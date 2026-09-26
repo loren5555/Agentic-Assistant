@@ -1,0 +1,23 @@
+# Python environments and generated files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+*.egg-info/
+dist/
+build/
+
+# Local assistant runtime data
+/data/
+/state/
+*.sqlite
+*.sqlite3
+*.db
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
