@@ -21,3 +21,10 @@ build/
 .env
 .env.*
 !.env.example
+
+# Workspace-local Agent instructions, plans, fixtures, and helper scripts
+/.agents/
+/AGENTS.md
+/.vscode/
+/.codex/
+/src/assistant/config.yaml

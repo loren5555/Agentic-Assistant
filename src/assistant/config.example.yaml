@@ -1,0 +1,18 @@
+providers:
+  inbox: notion
+  router: local
+
+local:
+  router_model: openai-codex:gpt-5.6-luna
+  router_effort: low
+  timeout_seconds: 120
+
+codex:
+  router_model: gpt-5.6-luna
+  router_effort: low
+  timeout_seconds: 120
+  executable: codex
+
+notion:
+  token: <<notion-token>>
+  inbox_data_source_id: <<data-source-id>>

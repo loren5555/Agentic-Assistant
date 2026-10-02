@@ -1,0 +1,7 @@
+"""Execute the Assistant with python -m assistant."""
+
+from assistant.main import main
+
+
+if __name__ == "__main__":
+    main()

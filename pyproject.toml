@@ -1,0 +1,26 @@
+[project]
+name = "agentic-assistant"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "loren", email = "loren5555@foxmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "httpx[socks]>=0.28.1",
+    "notion-client>=3.1.0",
+    "pydantic-ai>=2.51.0",
+    "pydantic-ai-harness>=0.36.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+agentic-assistant = "assistant.main:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = ["assistant", "providers", "logger"]
