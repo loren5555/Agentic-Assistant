@@ -1,135 +1,213 @@
 # Agentic Assistant
 
-个人科研助理。当前入口读取 Notion Inbox 最近更新的一条记录，交给真实
-PydanticAI 本地 Router 直接调用订阅模型理解意图，再打印原文和结构化建议。
-不执行建议、不更改记录、不自动标记已处理。
+个人科研助理。当前入口依次维护提案、执行一条获批任务、整理人类验收通过的成果：
+读取 Inbox 和 elevated TODO，由 `providers.local.Proposer` 提出或修订方案，
+交给 Workbench 供人审批。执行结果写回同一页面，等待人工验收。
+验收通过不等于值得长期保存：无可复用产出标为 Finished，有用成果存入 Knowledge／Ideas 后
+标为 Archived。
 
-## 配置 Notion
+`main.py` 使用 `ProposerProtocol` 和 `WorkbenchProtocol`；
+`providers.notion.Workbench` 管理 Notion 的读取、报告写入及状态更新。
+`providers.local.TaskRunner` 管理执行周期，调用 DecisionRouter、TaskWorker 或 Investigator。
+main 仅组装能力并按顺序调用，不持有提案或执行细节。
+
+## 配置
 
 Python 使用社区维护的 [notion-client SDK](https://github.com/ramnes/notion-sdk-py)，
-直接连接官方 API，不经过 Codex 的 Notion 连接工具。SDK 仍需授权，
-请求受 Notion API 自身的权限和限流约束。
+直接连接官方 API。创建内部连接，并为 Inbox、TODO、Workbench 授予读取、插入和
+更新内容权限。参见 [Notion 授权指南](https://developers.notion.com/guides/get-started/authorization)。
+配置使用 **data source ID**，参见 [数据源指南](https://developers.notion.com/guides/data-apis/working-with-databases)。
 
-1. 按 [Notion 授权指南](https://developers.notion.com/guides/get-started/authorization)
-   创建内部连接，启用读取内容权限；本功能不需要写入权限。
-2. 在 Notion 中将 Inbox 数据库授权给该连接。
-3. 获取 Inbox 的 **data source ID**（不是页面 ID，也不是数据库容器 ID）。
-   参见 [数据源指南](https://developers.notion.com/guides/data-apis/working-with-databases)。
-4. 在 `src/assistant/config.yaml` 中填写连接信息：
+将 `src/assistant/config.example.yaml` 复制为 `src/assistant/config.yaml`，填写自己的 Token。
+配置文件保留在本地；运行和调试均从 YAML 读取配置。
 
 ```yaml
 providers:
   inbox: notion
   router: local
+  investigator: codex
+  proposer: local
+  workbench: notion
+  worker: local
+  execution: local
+  curator: local
+  archive: notion
 
 local:
   router_model: openai-codex:gpt-5.6-luna
   router_effort: low
   timeout_seconds: 120
+  proposer_model: openai-codex:gpt-5.6-luna
+  proposer_effort: medium
+  proposer_timeout_seconds: 180
+  worker_model: openai-codex:gpt-5.6-luna
+  worker_effort: low
+  worker_timeout_seconds: 180
+  curator_model: openai-codex:gpt-5.6-luna
+  curator_effort: low
+  curator_timeout_seconds: 180
 
 codex:
   router_model: gpt-5.6-luna
   router_effort: low
   timeout_seconds: 120
   executable: codex
+  investigator_model: gpt-5.6-luna
+  investigator_effort: low
+  investigator_timeout_seconds: 300
 
 notion:
   token: "你的 Notion Token"
-  inbox_data_source_id: "你的 Inbox 数据源 ID"
+  inbox_data_source_id: 2e889969-ca07-49cf-92dc-647b232eb4bd
+  todo_data_source_id: 0b44813f-387f-4610-9f9c-84df0c02d595
+  workbench_data_source_id: b8800c2d-f16b-4ba2-908c-8b8379e12c03
+  knowledge_data_source_id: "你的 Knowledge data source ID"
+  ideas_data_source_id: "你的 Ideas data source ID"
 ```
 
-也支持 Notion 的个人访问 Token（PAT），填入同一个 `notion.token` 即可。
-PAT 继承你的用户权限；若只想授权 Inbox，优先使用上述内部连接。
+先安装 Codex CLI，运行 `codex login`，使用 ChatGPT 账户登录。
+`codex login status` 应显示 ChatGPT 登录。Proposer 与本地 Router 使用 PydanticAI 的
+`openai-codex:` 模型接入订阅登录，不启动 Codex CLI 子进程。
+两者独立配置模型、推理强度和超时。账户订阅决定额度与可用模型。
 
-填写后运行：
+## 来源与报告
+
+| 来源 | 查询条件 | 提案保存后的状态 |
+|---|---|---|
+| Inbox | `Status != Archived` | `Archived` |
+| TODO | `Status = elevated` | `handled` |
+
+人类将需要 Agent 额外处置的 TODO 标为 `elevated`。程序只读取这些条目，
+成功保存提案后标为 `handled`；不写入 TODO 的 `pending`、`leaved` 或 `finished`。
+普通个人待办由人管理。
+
+Workbench 报告包含原始来源链接、内容理解、目的、原因、建议动作、步骤和预期产出。
+Action、Agent Understanding、Intention 等内容保存在页面正文中。
+修订覆盖正文，只展示当前提案。`Proposal Version` 保存版本号，`Proposal Data`
+保存当前结构化提案及来源内容指纹，`Source Kind` 区分 Inbox 与 TODO。
+程序直接读取这些属性，不再搜索正文中的 JSON，也不保存旧版报告或完整来源快照。
+人类反馈仍保留在审批属性中。
+
+Workbench 使用以下属性：
+
+| 属性 | 内容 |
+|---|---|
+| Name | 提案标题 |
+| Status | `Open`、`Executed`、`Finished`、`Archived`、`Deprecated` |
+| Source | 原始来源链接，使用 rich text 保存 |
+| Human Review | `Pending`、`Approved`、`Revision Requested`、`Rejected` |
+| Human Instruction | 人类审批反馈 |
+| Result Review | `Pending`、`Qualified`、`Unqualified` |
+| Result Feedback | 人类结果验收反馈 |
+| Proposal Version | 当前提案版本号（number） |
+| Proposal Data | 当前提案 JSON，不包含模型过程（rich text） |
+| Source Kind | `inbox` 或 `todo`（rich text） |
+| Result Data | 最新执行结果 JSON，不含模型过程（rich text） |
+| Execution Error | 最近一次执行错误（rich text） |
+| Curation Data | 当前整理决定、结果指纹和已验证的存档链接（rich text） |
+
+属性只在显式 setup 时初始化，日常写入不检查或修改数据库结构；可以在日常视图隐藏数据属性。
+当前不设置 Proposal History，也不累积历史。
+
+数据库已改名为 Workbench，验收字段、`Deprecated` 和 TODO 的 `handled` 已添加。
+旧属性删除被自动审批拦截，请在 Workbench 中手动删除 `Action`、
+`Agent Understanding`、`Agent Intention`、`Destination`、`Proposed Relation`。
+新流程不读取这些属性，也不迁移旧提案；仅管理具有 `Proposal Data` 的记录。
+
+## 人工审批与验收
+
+每轮依次运行 Proposer → TaskRunner → Curator。新提案是 Pending，不会绕过审批。
+一次最多执行一条任务；Curator 只处理 Executed / Qualified。
+
+- `Open / Pending`：等待人类审批。
+- `Open / Approved`：Router 选择动作，执行后将当前结果写回原页面，标为 `Executed`。
+- `Open / Revision Requested`：根据 Human Instruction 修订同一页面，重新设为 `Pending`。
+- `Open / Rejected`：标为 `Deprecated`。
+- `Executed / Qualified`：Curator 提取有用成果；空产出标为 Finished，否则存档成功后标为 Archived。
+- `Executed / Unqualified`：根据 Result Feedback 和旧结果重做，覆盖结果并重新等待验收。
+
+执行失败只记录 Execution Error，不推进状态；下次运行可以重试。
+Router 如选择 ask_user，会在正文显示问题并回到 `Open / Pending`，人类在 Human Instruction
+填写答案后重新批准。来源内容变化时跳过执行，由 Proposer 修订后重新申报。
+执行结束前再次检查提案与人工反馈，发生变化则不提交结果。
+
+`complete_task` 处理自包含的计算、解释、翻译等任务，计算使用受限算术工具；
+`organize_material` 使用同一 TaskWorker 整理提供的内容；`investigate_question` 使用 Codex
+Investigator 调查公开来源。执行能力不创建其它数据库条目；验收后的 Curator 可保存长期成果。
+
+计算 `1+1` 的调试步骤：第一次运行从 Inbox 生成 Pending 提案；将 Human Review 设为
+Approved；第二次运行执行并在同一 Workbench 页面显示结果；将 Result Review 设为
+Qualified；下一次运行 Curator 应判断没有长期积累价值，将页面状态设为 Finished。
+无需建立额外 Task 或 Activity Log。
+归档是退出活跃查询，不是删除页面；暂不自动删除已验收的记录。
+
+Tasks 用于未来需要持续跟踪的工作，Ideas 与 Experiments 用于值得保留的研究产出。
+普通问答、计算和中间步骤不另建记录。当前请单进程运行；定时器用下面的 flock 示例
+防止重叠，手动运行也不要与定时周期同时启动。
+
+## 运行与定时
+
+首次使用新版本，先填写 Knowledge／Ideas data source ID 并将数据库授权给同一 integration，
+然后显式初始化属性：
+
+```bash
+uv run python -m providers.notion.setup
+```
+
+setup 添加 Workbench 的 Curation Data 和 Finished 状态，以及目标库的 Archive Key 文本属性，
+不删除现有属性、不迁移旧记录、不运行模型。标题属性名会在首次存档时自动读取并缓存。
+目标 ID 可以暂时留空：零产出任务可正常 Finished；有价值的成果会保持 Executed 并报告
+缺少目标配置，填写后重新运行 setup 和主入口即可继续。
+
+手动运行一个周期：
 
 ```bash
 uv run python -m assistant
 ```
 
-也可执行 `uv run agentic-assistant`，二者使用相同入口。
-运行和调试均从上述 YAML 读取配置，不需要环境变量。
+也可执行 `uv run agentic-assistant`，二者使用相同入口。程序通过 `src/logger/` 输出
+处理进度、执行结果链接，以及提案和成果整理摘要。
 
-## 配置决策服务
+调试后可由外部定时器每天调用一次。以下是 cron 示例，需先创建项目的 `.agents/` 目录，
+并将项目路径和 `uv` 路径改为本机实际值：
 
-先安装 Codex CLI，运行 `codex login` 并使用 ChatGPT 账户登录。
-`codex login status` 应显示 ChatGPT 登录。当前配置使用
-ChatGPT 认证，不自动回退到付费 API。
-订阅用量仍受账户额度和模型可用性限制。
+```cron
+CRON_TZ=Asia/Shanghai
+0 7 * * * cd /home/loren/workspace/Agentic-Assistant && flock -n .agents/proposer.lock /home/loren/.local/bin/uv run python -m assistant >> .agents/proposer.log 2>&1
+```
 
-当前 `providers.router: local` 使用 PydanticAI 的 `openai-codex:` 模型接入，
-读取已有 Codex CLI 登录凭证，直接调用模型，不启动 CLI、不载入 Codex 的
-编码指令、skills、工作目录或执行工具。只发送 Router 指令、输入和输出 Schema。
+`flock` 防止定时器同时启动两个处理周期。上面的示例不会自动安装或启动。
+
+## Provider 与过程记录
+
+业务代码只使用 Protocol 定义的服务。Provider 根据 YAML 动态加载，直接暴露实现类；
+每个实现读取自己的配置并管理调用资源。Notion 客户端在一次操作完成或失败时关闭。
+正文通过 Notion Markdown API 读取，截断或不可访问块会直接报告，避免把部分内容当作完整来源。
+
+Proposer 自己持有来源处理、提案、修订和人工审批的工作流，TaskRunner 持有执行周期。
+Curator 持有验收后的成果整理周期；main 只组装服务并调用它们。
+报告通过 PydanticAI 的原生结构化输出生成，不提供执行工具；状态写入由 Proposer 调用
+Workbench 完成。Notion Token 不进入模型请求。修订只发送来源、上一版提案和反馈，
+不发送过程记录及整页历史。
+
+Curator 第一版只存 Knowledge 和 Ideas。它不新增研究结论，保留原结果中的证据链接、
+推测和限制；论文笔记可作为 Knowledge，但暂不创建 Papers 条目或同步 Zotero。
+普通计算、临时转换和中间步骤可以零产出，不另存一份报告。
+
+整理决定在写目标库之前保存于 Curation Data。每条成果使用源 Workbench、结果指纹和
+产出序号生成稳定的 Archive Key；单进程重试时复用当前决定、查找已有写入，并回读
+页面属性和正文后确认收据。全部保存成功才 Archived。失败保留 Executed 和错误，
+不会重新运行执行器，也不会重新生成同一份提取决定。当前不做跨任务的语义去重。
+
+本地 Proposer 的 `process.events` 保存 PydanticAI 的真实请求与响应消息，
+`process.usage` 保存本次调用的 token 统计，包含缓存输入和请求次数。
+这些信息附在本次返回的 Proposal 中，不进入模型输出 Schema，也不写入 Notion 正文或属性。
+控制台继续打印调用耗时及 token 用量。
+Codex Router 和 Investigator 仍保留 CLI 实现，其过程记录使用原始 JSON 事件。
+
+已有本地 Router 使用 PydanticAI 的 `openai-codex:` 模型直接接入订阅登录，
 参见 [PydanticAI Codex 接入](https://pydantic.dev/docs/ai/models/openai-codex/)。
-`local.router_effort` 指定推理强度，`local.timeout_seconds` 限制整个决策调用。
-刷新后的凭证只保留在进程内，PydanticAI 不改写 CLI 登录文件。
+Codex Investigator 使用独立配置进行公开网页调查，现已接入获批任务的执行流程。
 
-将 `providers.router` 改回 `codex` 可继续使用完整 CLI harness。
-`codex.router_model: null` 使用 CLI 默认模型（不加载个人 config.toml）；
-也可以填入账户可用的模型标识。`timeout_seconds` 限制一次决策等待时间。
-
-Codex CLI provider 使用临时工作目录、只读沙箱、禁用相关工具/插件的配置和结构化输出。
-不会将项目配置或 Notion Token 放入模型请求。Inbox 正文和来源信息会发送给
-Codex 服务。CLI 本身仍使用已有登录状态，临时请求文件会在调用结束后清理。
-参见 [非交互调用](https://learn.chatgpt.com/docs/non-interactive-mode) 和
-[配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)。
-
-输出分为 `inbox` 和 `suggestion`。建议包含内容类型、用户意图、下一步、
-简短依据、必要的澄清问题以及候选动作 ID。动作仅供审核，并不表示执行器已接入。
-模型失败直接报告；空 Inbox 不调用模型。
-
-当前 Inbox 候选动作集中在 `src/assistant/actions/inbox.py`：
-
-- `organize_material`：整理已有材料，形成可审阅的结构化草稿。
-- `investigate_question`：解释或调查问题，形成有依据的回答。
-- `ask_user`：获取推进工作所必需的用户信息或选择。
-
-入口直接使用 `INBOX_CANDIDATES`，Router 根据传入的描述选择一个动作。
-动作 ID 使用字符串，不维护另一份固定枚举；返回值仍必须属于本次候选集合。
-后续关系发现等阶段可在 `assistant/actions/` 中增加自己的候选目录，按阶段提供给
-Router，不把全部动作一次性加入 Inbox。整理、提交审阅、正式写入和归档的执行逻辑
-尚未接入，当前不会因为选中了某个动作而更改 Notion。
-
-空 Inbox 打印“没有记录”。授权、网络及内容读取异常直接报告，不伪造成功结果。
-正文使用 Notion 的 Markdown 导出；若 API 报告截断或不可访问的块，程序会停止，
-不会将部分正文当作完整输入。此步骤不下载附件或展开关联页面。
-当前选择不依赖特定的状态字段，也不限定“未处理”记录；每次读取最近更新的一条。
-
-## 结构
-
-运行进度、JSON 结果和 Router 的耗时、token usage 通过 `src/logger/` 输出到 stderr。
-日志支持多行对齐，
-终端支持彩色输出；默认只打印，不保存文件、不上传观测数据。
-
-- `src/assistant/main.py`：读取、构造决策请求、调用 Router 并打印建议。
-- `src/assistant/actions/`：按工作阶段集中定义候选动作及其业务含义。
-- `src/assistant/config.yaml`：选择 Inbox provider，配置 Notion Token 和数据源 ID。
-- `src/assistant/protocol/`：能力接口。
-- `src/assistant/schemas/`：业务数据结构。
-- `src/assistant/schemas/routing.py`：RouterInput 包含内容文本、上下文和候选动作；`from_source()` 读取来源的普通 `context_content` 属性，不要求各来源字段一致。
-- `src/assistant/protocol/content.py`：供模型上下文使用的通用内容接口。来源自行组织语义内容，不依赖 Router；完整序列化仍保留 ID、版本等存储信息，普通属性不会重复加入序列化结果。
-- `src/assistant/protocol/router.py`：Router 接口，规定必须实现的 decide 方法。
-- `src/providers/__init__.py`：按名称导入 Provider 包，不包装各项能力。
-- `src/providers/local/router.py`：本地 PydanticAI Router 实现，从自身配置创建模型。
-- `src/providers/routing.py`：两种 Router 共用的理解指令和候选动作校验。
-- `src/assistant/workflows/`：保留的旧执行流程，尚未迁移到新候选目录，当前建议入口不调用。
-- `src/providers/notion/`：Notion SDK 的 Inbox 实现。
-- `src/providers/codex/`：实现 Router 接口的 Codex CLI 服务适配器。
-
-业务代码给实例标注能力 Protocol，只使用接口定义的方法。Router 包直接导出
-DecisionRouter 类，构造函数接收自身配置并完成初始化，不再套 open_router 或
-无清理职责的上下文管理器。Router 仅在读取到 Inbox 内容后创建。
-
-Notion 直接导出 InboxSource，构造时保存自身配置；fetch 和 fetch_latest 内部
-创建客户端，在一次读取完成或失败时关闭连接，调用方无需管理上下文。
-插件仍按配置名称动态加载，不额外定义 Factory Protocol 或接口校验层。
-调用侧的类型注解提供提示和参数检查；缺失入口或调用不兼容时自然报错。
-Protocol 不读取配置，也不自行选择实现。
-工作区 Pylance 配置启用了 basic 检查，并将抽象类实例化问题显示为错误。
-
-现有 YAML 格式不变。每个 Provider 读取与包同名的配置节；切换到本地 Router
-时设置 `providers.router: local`，并添加 `local.router_model`（PydanticAI 的模型名称）、
-`local.router_effort` 和 `local.timeout_seconds`。
-配置解析与客户端创建均在使用对应能力时进行，空 Inbox 不初始化决策服务。
-
-旧 Demo 已移除。Agent 计划、临时验证脚本和工作区记录留在 Git 忽略的 `.agents/`。
+正式代码在 `src/assistant/`、`src/providers/` 和 `src/logger/`。
+Agent 计划、临时脚本、工作区记录和定时运行日志放在 Git 忽略的 `.agents/`。

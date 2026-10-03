@@ -4,9 +4,7 @@ import asyncio
 import json
 from collections.abc import Mapping
 from time import perf_counter
-from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent, NativeOutput
 from pydantic_ai.models import infer_model
 from pydantic_ai.models.openai import OpenAIResponsesModelSettings
@@ -15,24 +13,7 @@ from assistant.protocol.router import RouterProtocol
 from assistant.schemas.routing import RouterDecision, RouterInput
 from providers.routing import ROUTER_INSTRUCTIONS, validate_decision
 from logger import get_logger
-
-
-class LocalSettings(BaseModel):
-    """Model selection owned by the local Pydantic AI provider.
-
-    Attributes:
-        router_model: Pydantic AI model name in provider:model format.
-        router_effort: Reasoning effort sent to the OpenAI-compatible model.
-        timeout_seconds: Maximum duration of one decision invocation.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    router_model: str
-    router_effort: Literal[
-        "none", "minimal", "low", "medium", "high", "xhigh", "max"
-    ] | None = "low"
-    timeout_seconds: float = 120
+from providers.local.config import LocalSettings
 
 
 class DecisionRouter(RouterProtocol):

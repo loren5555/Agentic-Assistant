@@ -3,8 +3,11 @@
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict
+from pydantic.json_schema import SkipJsonSchema
 
 from assistant.protocol.content import ContextContent
+from assistant.schemas.process import ExecutionProcess
+
 
 class Trigger(BaseModel):
     """Identify one invocation independently of its task content.
@@ -86,6 +89,7 @@ class RouterDecision(BaseModel):
         reason: Brief user-facing justification for the proposal.
         clarification_question: Question needed to proceed, or None when clear.
         selected_action_id: Available workflow action matching the proposal.
+        process: Actual provider execution events and usage, when available.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -96,3 +100,6 @@ class RouterDecision(BaseModel):
     reason: str
     clarification_question: str | None
     selected_action_id: str
+
+    # Runtime telemetry belongs to the result, not the model's output contract.
+    process: SkipJsonSchema[ExecutionProcess | None] = None

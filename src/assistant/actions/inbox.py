@@ -1,13 +1,20 @@
 """Business capabilities offered when interpreting an Inbox item.
 
-These descriptions define the current selection catalogue, not executable
-handlers. The workflow presents this catalogue before any downstream work.
+The execution service dispatches these identifiers to matching capabilities.
+This catalogue describes what each capability produces, not provider details.
 """
 
 from assistant.schemas.routing import ActionCandidate
 
 
 INBOX_CANDIDATES = [
+    ActionCandidate(
+        id="complete_task",
+        description=(
+            "Complete a self-contained calculation, explanation, translation, "
+            "or text transformation using the supplied material and return the result."
+        ),
+    ),
     ActionCandidate(
         id="organize_material",
         description=(
@@ -18,8 +25,8 @@ INBOX_CANDIDATES = [
     ActionCandidate(
         id="investigate_question",
         description=(
-            "Explain, analyze, or investigate the user's question and produce "
-            "an evidence-backed answer, researching unknown facts as needed."
+            "Research a question using public sources, verify unknown or current "
+            "facts, and produce an evidence-backed answer with supporting links."
         ),
     ),
     ActionCandidate(

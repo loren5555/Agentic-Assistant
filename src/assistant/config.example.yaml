@@ -1,18 +1,42 @@
 providers:
   inbox: notion
   router: local
+  investigator: codex
+  proposer: local
+  workbench: notion
+  worker: local
+  execution: local
+  curator: local
+  archive: notion
 
 local:
   router_model: openai-codex:gpt-5.6-luna
   router_effort: low
   timeout_seconds: 120
+  proposer_model: openai-codex:gpt-5.6-luna
+  proposer_effort: medium
+  proposer_timeout_seconds: 180
+  worker_model: openai-codex:gpt-5.6-luna
+  worker_effort: low
+  worker_timeout_seconds: 180
+  curator_model: openai-codex:gpt-5.6-luna
+  curator_effort: low
+  curator_timeout_seconds: 180
 
 codex:
   router_model: gpt-5.6-luna
   router_effort: low
   timeout_seconds: 120
   executable: codex
+  investigator_model: gpt-5.6-luna
+  investigator_effort: low
+  investigator_timeout_seconds: 300
 
 notion:
   token: <<notion-token>>
-  inbox_data_source_id: <<data-source-id>>
+  inbox_data_source_id: 2e889969-ca07-49cf-92dc-647b232eb4bd
+  todo_data_source_id: 0b44813f-387f-4610-9f9c-84df0c02d595
+  workbench_data_source_id: b8800c2d-f16b-4ba2-908c-8b8379e12c03
+  knowledge_data_source_id: "fb11560c-cd02-42e4-9b98-537ad5aea68c"
+  ideas_data_source_id: "fe0902f6-4eef-404f-bdb0-38e2593271fb"
+  

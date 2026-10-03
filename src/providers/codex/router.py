@@ -8,29 +8,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import perf_counter
 
-from pydantic import BaseModel, ConfigDict
-
 from assistant.protocol.router import RouterProtocol
 from assistant.schemas.routing import RouterDecision, RouterInput
+from providers.codex.config import CodexSettings
+from providers.codex.process import read_process
 from providers.routing import ROUTER_INSTRUCTIONS, validate_decision
 from logger import get_logger
-
-
-class CodexSettings(BaseModel):
-    """Invocation settings owned by the subscription-backed Codex provider.
-
-    Attributes:
-        model: Optional model name; None uses the CLI default.
-        timeout_seconds: Maximum duration of one decision invocation.
-        executable: Codex CLI executable name or path.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    router_model: str | None = None
-    router_effort: str | None = None
-    timeout_seconds: float = 120
-    executable: str = "codex"
 
 
 class DecisionRouter(RouterProtocol):
@@ -165,7 +148,8 @@ class DecisionRouter(RouterProtocol):
             validated_decision = validate_decision(request, decision)
 
             # CLI stdout is optional telemetry, not the decision result channel.
-            usage = _read_usage(stdout.decode(errors="replace"))
+            validated_decision.process = read_process(stdout.decode(errors="replace"))
+            usage = validated_decision.process.usage
             elapsed_seconds = perf_counter() - started_at
             usage_summary = json.dumps(usage, indent=2) if usage else "Unavailable"
             self.logger.info(
@@ -173,34 +157,3 @@ class DecisionRouter(RouterProtocol):
             )
 
         return validated_decision
-
-
-def _read_usage(output: str) -> dict[str, object]:
-    """Read optional token usage without treating CLI logs as decision validation.
-
-    Args:
-        output: Codex stdout, which may mix JSON events and diagnostic text.
-
-    Returns:
-        Last available completed-turn usage mapping, or an empty mapping when
-        unavailable. Reported values are preserved; cached input is not added.
-    """
-    usage = {}
-    for line in output.splitlines():
-        if not line.strip():
-            continue
-
-        # Diagnostics and unknown events must not invalidate a valid result file.
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-
-        if not isinstance(event, dict) or event.get("type") != "turn.completed":
-            continue
-
-        reported_usage = event.get("usage")
-        if isinstance(reported_usage, dict) and reported_usage:
-            usage = reported_usage
-
-    return usage
