@@ -1,6 +1,7 @@
 """Read service providers and their settings from application configuration."""
 
 from importlib.resources import files
+from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 from yaml import safe_load
@@ -32,6 +33,31 @@ class ProviderSettings(BaseModel):
     execution: str = "local"
     curator: str = "local"
     archive: str = "notion"
+    captures: str = "notion"
+    briefs: str = "local"
+    feed: str = "notion"
+    discovery: str = "demo"
+    evidence: str = "demo"
+    recommender: str = "local"
+
+
+class RuntimeSettings(BaseModel):
+    """Configure local durability and explicitly opt into recurring jobs.
+
+    Attributes:
+        directory: Local directory for databases and reports.
+        batch_size: Maximum raw capture records per manual pass.
+        schedules: Enabled job names and cron expressions; empty means manual only.
+        recommendation_maxima: Daily upper bounds, never required output counts.
+    """
+
+    directory: str = "data/assistant"
+    batch_size: int = 20
+    schedules: dict[str, str] = {}
+    recommendation_maxima: dict[str, int] = {
+        "Understanding Daily": 1, "Mainline Deep Read": 1,
+        "Frontier Radar": 1, "Exceptional Event": 1,
+    }
 
 
 class AssistantConfig(BaseModel):
@@ -47,24 +73,30 @@ class AssistantConfig(BaseModel):
 
     providers: ProviderSettings
     provider_options: dict[str, dict[str, object]]
+    runtime: RuntimeSettings = RuntimeSettings()
 
 
-def load_settings() -> AssistantConfig:
+def load_settings(path: str | Path | None = None) -> AssistantConfig:
     """Read config.yaml from the assistant package and parse application settings.
+
+    Args:
+        path: Optional YAML path for an isolated debug configuration.
 
     Returns:
         Provider selections and options, without initializing any services.
     """
 
-    config_file = files("assistant") / "config.yaml"
+    config_file = Path(path) if path is not None else files("assistant") / "config.yaml"
     with config_file.open("r", encoding="utf-8") as stream:
         document = safe_load(stream)
 
     # Keep the existing YAML layout: providers selects packages, and the other
     # top-level sections belong to those packages rather than to the Assistant.
     providers = document.pop("providers")
+    runtime = document.pop("runtime", {})
     assistant_config = AssistantConfig(
         providers=providers,
         provider_options=document,
+        runtime=runtime,
     )
     return assistant_config

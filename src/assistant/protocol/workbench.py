@@ -10,6 +10,10 @@ from assistant.schemas.curation import CurationDecision
 class WorkbenchProtocol(Protocol):
     """Read sources and maintain proposal reports and review states."""
 
+    def initialize_schema(self) -> None:
+        """Explicitly prepare the storage additions required by this capability."""
+        ...
+
     def list_inputs(self) -> list[SourceMaterial]:
         """Read unarchived Inbox and elevated TODO material.
 
@@ -51,12 +55,13 @@ class WorkbenchProtocol(Protocol):
         """
         ...
 
-    def submit(self, source: SourceMaterial, proposal: Proposal) -> WorkbenchItem:
+    def submit(self, source: SourceMaterial, proposal: Proposal, workflow_id: str = "") -> WorkbenchItem:
         """Submit a proposal for human review.
 
         Args:
             source: Original material.
             proposal: Report to submit.
+            workflow_id: Stable publication identity for recovering lost acknowledgements.
 
         Returns:
             Created workbench row.

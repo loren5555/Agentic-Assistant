@@ -1,13 +1,29 @@
 providers:
   inbox: notion
   router: local
-  investigator: codex
+  investigator: local
   proposer: local
   workbench: notion
   worker: local
   execution: local
   curator: local
   archive: notion
+  captures: notion
+  briefs: local
+  feed: notion
+  discovery: demo
+  evidence: demo
+  recommender: local
+
+runtime:
+  directory: data/assistant
+  batch_size: 20
+  schedules: {}  # Manual jobs only; opt in after debugging.
+  recommendation_maxima:
+    Understanding Daily: 1
+    Mainline Deep Read: 1
+    Frontier Radar: 1
+    Exceptional Event: 1
 
 local:
   router_model: openai-codex:gpt-5.6-luna
@@ -22,6 +38,11 @@ local:
   curator_model: openai-codex:gpt-5.6-luna
   curator_effort: low
   curator_timeout_seconds: 180
+  investigator_model: openai-codex:gpt-5.6-luna
+  investigator_effort: medium
+  investigator_timeout_seconds: 300
+  brief_model: openai-codex:gpt-5.6-luna
+  recommendation_model: openai-codex:gpt-5.6-luna
 
 codex:
   router_model: gpt-5.6-luna
@@ -34,9 +55,13 @@ codex:
 
 notion:
   token: <<notion-token>>
-  inbox_data_source_id: 2e889969-ca07-49cf-92dc-647b232eb4bd
-  todo_data_source_id: 0b44813f-387f-4610-9f9c-84df0c02d595
-  workbench_data_source_id: b8800c2d-f16b-4ba2-908c-8b8379e12c03
-  knowledge_data_source_id: "fb11560c-cd02-42e4-9b98-537ad5aea68c"
-  ideas_data_source_id: "fe0902f6-4eef-404f-bdb0-38e2593271fb"
-  
+  inbox_data_source_id: <<notion-inbox-data-source-id>>
+  todo_data_source_id: <<notion-todo-data-source-id>>
+  workbench_data_source_id: <<notion-workbench-data-source-id>>
+  knowledge_data_source_id: <<notion-knowledge-data-source-id>>
+  ideas_data_source_id: <<notion-ideas-data-source-id>>
+  notero_data_source_id: <<notion-notero-data-source-id>>
+  simpread_data_source_id: <<notion-simpread-data-source-id>>
+  papers_data_source_id: <<notion-papers-data-source-id>>
+  research_interests_data_source_id: <<notion-research-interests-data-source-id>>
+  research_feed_data_source_id: <<notion-research-feed-data-source-id>>

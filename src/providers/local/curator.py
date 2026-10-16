@@ -71,6 +71,24 @@ class Curator(CuratorProtocol):
             output_type=NativeOutput(CurationDecision), model_settings=model_settings,
         )
 
+    async def extract(self, item: WorkbenchItem) -> CurationDecision:
+        """Extract one accepted result without changing storage.
+
+        Args:
+            item: Proposal, result, and human acceptance snapshot.
+
+        Returns:
+            A grounded extraction with its result fingerprint.
+        """
+        material = self._material(item)
+        async with asyncio.timeout(self.settings.curator_timeout_seconds):
+            async with self.agent:
+                response = await self.agent.run(material)
+        decision = response.output
+        decision.result_fingerprint = hashlib.sha256(material.encode()).hexdigest()
+        self.logger.info("Curation token usage: %s", response.usage)
+        return decision
+
     async def run_cycle(self) -> CurationCycle:
         """Finalize human-accepted results without touching unaccepted work.
 

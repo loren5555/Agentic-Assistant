@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "dbos>=3.2.0",
     "httpx[socks]>=0.28.1",
     "notion-client>=3.1.0",
     "pydantic-ai>=2.51.0",

@@ -92,7 +92,7 @@ class Proposer(ProposerProtocol):
                     cycle.waiting.append(item.url)
                     continue
                 source = self.workbench.read_source(item.source_url)
-                proposal = await self._draft(source, item)
+                proposal = await self.draft(source, item)
                 self.workbench.revise(item, proposal)
                 cycle.revised.append(item.url)
                 continue
@@ -103,7 +103,7 @@ class Proposer(ProposerProtocol):
                 proposal = item.proposal
                 source = self.workbench.read_source(item.source_url)
                 if fingerprint(source) != proposal.source_fingerprint:
-                    revised = await self._draft(source, item)
+                    revised = await self.draft(source, item)
                     self.workbench.revise(item, revised)
                     cycle.revised.append(item.url)
                     continue
@@ -120,7 +120,7 @@ class Proposer(ProposerProtocol):
         for source in self.workbench.list_inputs():
             existing = known.get(source_key(source.url))
             if existing is None:
-                proposal = await self._draft(source)
+                proposal = await self.draft(source)
                 existing = self.workbench.submit(source, proposal)
                 known[source_key(source.url)] = existing
                 cycle.submitted.append(existing.url)
@@ -128,7 +128,7 @@ class Proposer(ProposerProtocol):
 
         return cycle
 
-    async def _draft(
+    async def draft(
         self, source: SourceMaterial, previous: WorkbenchItem | None = None,
     ) -> Proposal:
         """Generate one report and attach actual invocation metadata.
@@ -183,7 +183,6 @@ class Proposer(ProposerProtocol):
             proposal.version = previous_proposal.version + 1
 
         return proposal
-
 
 def fingerprint(source: SourceMaterial) -> str:
     """Compare source content independently of intake status writes.

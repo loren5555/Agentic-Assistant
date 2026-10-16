@@ -2,12 +2,23 @@
 
 from typing import Protocol
 
-from assistant.schemas.curation import ArchiveReceipt, CurationCycle, RetainedArtifact
+from assistant.schemas.curation import ArchiveReceipt, CurationCycle, CurationDecision, RetainedArtifact
 from assistant.schemas.proposal import WorkbenchItem
 
 
 class CuratorProtocol(Protocol):
     """Own extraction and finalization of human-accepted results."""
+
+    async def extract(self, item: WorkbenchItem) -> CurationDecision:
+        """Extract reusable material without publishing it.
+
+        Args:
+            item: Human-accepted proposal and result.
+
+        Returns:
+            Supported artifacts, or an empty extraction.
+        """
+        ...
 
     async def run_cycle(self) -> CurationCycle:
         """Retain useful outcomes and finalize accepted tasks.
@@ -20,6 +31,10 @@ class CuratorProtocol(Protocol):
 
 class ArchiveStoreProtocol(Protocol):
     """Save useful outcomes independently of workflow implementation."""
+
+    def initialize_schema(self) -> None:
+        """Explicitly prepare stable publication identities in archive storage."""
+        ...
 
     def publish(
         self, item: WorkbenchItem, artifact: RetainedArtifact, key: str,

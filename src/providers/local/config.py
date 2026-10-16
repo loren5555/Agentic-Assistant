@@ -45,3 +45,14 @@ class LocalSettings(BaseModel):
         "none", "minimal", "low", "medium", "high", "xhigh", "max"
     ] | None = "low"
     curator_timeout_seconds: float = 180
+
+    investigator_model: str | None = None
+    investigator_effort: str | None = "medium"
+    investigator_timeout_seconds: float = 300
+
+    brief_model: str | None = None
+    brief_effort: str | None = "low"
+    brief_timeout_seconds: float = 180
+
+    recommendation_model: str | None = None
+    recommendation_timeout_seconds: float = 180

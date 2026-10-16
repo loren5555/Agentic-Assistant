@@ -57,6 +57,9 @@ class ArchiveStore(ArchiveStoreProtocol):
                         data_source_id=data_source_id,
                         properties={"Archive Key": {"rich_text": {}}},
                     )
+                    verified = client.data_sources.retrieve(data_source_id=data_source_id)
+                    if verified["properties"]["Archive Key"]["type"] != "rich_text":
+                        raise ValueError(f"Archive schema readback failed: {data_source_id}")
 
     def publish(
         self, item: WorkbenchItem, artifact: RetainedArtifact, key: str,
@@ -116,7 +119,7 @@ class ArchiveStore(ArchiveStoreProtocol):
             if (
                 stored_key != key or title != artifact.title
                 or body["truncated"] or body["unknown_block_ids"]
-                or key not in body["markdown"]
+                or " ".join(content.split()) not in " ".join(body["markdown"].split())
             ):
                 raise ValueError(f"Archive readback failed: {page_id}")
             receipt = ArchiveReceipt(key=key, url=verified["url"])

@@ -22,7 +22,7 @@ class SourceMaterial(BaseModel):
         revision: Source edit timestamp at intake.
     """
 
-    kind: Literal["inbox", "todo"]
+    kind: Literal["inbox", "todo", "notero", "simpread"]
     page_id: str
     url: str
     title: str
@@ -77,6 +77,9 @@ class WorkbenchItem(BaseModel):
         proposal: Current structured proposal, or None for unmanaged records.
         result: Latest saved deliverable, if execution has completed.
         curation: Current extraction decision and verified destination links.
+        body_fingerprint: Digest used to notice edits to a reviewed report.
+        publication_key: Visible report identity for recovering write acknowledgements.
+        publication_applied: Whether report metadata was independently verified.
     """
 
     page_id: str
@@ -88,10 +91,13 @@ class WorkbenchItem(BaseModel):
     result_review: str
     result_feedback: str
     source_url: str
-    source_kind: Literal["inbox", "todo"] | None = None
+    source_kind: Literal["inbox", "todo", "notero", "simpread"] | None = None
     proposal: Proposal | None = None
     result: TaskResult | None = None
     curation: CurationDecision | None = None
+    body_fingerprint: str = ""
+    publication_key: str = ""
+    publication_applied: bool = False
 
 
 class ProposedTask(BaseModel):
