@@ -1,4 +1,24 @@
-"""Process Inbox and elevated TODO inputs into human-reviewed proposals."""
+"""Run intake: convert eligible human inputs into proposals awaiting approval.
+
+Inputs:
+    InputSource reads Inbox Status != Archived and TODO Status = elevated.
+    Local index entries and DBOS state identify earlier processing of a source.
+
+Outputs:
+    Confirmed Workbench proposal URLs and checkpoints associating each source
+    version with its proposal. Unchanged sources reuse their prior submission.
+
+Workflow:
+    Read a bounded input batch -> compare meaningful source fingerprints ->
+    invoke shared submit_proposal for new/changed material -> return the links.
+    That operation drafts, publishes, checkpoints, and then acknowledges the
+    source as Inbox Archived or TODO handled. The task stops at human review.
+
+Participants and effects:
+    Input reader, proposal-drafting agent, Workbench publisher, and human approver.
+    Called by run intake or its configured schedule. Reads/writes Notion and
+    saves DBOS/index state; it never routes or executes the new proposal itself.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,24 @@
-"""Recover an existing durable operation from its failed step."""
+"""Recover a named existing workflow instead of submitting a new business task.
+
+Inputs:
+    An existing workflow ID from status and an Application with the corresponding
+    durable functions registered against the selected runtime database.
+
+Outputs:
+    The recovered workflow's actual result as JSON, or an exception explaining
+    why recovery or execution could not complete.
+
+Workflow relationship:
+    runtime/recovery.recover rewinds an ERROR workflow from its failed step,
+    retaining earlier successful checkpoints, or requests DBOS resumption for
+    interrupted work. Incomplete work from another application version is
+    rejected explicitly rather than migrated or silently left waiting.
+
+Participants and effects:
+    Human operator, recovery helper, DBOS, and the original task's plugins.
+    Unfinished steps may call models and write external records. This command
+    neither deletes old tasks nor replaces required human approval.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,32 @@
-"""Advance human decisions through revision, execution, acceptance, and curation."""
+"""Run reviews: advance managed work according to explicit human decisions.
+
+Inputs:
+    Active local index entries, their DBOS state, current Workbench properties,
+    source content, and human approval, acceptance, instructions, and feedback.
+
+Outputs:
+    Updated Workbench URLs and state checkpoints. Qualified retained outcomes
+    produce archive links; Interested Research Feed entries produce Inbox links.
+
+Workflow:
+    Inspect managed Open/Executed items -> send a durable review signal -> read
+    current scope and human decisions. Revision Requested or source edits invoke
+    proposal revision; Rejected becomes Deprecated. Approved work is routed to
+    a worker/investigator, or asks the user, then awaits result acceptance.
+    Unqualified work is redone. Qualified work is curated and becomes Archived
+    after retained artifacts are published, or Finished if none are retained.
+    Interested follow-ups are processed after the Workbench pass.
+
+Participants and effects:
+    Human approver/reviewer, decision router, execution worker, investigator,
+    curator, Workbench, ArchiveStore, and ResearchFeed. run reviews and schedules
+    use this task. It calls models, publishes results, and records durable state.
+
+Boundaries:
+    Unmanaged historical rows are not automatically adopted. Source and human
+    authorization are reread at write boundaries; publication receipts identify
+    report versions. Follow-ups never write directly to Papers.
+"""
 
 from __future__ import annotations
 

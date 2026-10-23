@@ -1,4 +1,28 @@
-"""Execute the serve command."""
+"""Keep the runtime alive and trigger explicitly configured recurring tasks.
+
+Inputs:
+    Application settings with runtime.schedules: job names mapped to cron
+    expressions. Schedules use Asia/Shanghai and the existing DBOS database.
+
+Outputs:
+    Persisted schedule definitions and progress logs; this command waits until
+    interrupted rather than returning one business result as JSON.
+
+Workflow relationship:
+    runtime/schedules.scheduled_job receives the scheduled time and stored job
+    context, then calls the same run.dispatch workflow used by manual execution.
+    The assistant-jobs queue serializes entry dispatch with worker_concurrency=1.
+
+Participants and effects:
+    DBOS scheduler, job queue, dispatcher, and configured business tasks. This
+    command pauses assistant-owned schedules removed from YAML and applies the
+    configured definitions. Automatic backfill is disabled; an empty mapping
+    enables no recurring tasks, though unfinished work can still recover.
+
+Boundaries:
+    Frequency belongs here; proposal, review, research, and archival policy remain
+    in task workflows. A timer never supplies human approval.
+"""
 
 from __future__ import annotations
 

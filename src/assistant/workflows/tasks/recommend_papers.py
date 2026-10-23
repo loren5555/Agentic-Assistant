@@ -1,4 +1,32 @@
-"""Checkpoint research discovery and publication independently from providers."""
+"""Run recommendations: select new papers through explicit evidence gates.
+
+Inputs:
+    Asia/Shanghai day, configured category maxima, read-only active research
+    interests, discovery candidates, and primary material actually retrieved.
+    Services, local index, and report directory come from the runtime.
+
+Outputs:
+    RecommendationRun separating selections, real Feed publications, duplicates,
+    rejections, source failures, and pending recovery. A readable local JSON report
+    and DBOS event preserve the outcome independently of the command's display.
+
+Workflow:
+    Read interests -> discover -> deduplicate within/across runs -> retrieve
+    evidence -> assess relevance/quality -> enforce evidence gates and maxima ->
+    publish permitted recommendations -> save the report. Mainline Deep Read
+    requires full text; claims, experimental support, and inference stay separate.
+
+Participants and effects:
+    Discovery service, evidence reader, assessment agent, Research Feed storage,
+    and human reader. run recommendations and scheduled dispatch share the same
+    per-day operation identity. Real mode may call models and publish Feed rows.
+
+Boundaries:
+    Maxima are caps, not quotas; zero publication is valid. Synthetic demo mode
+    uses fixed assessment and prohibits real Feed writes. Interests and Human
+    Feedback are not modified. Interested follow-up implementations are bound
+    here for DBOS registration but live in process_reviews.py and run with reviews.
+"""
 
 from pathlib import Path
 import hashlib

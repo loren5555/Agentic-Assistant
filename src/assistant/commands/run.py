@@ -1,4 +1,26 @@
-"""Run one of the five complete tasks and print its result."""
+"""Manually trigger one complete business task and await its result.
+
+Inputs:
+    Application and CLI options selecting intake, reviews, papers, articles, or
+    recommendations; an optional page ID narrows raw-capture processing. The
+    current Asia/Shanghai date identifies a daily recommendation run.
+
+Outputs:
+    JSON destination links or a RecommendationRun summary on stdout, with
+    workflow identity, progress, usage, and failures in the shared log.
+
+Workflow relationship:
+    dispatch is the durable entry shared with scheduled execution. Its mapping is
+    intake -> tasks/process_inputs, reviews -> tasks/process_reviews,
+    papers -> tasks/organize_papers, articles -> tasks/organize_articles,
+    recommendations -> tasks/recommend_papers. Each task owns its business order.
+
+Participants and effects:
+    Human operator, DBOS dispatcher, selected task, and its capability plugins.
+    Depending on the task, execution may call models and write Notion records.
+    Running intake does not execute the proposals it creates; human review is a
+    separate boundary. This command runs once, not as a scheduler.
+"""
 
 from __future__ import annotations
 

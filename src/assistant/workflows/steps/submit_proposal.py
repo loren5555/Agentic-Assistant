@@ -1,4 +1,30 @@
-"""Draft, publish, verify, and checkpoint one source proposal."""
+"""Share proposal submission across intake, capture escalation, and revision.
+
+Inputs:
+    Stable source key, SourceMaterial snapshot, and optional prior WorkbenchItem
+    carrying the previous proposal and human feedback.
+
+Outputs:
+    Confirmed Workbench URL plus a DBOS state event and local index pointer for
+    the source/proposal version. Successful submission acknowledges the raw input.
+
+Workflow:
+    Draft and checkpoint the Proposal -> reread source and relevant human fields
+    -> submit or revise through Workbench -> save the resulting machine state ->
+    acknowledge the original source. Model drafting and publication have separate
+    checkpoints so a write failure does not require repeating a successful draft.
+
+Participants and effects:
+    Parent intake/capture/review workflows, proposal-drafting agent, input source,
+    Workbench publisher, and human approver. Publication confirmation uses the
+    Workbench property receipt; source acknowledgement follows the saved state.
+    Inbox/TODO/SimpRead may be acknowledged; raw Notero remains read-only.
+
+Boundaries:
+    This operation ends at human approval, not task execution. Functions are
+    bound to WorkbenchWorkflows by runtime/application.py; callers determine
+    operation identity and timing, while plugins own individual service calls.
+"""
 
 from __future__ import annotations
 

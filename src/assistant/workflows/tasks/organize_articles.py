@@ -1,4 +1,24 @@
-"""Organize SimpRead articles and acknowledge only verified outputs."""
+"""Run articles: turn pending SimpRead captures into organized reading material.
+
+Inputs:
+    Optional explicit SimpRead page ID, including archived pages; otherwise up to
+    the batch limit from the head of the Agent Archived = false collection.
+
+Outputs:
+    Confirmed Papers, Knowledge, or Workbench proposal URLs and local processing
+    checkpoints. Successfully handled source pages receive Agent Archived = true.
+
+Workflow:
+    Delegate to shared steps/organize_capture with kind=simpread. Read content ->
+    deduplicate -> brief -> publish or propose -> checkpoint -> acknowledge.
+    Ordinary scans restart at the eligible queue head because archiving removes
+    rows from the filtered collection. Explicit page checks do not move its cursor.
+
+Participants and effects:
+    SimpRead reader, briefing agent, organized-content publisher, and optionally
+    proposal drafter and human approver. Called by run articles or a schedule.
+    Reads/writes Notion and local state, but does not execute proposed further work.
+"""
 
 from __future__ import annotations
 

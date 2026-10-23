@@ -1,4 +1,24 @@
-"""Explicitly initialize required storage fields."""
+"""Explicitly initialize the storage fields required by current workflows.
+
+Inputs:
+    Application services selected by YAML and their target collection settings.
+    No proposal, source page, or scheduled business job is supplied.
+
+Outputs:
+    Initialized schema and progress logs, rather than a task deliverable. Current
+    Notion plugins add the Workbench Finished option and Publication Key, archive
+    publication keys, and the Research Feed follow-up identity on Inbox.
+
+Workflow relationship:
+    Calls initialize_schema on Workbench, ArchiveStore, and ResearchFeed directly;
+    it does not run intake, reviews, captures, or recommendations itself.
+
+Participants and effects:
+    Human operator and storage plugins. Schema changes are explicit here rather
+    than repeated on every normal read/write. Application still launches DBOS
+    before this handler, so unrelated unfinished workflows may recover at startup.
+    This command does not approve or execute new proposals intentionally.
+"""
 
 from __future__ import annotations
 

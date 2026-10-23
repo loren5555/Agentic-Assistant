@@ -1,4 +1,31 @@
-"""Share raw-capture briefing, verified publication, and cursor checkpoints."""
+"""Share source selection, briefing, publication, and acknowledgement for captures.
+
+Inputs:
+    Notero/SimpRead collection and optional explicit page ID. Batches use pending
+    revision selection; each RawCapture includes the content and provenance the
+    briefing agent is actually permitted to interpret.
+
+Outputs:
+    Confirmed output/proposal URLs, per-capture DBOS checkpoints, handled source
+    versions in the local index, and pagination progress after a successful pass.
+
+Workflow:
+    Read captures -> compare meaningful fingerprints -> reuse or start one durable
+    item operation -> checkpoint the model brief -> publish Papers/Knowledge or
+    invoke shared submit_proposal -> save the capture checkpoint -> acknowledge
+    the source -> advance the collection cursor after the batch completes.
+    Publication rereads source content to reject a changed briefing scope.
+
+Participants and effects:
+    organize_papers and organize_articles tasks, capture reader, briefing agent,
+    content publisher, and optional proposal drafter/Workbench publisher. Item
+    operation identities isolate retries and preserve completed model work.
+
+Boundaries:
+    Only SimpRead acknowledgement writes the raw collection; Notero stays
+    read-only. A proposal result awaits approval rather than being executed here.
+    These shared operations are bound to TaskWorkflows by runtime/application.py.
+"""
 
 from __future__ import annotations
 
