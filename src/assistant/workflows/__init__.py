@@ -1,1 +1,1 @@
-"""Application processes that connect nodes and carry task state."""
+"""Complete tasks and their shared durable execution steps."""

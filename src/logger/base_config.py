@@ -31,7 +31,7 @@ class BaseConfig:
     """
 
     name: str = "assistant"
-    level: int | str = logging.INFO
+    level: int | str = logging.DEBUG
     style: Literal["%", "{", "$"] = "{"
     fmt: str = "{asctime} | {levelname:<8} | {name:<10} | {message}"
     date_fmt: str = "%H:%M:%S"

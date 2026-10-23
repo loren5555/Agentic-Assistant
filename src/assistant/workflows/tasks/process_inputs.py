@@ -1,0 +1,94 @@
+"""Process Inbox and elevated TODO inputs into human-reviewed proposals."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from dbos import DBOS
+
+from assistant.components.inputs.models import SourceMaterial
+from assistant.components.workbench.models import WorkbenchItem
+from assistant.runtime.records import digest
+from assistant.runtime.recovery import invoke
+from logger import get_logger
+
+if TYPE_CHECKING:
+    from assistant.runtime.application import TaskWorkflows
+
+logger = get_logger("assistant.workflows.tasks.process_inputs")
+
+
+@DBOS.workflow(name="JobWorkflows.intake")
+async def process_inputs(self: TaskWorkflows) -> list[str]:
+    """Create proposals and stop at human review, never execute implicitly.
+
+    Returns:
+        Verified Workbench links from this pass.
+    """
+    urls = []
+    sources = self.read_inputs()
+    skipped = 0
+    for position, source in enumerate(sources, start=1):
+        logger.info("Intake item %d/%d: source=%s page=%s title=%r.",
+                    position, len(sources), source.kind, source.page_id, source.title[:120])
+        key = f"proposal:{source.kind}:{source.page_id}"
+        record, state = await self.load_previous(key)
+        if record is not None and record["fingerprint"] == digest(source.text):
+            # A lost acknowledgement must not create another proposal.
+            logger.info("Skipping unchanged proposal: page=%s; checking source acknowledgement.", source.page_id)
+            skipped += 1
+            self.proposals.acknowledge(source)
+            continue
+        previous = WorkbenchItem.model_validate(state["item"]) if state else None
+        operation = "intake:" + digest(key + source.text)
+        url = await invoke(operation, self.proposals.submit_proposal, key, source, previous)
+        urls.append(url)
+        logger.info("Intake item resolved: page=%s workbench=%s.", source.page_id, url)
+    logger.info("Intake completed: read=%d submitted_or_reused=%d unchanged=%d.",
+                len(sources), len(urls), skipped)
+    return urls
+
+
+@DBOS.step(name="JobWorkflows.inputs")
+def read_inputs(self: TaskWorkflows) -> list[SourceMaterial]:
+    """Read eligible Inbox and elevated TODO inputs.
+
+    Returns:
+        Bounded source snapshots supplied by the input provider.
+    """
+    logger.info("Reading eligible inputs: Inbox Status != Archived; TODO Status = elevated.")
+    sources = self.services.inputs.list_inputs()
+    logger.info("Input read completed: inbox=%d todo=%d total=%d.",
+                sum(source.kind == "inbox" for source in sources),
+                sum(source.kind == "todo" for source in sources), len(sources))
+    return sources
+
+
+async def load_previous(self: TaskWorkflows, key: str) -> tuple[dict | None, dict | None]:
+    """Load state through its DBOS event rather than a Notion JSON property.
+
+    Args:
+        key: Stable source identity.
+
+    Returns:
+        Local pointer and its structured workflow state.
+    """
+    record = self.lookup(key)
+    state = None
+    if record is not None:
+        state = await DBOS.get_event_async(record["workflow_id"], "state", timeout_seconds=0)
+    return record, state
+
+
+@DBOS.step(name="JobWorkflows.lookup")
+def lookup(self: TaskWorkflows, key: str) -> dict | None:
+    """Locate the latest durable owner of one source.
+
+    Args:
+        key: Source identity.
+
+    Returns:
+        Index metadata, or None for a new input.
+    """
+    record = self.index.get(key)
+    return record

@@ -11,26 +11,24 @@ class ProviderSettings(BaseModel):
     """Select the providers implementing the application's external capabilities.
 
     Attributes:
-        inbox: Inbox provider package name, identifying a subpackage of providers.
+        inputs: Provider reading Inbox/TODO and confirming processed sources.
         router: Provider package exposing the decision service.
         investigator: Provider package exposing read-only question investigation.
         proposer: Provider package managing proposals.
         workbench: Provider package storing reports and reading their sources.
         worker: Provider completing self-contained approved tasks.
-        execution: Provider owning the approved-task execution cycle.
         curator: Provider finalizing human-accepted results.
         archive: Provider storing retained knowledge and ideas.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    inbox: str
+    inputs: str = "notion"
     router: str
     investigator: str
     proposer: str = "local"
     workbench: str = "notion"
     worker: str = "local"
-    execution: str = "local"
     curator: str = "local"
     archive: str = "notion"
     captures: str = "notion"
@@ -67,6 +65,7 @@ class AssistantConfig(BaseModel):
         providers: Provider selections for the application's capabilities.
         provider_options: Opaque options keyed by provider package name. Each
             provider interprets and validates its own settings when opened.
+        runtime: Local persistence, batching, and explicitly enabled schedules.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
