@@ -1,5 +1,15 @@
 """Recover a named existing workflow instead of submitting a new business task.
 
+Input origin:
+    The operator supplies a workflow ID, usually copied from status. Application
+    selects the configured DBOS database, and recovery reads that workflow
+    history, inputs, and saved steps rather than drafting a new task request.
+
+Output destination:
+    The recovery handle supplies the original workflow result to display()/stdout.
+    Any unfinished business steps publish through their original plugins to the
+    same Notion destinations and save new DBOS progress, subject to authorization.
+
 Inputs:
     An existing workflow ID from status and an Application with the corresponding
     durable functions registered against the selected runtime database.
@@ -27,12 +37,13 @@ import argparse
 
 from assistant.commands.run import display
 from assistant.runtime.recovery import recover
-from logger import get_logger
+from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
     from assistant.runtime.application import Application
 
 
+@trace_call("command", "resume")
 async def run(application: Application, options: argparse.Namespace) -> None:
     """Recover the requested workflow and display its actual result.
 

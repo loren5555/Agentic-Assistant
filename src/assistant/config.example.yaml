@@ -34,6 +34,8 @@ local:
   worker_model: openai-codex:gpt-5.6-luna
   worker_effort: low
   worker_timeout_seconds: 180
+  worker_toolsets:
+    calculator.local: {}  # plugins/tools/calculator/local.py:create_toolset
   curator_model: openai-codex:gpt-5.6-luna
   curator_effort: low
   curator_timeout_seconds: 180

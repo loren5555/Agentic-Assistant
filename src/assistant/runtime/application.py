@@ -14,8 +14,8 @@ from assistant.runtime.index import WorkIndex
 from assistant.runtime.records import install_checkpoint_aliases
 from assistant.runtime.services import Services
 from assistant.workflows.steps import submit_proposal as proposal_steps, organize_capture as capture_steps
-from assistant.workflows.tasks import organize_papers as paper_task, organize_articles as article_task
-from assistant.workflows.tasks import process_inputs as input_steps, process_reviews as review_steps
+from assistant.workflows.tasks import organize_papers as papers_task, organize_articles as articles_task
+from assistant.workflows.tasks import propose_tasks as proposal_task, process_workbench as workbench_task
 from assistant.workflows.tasks.recommend_papers import RecommendationWorkflows
 from logger import get_logger
 
@@ -45,10 +45,10 @@ class TaskWorkflows(DBOSConfiguredInstance):
         self.index = index
         self.settings = settings
 
-    read_inputs = input_steps.read_inputs
-    lookup = input_steps.lookup
-    load_previous = input_steps.load_previous
-    list_active = review_steps.list_active
+    read_inputs = proposal_task.read_inputs
+    lookup = proposal_task.lookup
+    load_previous = proposal_task.load_previous
+    list_active = workbench_task.list_active
     read_capture_batch = capture_steps.read_capture_batch
     brief = capture_steps.brief
     publish_capture = capture_steps.publish_capture
@@ -58,10 +58,10 @@ class TaskWorkflows(DBOSConfiguredInstance):
     save_cursor = capture_steps.save_cursor
     organize_captures = capture_steps.organize_captures
     read_capture = capture_steps.read_capture
-    process_inputs = input_steps.process_inputs
-    process_reviews = review_steps.process_reviews
-    organize_papers = paper_task.organize_papers
-    organize_articles = article_task.organize_articles
+    propose_tasks = proposal_task.propose_tasks
+    process_workbench = workbench_task.process_workbench
+    organize_papers = papers_task.organize_papers
+    organize_articles = articles_task.organize_articles
     dispatch = run_command.dispatch
 
 
@@ -89,17 +89,18 @@ class WorkbenchWorkflows(DBOSConfiguredInstance):
     publish_proposal = proposal_steps.publish_proposal
     acknowledge = proposal_steps.acknowledge
     submit_proposal = proposal_steps.submit_proposal
-    read_review = review_steps.read_review
-    route = review_steps.route
-    decide = review_steps.decide
-    execute = review_steps.execute
-    save_result = review_steps.save_result
-    check_authorization = review_steps.check_authorization
-    extract = review_steps.extract
-    publish_artifact = review_steps.publish_artifact
-    close_item = review_steps.close_item
-    review_item = review_steps.review_item
-    request_input = review_steps.request_input
+    read_review = workbench_task.read_review
+    route = workbench_task.route
+    decide = workbench_task.decide
+    execute = workbench_task.execute
+    save_result = workbench_task.save_result
+    save_error = workbench_task.save_error
+    check_authorization = workbench_task.check_authorization
+    extract = workbench_task.extract
+    publish_artifact = workbench_task.publish_artifact
+    close_item = workbench_task.close_item
+    review_item = workbench_task.review_item
+    request_input = workbench_task.request_input
 
 
 class Application:
@@ -118,7 +119,7 @@ class Application:
             settings: Provider choices, storage paths, and enabled schedules.
         """
         self.settings = settings
-        get_logger("runtime.application").info(
+        get_logger("runtime.application").debug(
             "Providers selected: proposer=%s router=%s worker=%s investigator=%s captures=%s discovery=%s.",
             settings.providers.proposer, settings.providers.router, settings.providers.worker,
             settings.providers.investigator, settings.providers.captures, settings.providers.discovery,
@@ -132,6 +133,8 @@ class Application:
         install_checkpoint_aliases()
         config: DBOSConfig = {
             "name": "assistant", "system_database_url": f"sqlite:///{directory / 'dbos.sqlite'}",
+            "log_level": "WARNING",
+            "console_log_level": "WARNING",
         }
         DBOS(config=config)
 

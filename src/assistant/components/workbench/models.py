@@ -1,12 +1,28 @@
 """Human review and visible execution state on the workbench."""
 
 from typing import Literal
+import hashlib
+import json
 
 from pydantic import BaseModel
 
 from assistant.components.curator.models import CurationDecision
 from assistant.components.proposer.models import Proposal
 from assistant.components.task_worker.models import TaskResult
+
+
+def result_publication_key(version: int, content: str) -> str:
+    """Identify a result within a proposal version.
+
+    Args:
+        version: Approved proposal version.
+        content: Published result text.
+
+    Returns:
+        Stable publication receipt.
+    """
+    payload = json.dumps([version, content], ensure_ascii=False)
+    return "result:" + hashlib.sha256(payload.encode()).hexdigest()
 
 
 class WorkbenchItem(BaseModel):
@@ -28,6 +44,8 @@ class WorkbenchItem(BaseModel):
         curation: Current extraction decision and verified destination links.
         publication_key: Report receipt stored in the Publication Key property.
         publication_applied: Whether the report has a publication receipt.
+        proposal_version: Revision displayed in the Workbench number property.
+        execution_error: Latest human-visible execution failure, cleared on success.
     """
 
     page_id: str
@@ -45,3 +63,5 @@ class WorkbenchItem(BaseModel):
     curation: CurationDecision | None = None
     publication_key: str = ""
     publication_applied: bool = False
+    proposal_version: int | None = None
+    execution_error: str = ""

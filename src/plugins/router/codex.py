@@ -11,7 +11,7 @@ import os
 from assistant.components.router.models import RouterDecision, RouterInput
 from assistant.components.router.prompt import ROUTER_INSTRUCTIONS, validate_decision
 from assistant.components.router.protocol import RouterProtocol
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.codex.config import CodexSettings
 from plugins._shared.codex.process import read_process
 
@@ -38,6 +38,7 @@ class DecisionRouter(RouterProtocol):
         self.executable = settings.executable
         self.logger = get_logger("plugins.router.codex")
 
+    @trace_call("component", "router.decide")
     async def decide(self, request: RouterInput) -> RouterDecision:
         """Read the supplied input and return a validated action suggestion.
 
@@ -157,9 +158,9 @@ class DecisionRouter(RouterProtocol):
             validated_decision.process = read_process(stdout.decode(errors="replace"))
             usage = validated_decision.process.usage
             elapsed_seconds = perf_counter() - started_at
-            usage_summary = json.dumps(usage, indent=2) if usage else "Unavailable"
             self.logger.info(
-                f"kind=agent provider=codex action=decide harness=codex Codex decision completed in {elapsed_seconds:.2f} seconds.\nToken usage:\n{usage_summary}",
+                f"kind=agent provider=codex action=decide harness=codex Codex decision completed in {elapsed_seconds:.2f} seconds.",
+                extra={"details": {"token_usage": usage}},
             )
 
         return validated_decision

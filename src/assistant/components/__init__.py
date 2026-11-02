@@ -1,5 +1,15 @@
 """Describe the capabilities available to the assistant's workflows.
 
+Input origin:
+    Commands and task workflows supply material through these contracts. Business
+    sources include Inbox/TODO, Workbench human decisions, Notero/SimpRead,
+    Research Interests, Research Feed, and retrieved public evidence.
+
+Output destination:
+    Capability results return to their calling workflows. Those workflows decide
+    the next consumer and persist state in DBOS/indexes or publish to Workbench,
+    Papers, Knowledge, Ideas, Research Feed, or Inbox through storage plugins.
+
 Responsibility:
     Give each business component one vocabulary, data contract, and interface.
     Its models.py defines exchanged data; protocol.py defines callable services.

@@ -1,5 +1,15 @@
 """Provide the human-facing workspace for proposals, decisions, and results.
 
+Input origin:
+    Proposal submission steps supply source/proposal data from InputSource or
+    captures. reviews supplies execution results, questions, and lifecycle
+    changes. Human approval, acceptance, and feedback originate in Notion Workbench.
+
+Output destination:
+    Reports, publication receipts, and requested lifecycle changes are written to
+    the Notion Workbench. WorkbenchItem snapshots return to the calling workflow
+    for DBOS/index checkpoints and the next review pass; humans read the pages.
+
 Responsibility:
     Store proposal reports, read human feedback, publish revised reports and
     execution results, and apply lifecycle changes requested by workflows.

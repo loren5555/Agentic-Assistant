@@ -1,4 +1,16 @@
-"""Run recommendations: select new papers through explicit evidence gates.
+"""Run recommend-papers: select new papers through explicit evidence gates.
+
+Input origin:
+    Manual/scheduled recommendations dispatch supplies the day. ResearchFeed
+    reads active Notion Research Interests; discovery and evidence plugins
+    supply candidate metadata and primary text; feed/local index supply duplicate
+    history. Demo mode replaces live discovery/assessment with fixtures.
+
+Output destination:
+    Passing real recommendations go through ResearchFeed.publish to Notion
+    Research Feed. RecommendationRun goes to DBOS and a local recommendations
+    JSON report, then command output. Human Interested feedback later flows
+    through reviews to Inbox, not directly to Papers.
 
 Inputs:
     Asia/Shanghai day, configured category maxima, read-only active research
@@ -18,14 +30,14 @@ Workflow:
 
 Participants and effects:
     Discovery service, evidence reader, assessment agent, Research Feed storage,
-    and human reader. run recommendations and scheduled dispatch share the same
+    and human reader. run recommend-papers and scheduled dispatch share the same
     per-day operation identity. Real mode may call models and publish Feed rows.
 
 Boundaries:
     Maxima are caps, not quotas; zero publication is valid. Synthetic demo mode
     uses fixed assessment and prohibits real Feed writes. Interests and Human
     Feedback are not modified. Interested follow-up implementations are bound
-    here for DBOS registration but live in process_reviews.py and run with reviews.
+    here for DBOS registration but live in reviews.py and run with reviews.
 """
 
 from pathlib import Path
@@ -37,8 +49,8 @@ from dbos import DBOS, DBOSConfiguredInstance
 from assistant.components.recommendations.models import CATEGORIES, PaperCandidate, PaperEvidence, Recommendation, RecommendationAssessment, RecommendationRun, ResearchInterest
 from assistant.runtime.index import WorkIndex
 from assistant.runtime.services import Services
-from assistant.workflows.tasks.process_reviews import list_interested, create_follow_up, process_followups
-from logger import get_logger
+from assistant.workflows.tasks.process_workbench import list_interested, create_follow_up, process_followups
+from logger import get_logger, trace_call
 
 
 def candidate_identity(candidate: PaperCandidate) -> str:
@@ -89,6 +101,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         self.logger = get_logger("workflows.tasks.recommend_papers")
 
     @DBOS.workflow(name="ResearchWorkflows.recommendations")
+    @trace_call("workflow", "recommend_papers")
     async def recommend_papers(self, day: str) -> RecommendationRun:
         """Run one day's bounded recommendations with resumable provider calls.
 
@@ -99,8 +112,13 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             Report of actual publications, failures, exclusions, and selected fixtures.
         """
         report = RecommendationRun(demo=self.demo)
-        self.logger.info("Recommendation run started: day=%s workflow=%s demo=%s maxima=%s.",
-                         day, DBOS.workflow_id, self.demo, self.maxima)
+        self.logger.info(
+            'Recommendation run started: day=%s demo=%s maxima=%s.',
+            day,
+            self.demo,
+            self.maxima,
+            extra={"details": {'workflow': DBOS.workflow_id}},
+        )
         if self.demo:
             self.logger.info("Offline demo: real interest reads, model assessment, and Feed publication are disabled.")
         interests = [] if self.demo else self.read_interests()
@@ -109,60 +127,99 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         seen = set()
 
         for position, candidate in enumerate(candidates, start=1):
-            self.logger.info("Recommendation candidate %d/%d: id=%s title=%r.",
-                             position, len(candidates), candidate.id, candidate.title[:120])
+            self.logger.info(
+                'Recommendation candidate %d/%d: title=%r.',
+                position,
+                len(candidates),
+                candidate.title[:120],
+                extra={"details": {'id': candidate.id}},
+            )
             identity = candidate_identity(candidate)
             if identity in seen:
                 report.rejected[candidate.id] = "Duplicate source identity in this run"
-                self.logger.info("Candidate rejected: id=%s reason=duplicate within run.", candidate.id)
+                self.logger.info(
+                    'Candidate rejected: reason=duplicate within run.',
+                    extra={"details": {'id': candidate.id}},
+                )
                 continue
             seen.add(identity)
             if not self.demo and not candidate.demo and self.find_duplicate(candidate):
                 report.rejected[candidate.id] = "Previously published recommendation"
-                self.logger.info("Candidate rejected: id=%s reason=previously published.", candidate.id)
+                self.logger.info(
+                    'Candidate rejected: reason=previously published.',
+                    extra={"details": {'id': candidate.id}},
+                )
                 continue
 
             try:
                 evidence = self.read(candidate)
             except Exception as error:
-                self.logger.warning("Evidence retrieval failed: candidate=%s error_type=%s; continuing other candidates.",
-                                    candidate.id, type(error).__name__)
+                self.logger.warning(
+                    'Evidence retrieval failed: error_type=%s; continuing other candidates.',
+                    type(error).__name__,
+                    extra={"details": {'candidate': candidate.id}},
+                )
                 # A failed individual source is recorded, not replaced by invented evidence.
                 report.source_failures[candidate.id] = f"{type(error).__name__}: {error}"
                 report.rejected[candidate.id] = "Primary evidence retrieval failed"
                 continue
             if evidence.failure:
-                self.logger.warning("Evidence source reported a failure: candidate=%s detail=%s.", candidate.id, evidence.failure[:240])
+                self.logger.warning(
+                    'Evidence source reported a failure.',
+                    extra={"details": {'candidate': candidate.id, 'detail': evidence.failure[:240]}},
+                )
                 report.source_failures[candidate.id] = evidence.failure
             if not evidence.primary_source or not evidence.text.strip():
                 report.rejected[candidate.id] = "Accessible primary evidence required"
-                self.logger.info("Candidate rejected: id=%s reason=accessible primary evidence required.", candidate.id)
+                self.logger.info(
+                    'Candidate rejected: reason=accessible primary evidence required.',
+                    extra={"details": {'id': candidate.id}},
+                )
                 continue
 
             assessment = await self.assess(candidate, evidence, interests)
             category = assessment.category
             if not assessment.qualified or category is None:
                 report.rejected[candidate.id] = assessment.reason
-                self.logger.info("Candidate rejected by assessment: id=%s reason=%s.", candidate.id, assessment.reason[:240])
+                self.logger.info(
+                    'Candidate rejected by assessment: reason=%s.',
+                    assessment.reason[:240],
+                    extra={"details": {'id': candidate.id}},
+                )
                 continue
             if category == "Mainline Deep Read" and not evidence.full_text:
                 report.rejected[candidate.id] = "Mainline Deep Read requires complete primary text"
-                self.logger.info("Candidate rejected: id=%s reason=full text required for deep read.", candidate.id)
+                self.logger.info(
+                    'Candidate rejected: reason=full text required for deep read.',
+                    extra={"details": {'id': candidate.id}},
+                )
                 continue
             if counts[category] >= self.maxima[category]:
                 report.rejected[candidate.id] = f"Daily maximum reached for {category}"
-                self.logger.info("Candidate rejected: id=%s reason=daily maximum reached category=%s.", candidate.id, category)
+                self.logger.info(
+                    'Candidate rejected: reason=daily maximum reached category=%s.',
+                    category,
+                    extra={"details": {'id': candidate.id}},
+                )
                 continue
 
             counts[category] += 1
             recommendation = Recommendation(candidate=candidate, evidence=evidence,
                                              assessment=assessment)
             report.selected.append(recommendation)
-            self.logger.info("Candidate selected: id=%s category=%s count=%d maximum=%d.",
-                             candidate.id, category, counts[category], self.maxima[category])
+            self.logger.info(
+                'Candidate selected: category=%s count=%d maximum=%d.',
+                category,
+                counts[category],
+                self.maxima[category],
+                extra={"details": {'id': candidate.id}},
+            )
             if self.demo or candidate.demo:
                 report.demo = True
-                self.logger.info("Synthetic recommendation retained locally only: candidate=%s; no Feed write.", candidate.id)
+                self.logger.info(
+                    'Synthetic recommendation retained locally only; no Feed write.',
+                    extra={"details": {'candidate': candidate.id}},
+                )
                 continue
 
             url = await self.publish(recommendation, day, report)
@@ -174,6 +231,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         return report
 
     @DBOS.step(name="ResearchWorkflows.read_interests")
+    @trace_call("step", "read_interests")
     def read_interests(self) -> list[ResearchInterest]:
         """Read current human priorities without modifying them.
 
@@ -186,6 +244,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         return interests
 
     @DBOS.step(name="ResearchWorkflows.discover")
+    @trace_call("step", "discover")
     def discover(self, interests: list[ResearchInterest]) -> list[PaperCandidate]:
         """Checkpoint candidate search separately from subsequent evidence reads.
 
@@ -201,6 +260,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         return candidates
 
     @DBOS.step(name="ResearchWorkflows.read")
+    @trace_call("step", "read")
     def read(self, candidate: PaperCandidate) -> PaperEvidence:
         """Checkpoint one primary-source retrieval.
 
@@ -210,13 +270,24 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         Returns:
             Actual source content, completeness, and any known retrieval failure.
         """
-        self.logger.info("Reading candidate evidence: candidate=%s demo=%s.", candidate.id, candidate.demo)
+        self.logger.info(
+            'Reading candidate evidence: demo=%s.',
+            candidate.demo,
+            extra={"details": {'candidate': candidate.id}},
+        )
         evidence = self.services.evidence.read(candidate)
-        self.logger.info("Evidence read: candidate=%s primary=%s full_text=%s characters=%d retrieval_failure=%s.",
-                         candidate.id, evidence.primary_source, evidence.full_text, len(evidence.text), bool(evidence.failure))
+        self.logger.info(
+            'Evidence read: primary=%s full_text=%s characters=%d retrieval_failure=%s.',
+            evidence.primary_source,
+            evidence.full_text,
+            len(evidence.text),
+            bool(evidence.failure),
+            extra={"details": {'candidate': candidate.id}},
+        )
         return evidence
 
     @DBOS.step(name="ResearchWorkflows.assess")
+    @trace_call("step", "assess")
     async def assess(self, candidate: PaperCandidate, evidence: PaperEvidence,
                      interests: list[ResearchInterest]) -> RecommendationAssessment:
         """Checkpoint a model response so publication retries do not reassess.
@@ -230,14 +301,22 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             Evidence-grounded decision with separate epistemic layers.
         """
         assessor = self.services.fixture_recommender if self.demo or candidate.demo else self.services.recommender
-        self.logger.info("Assessing candidate: candidate=%s mode=%s.", candidate.id,
-                         "fixed demo assessment" if self.demo or candidate.demo else "configured model")
+        self.logger.info(
+            'Assessing candidate: mode=%s.',
+            'fixed demo assessment' if self.demo or candidate.demo else 'configured model',
+            extra={"details": {'candidate': candidate.id}},
+        )
         assessment = await assessor.assess(candidate, evidence, interests)
-        self.logger.info("Assessment completed: candidate=%s qualified=%s category=%s.",
-                         candidate.id, assessment.qualified, assessment.category)
+        self.logger.info(
+            'Assessment completed: qualified=%s category=%s.',
+            assessment.qualified,
+            assessment.category,
+            extra={"details": {'candidate': candidate.id}},
+        )
         return assessment
 
     @DBOS.step(name="ResearchWorkflows.find_duplicate")
+    @trace_call("step", "find_duplicate")
     def find_duplicate(self, candidate: PaperCandidate) -> str | None:
         """Check local publication state and targeted historical feed identities.
 
@@ -250,13 +329,21 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         key = f"recommendation:{candidate_identity(candidate)}"
         previous = self.index.get(key)
         if previous is not None:
-            self.logger.info("Previously published candidate found in local index: candidate=%s.", candidate.id)
+            self.logger.info(
+                'Previously published candidate found in local index.',
+                extra={"details": {'candidate': candidate.id}},
+            )
             return previous["page_id"]
         url = self.services.feed.find_existing(candidate)
-        self.logger.info("Historical Feed lookup completed: candidate=%s duplicate=%s.", candidate.id, url is not None)
+        self.logger.info(
+            'Historical Feed lookup completed: duplicate=%s.',
+            url is not None,
+            extra={"details": {'candidate': candidate.id}},
+        )
         return url
 
     @DBOS.step(name="ResearchWorkflows.publish")
+    @trace_call("step", "publish")
     async def publish(self, recommendation: Recommendation, day: str,
                 report: RecommendationRun) -> str:
         """Publish with a stable key and save the mapping only after readback.
@@ -271,22 +358,31 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         """
         identity = candidate_identity(recommendation.candidate)
         key = hashlib.sha256(f"research-feed:{identity}".encode()).hexdigest()
-        self.logger.info("Publishing real recommendation: candidate=%s category=%s.",
-                         recommendation.candidate.id, recommendation.assessment.category)
+        self.logger.info(
+            'Publishing real recommendation: category=%s.',
+            recommendation.assessment.category,
+            extra={"details": {'candidate': recommendation.candidate.id}},
+        )
         try:
             url = self.services.feed.publish(recommendation, key)
         except Exception as error:
-            self.logger.exception("Recommendation publication failed: candidate=%s workflow=%s; preserving recovery report.",
-                                  recommendation.candidate.id, DBOS.workflow_id)
+            self.logger.exception(
+                'Recommendation publication failed; preserving recovery report.',
+                extra={"details": {'candidate': recommendation.candidate.id, 'workflow': DBOS.workflow_id}},
+            )
             report.pending_recovery[recommendation.candidate.id] = f"{type(error).__name__}: {error}"
             # Record failure inside the incomplete step: replay keeps the same step order.
             await self._record_report(day, report)
             raise
         self.index.save(f"recommendation:{identity}", key, DBOS.workflow_id, url, "Published")
-        self.logger.info("Recommendation publication verified: candidate=%s url=%s.", recommendation.candidate.id, url)
+        self.logger.info(
+            'Recommendation publication verified.',
+            extra={"details": {'candidate': recommendation.candidate.id, 'url': url}},
+        )
         return url
 
     @DBOS.step(name="ResearchWorkflows.save_report")
+    @trace_call("step", "save_report")
     async def save_report(self, day: str, report: RecommendationRun) -> None:
         """Persist current report as a DBOS event and a readable local file.
 
@@ -313,8 +409,14 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         payload = {"day": day, "workflow_id": DBOS.workflow_id, **data,
                    "publication_count": len(report.published), "short_term_interest_changes": []}
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        self.logger.info("Recommendation report saved: path=%s published=%d rejected=%d source_failures=%d pending_recovery=%d.",
-                         path, len(report.published), len(report.rejected), len(report.source_failures), len(report.pending_recovery))
+        self.logger.info(
+            'Recommendation report saved: published=%d rejected=%d source_failures=%d pending_recovery=%d.',
+            len(report.published),
+            len(report.rejected),
+            len(report.source_failures),
+            len(report.pending_recovery),
+            extra={"details": {'path': path}},
+        )
 
 
     # Persisted feedback workflows retain their registration while their business

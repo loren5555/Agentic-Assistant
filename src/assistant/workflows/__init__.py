@@ -1,5 +1,15 @@
 """Organize business processes as complete tasks and reusable durable operations.
 
+Input origin:
+    commands/run.dispatch supplies manual task requests; runtime/schedules routes
+    scheduled triggers through the same dispatcher. commands/resume can reenter
+    saved DBOS work. Business material is fetched by component/plugin readers.
+
+Output destination:
+    Task results return to the triggering command or scheduler. Child operations
+    save DBOS/index state and publish through storage components to Workbench,
+    Papers, Knowledge, Ideas, Research Feed, or Inbox as defined by each task.
+
 Responsibility:
     Connect component capabilities in the required order while keeping human
     review boundaries, external writes, and local DBOS progress explicit.

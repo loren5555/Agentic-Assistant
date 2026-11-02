@@ -16,7 +16,7 @@ from assistant.components.proposer.models import Proposal
 from assistant.components.proposer.protocol import ProposerProtocol
 from assistant.components.workbench.models import WorkbenchItem
 from assistant.runtime.records import ExecutionProcess
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.local.config import LocalSettings
 
 PROPOSER_INSTRUCTIONS = """Prepare a report for a personal research assistant's
@@ -62,6 +62,7 @@ class Proposer(ProposerProtocol):
             model_settings=model_settings,
         )
 
+    @trace_call("component", "proposer.draft")
     async def draft(
         self, source: SourceMaterial, previous: WorkbenchItem | None = None,
     ) -> Proposal:
@@ -114,10 +115,9 @@ class Proposer(ProposerProtocol):
         proposal.process = ExecutionProcess(events=messages, usage=usage)
 
         elapsed_seconds = perf_counter() - started_at
-        usage_summary = json.dumps(usage, indent=2)
         self.logger.info(
-            f"kind=agent provider=local action=draft_proposal Proposal completed in {elapsed_seconds:.2f} seconds.\n"
-            f"Token usage:\n{usage_summary}"
+            f"kind=agent provider=local action=draft_proposal Proposal completed in {elapsed_seconds:.2f} seconds.",
+            extra={"details": {"token_usage": usage}},
         )
 
         proposal.source_fingerprint = fingerprint(source)

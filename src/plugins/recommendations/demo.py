@@ -1,11 +1,13 @@
 """Small synthetic sources for validating discovery without external APIs."""
 
 from assistant.components.recommendations.models import PaperCandidate, PaperEvidence, RecommendationAssessment, ResearchInterest
+from logger import trace_call
 
 
 class DemoDiscovery:
     """Return deterministic candidates clearly prohibited from real publication."""
 
+    @trace_call("component", "recommendations.discover")
     def discover(self, interests: list[ResearchInterest]) -> list[PaperCandidate]:
         """Provide one full-text fixture and one unavailable-text fixture.
 
@@ -27,6 +29,7 @@ class DemoDiscovery:
 class DemoEvidenceReader:
     """Read tiny fixture text rather than pretending to retrieve a paper."""
 
+    @trace_call("component", "recommendations.read")
     def read(self, candidate: PaperCandidate) -> PaperEvidence:
         """Retrieve the known fixture or an explicit source failure.
 
@@ -52,6 +55,7 @@ class DemoEvidenceReader:
 class DemoRecommender:
     """Provide deterministic assessments for an offline entry-point demo."""
 
+    @trace_call("component", "recommendations.assess")
     async def assess(self, candidate: PaperCandidate, evidence: PaperEvidence,
                      interests: list[ResearchInterest]) -> RecommendationAssessment:
         """Assess the fixture without consuming model quota.

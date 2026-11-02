@@ -1,5 +1,16 @@
 """Organize existing raw paper and article captures into useful reading outputs.
 
+Input origin:
+    Notero contains raw Zotero-synced papers; the independent SimpRead collection
+    contains captured articles. papers/articles invoke shared
+    organize_capture steps, which pass source snapshots to the briefing capability.
+
+Output destination:
+    Raw captures flow to the briefing agent. Its brief flows to the capture
+    publisher for Notion Papers/Knowledge, or to submit_proposal and Workbench for
+    further work. Receipts return to the workflow for DBOS/index bookkeeping;
+    successful acknowledgement updates only SimpRead, never Notero.
+
 Responsibility:
     Separate source reading, evidence-grounded briefing, and output publication
     so workflows can deduplicate, checkpoint, and retry each part independently.
@@ -15,7 +26,7 @@ Outputs:
 
 Participants:
     Capture-source storage plugin, briefing agent, capture publisher, and the
-    organize_papers/organize_articles tasks sharing organize_capture steps.
+    papers/articles tasks sharing organize_capture steps.
 
 Boundaries:
     Notero is the raw input; Papers is organized output. Notero stays read-only;

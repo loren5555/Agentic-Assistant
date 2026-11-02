@@ -1,5 +1,15 @@
 """Interpret work and select one currently available action.
 
+Input origin:
+    reviews builds RouterInput from the human-approved proposal, original
+    source material, human instructions, and the permitted execution candidates.
+    Approval/feedback comes from Workbench; structured task state comes from DBOS.
+
+Output destination:
+    RouterDecision returns to reviews. Its dispatcher calls TaskWorker
+    or Investigator, or publishes a clarification through Workbench. The selected
+    capability later returns the result that the workflow displays in Workbench.
+
 Responsibility:
     Identify the user's intent and choose a next action from the supplied
     candidates, including asking the user when essential information is missing.
@@ -13,7 +23,7 @@ Outputs:
     a suggested next step, and an optional clarification question.
 
 Participants:
-    Decision agent and process_reviews execution dispatcher. The current workflow
+    Decision agent and reviews execution dispatcher. The current workflow
     uses this component after human approval, not to generate intake proposals.
 
 Boundaries:

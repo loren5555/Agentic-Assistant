@@ -13,8 +13,9 @@ class BaseConfig:
     Attributes:
         name: Root logger name shared by its child loggers.
         level: Minimum severity accepted by the logger.
+        verbose: Whether formatters include structured diagnostic details.
         style: Standard logging format syntax.
-        fmt: Record format, including the final segment of the logger name.
+        fmt: Record format; operation identifies only the current execution node.
         date_fmt: Timestamp format.
         console_log: Whether to print to stderr.
         console_log_level: Console severity threshold.
@@ -32,8 +33,9 @@ class BaseConfig:
 
     name: str = "assistant"
     level: int | str = logging.DEBUG
+    verbose: bool = False
     style: Literal["%", "{", "$"] = "{"
-    fmt: str = "{asctime} | {levelname:<8} | {name:<10} | {message}"
+    fmt: str = "{asctime} | {levelname:<8} | {operation} | {message}"
     date_fmt: str = "%H:%M:%S"
 
     console_log: bool = True

@@ -1,5 +1,15 @@
 """Answer delegated questions using attributable evidence.
 
+Input origin:
+    The investigate_question branch of reviews supplies an approved
+    question plus original material and human instructions. Retrieval tools
+    provided by the selected plugin supply any additional public evidence.
+
+Output destination:
+    InvestigationReport returns to reviews.execute, which converts its
+    answer, sources, and limitations into TaskResult. The workflow publishes that
+    result to Workbench for human acceptance, not directly to Papers/Knowledge.
+
 Responsibility:
     Investigate facts beyond the supplied material and distinguish supported
     findings from missing information, inaccessible sources, and uncertainty.
@@ -13,7 +23,7 @@ Outputs:
 
 Participants:
     Research/investigation agent, its implementation's retrieval tools, and the
-    process_reviews dispatcher selecting investigate_question for approved work.
+    reviews dispatcher selecting investigate_question for approved work.
     The workflow presents the returned report for human acceptance.
 
 Boundaries:

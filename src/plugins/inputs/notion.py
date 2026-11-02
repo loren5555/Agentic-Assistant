@@ -9,7 +9,7 @@ from notion_client import Client
 
 from assistant.components.inputs.models import SourceMaterial
 from assistant.components.inputs.protocol import InputSourceProtocol
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.notion.config import NotionSettings
 
 
@@ -25,6 +25,7 @@ class InputSource(InputSourceProtocol):
         self.settings = NotionSettings.model_validate(options)
         self.logger = get_logger("plugins.inputs.notion")
 
+    @trace_call("component", "inputs.list_inputs")
     def list_inputs(self) -> list[SourceMaterial]:
         """Read a bounded batch of unarchived Inbox and elevated TODO items.
 
@@ -50,15 +51,22 @@ class InputSource(InputSourceProtocol):
 
             sources = []
             for page in inbox_pages[:self.settings.input_limit]:
-                self.logger.debug("kind=script provider=notion Reading Inbox body: page=%s.", page["id"])
+                self.logger.debug(
+                    'kind=script provider=notion Reading Inbox body.',
+                    extra={"details": {'page': page['id']}},
+                )
                 sources.append(self._read_source(client, page, "inbox"))
             for page in todo_pages[:self.settings.input_limit]:
-                self.logger.debug("kind=script provider=notion Reading TODO body: page=%s.", page["id"])
+                self.logger.debug(
+                    'kind=script provider=notion Reading TODO body.',
+                    extra={"details": {'page': page['id']}},
+                )
                 sources.append(self._read_source(client, page, "todo"))
 
         self.logger.info("kind=script provider=notion Notion intake read completed: pages=%d.", len(sources))
         return sources
 
+    @trace_call("component", "inputs.read_source")
     def read_source(self, source_url: str) -> SourceMaterial:
         """Read an original source linked from a Workbench proposal.
 
@@ -91,6 +99,7 @@ class InputSource(InputSourceProtocol):
 
         return source
 
+    @trace_call("component", "inputs.close_source")
     def close_source(self, source: SourceMaterial) -> None:
         """Mark an input consumed after its proposal has been saved.
 
@@ -100,7 +109,12 @@ class InputSource(InputSourceProtocol):
         status = "Archived" if source.kind == "inbox" else "handled"
         if source.kind not in {"inbox", "todo"}:
             return
-        self.logger.info("kind=script provider=notion Acknowledging source: source=%s page=%s target_status=%s.", source.kind, source.page_id, status)
+        self.logger.info(
+            'kind=script provider=notion Acknowledging source: source=%s target_status=%s.',
+            source.kind,
+            status,
+            extra={"details": {'page': source.page_id}},
+        )
         with Client(auth=self.settings.token) as client:
             original = client.pages.retrieve(page_id=source.page_id)
             current = self._read_source(client, original, source.kind)
@@ -113,7 +127,11 @@ class InputSource(InputSourceProtocol):
             verified = client.pages.retrieve(page_id=source.page_id)
             if self._select(verified["properties"], "Status") != status:
                 raise ValueError(f"Source acknowledgement failed: {source.page_id}")
-        self.logger.info("kind=script provider=notion Source status verified: page=%s status=%s.", source.page_id, status)
+        self.logger.info(
+            'kind=script provider=notion Source status verified: status=%s.',
+            status,
+            extra={"details": {'page': source.page_id}},
+        )
 
     def _query_pages(self, client: Client, data_source_id: str, page_filter: dict | None = None, limit: int | None = None) -> list[dict]:
         """Read every page in a data source with an optional property filter.
@@ -130,8 +148,13 @@ class InputSource(InputSourceProtocol):
         pages = []
         cursor = None
         query_number = 0
-        self.logger.debug("kind=script provider=notion Querying Notion collection: data_source=%s limit=%s.", data_source_id, limit or "all matching")
-        self.logger.debug("kind=script provider=notion Notion collection filter: %s.", page_filter)
+        self.logger.debug(
+            'kind=script provider=notion Querying Notion collection: limit=%s.',
+            limit or 'all matching',
+            extra={"details": {'data_source': data_source_id}},
+        )
+        self.logger.debug("kind=script provider=notion Notion collection filter.",
+                          extra={"details": {"filter": page_filter}})
         while True:
             arguments = {"data_source_id": data_source_id, "page_size": 100, "result_type": "page"}
             if limit is not None:

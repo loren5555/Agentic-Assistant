@@ -2,62 +2,18 @@
 
 from collections.abc import Mapping
 import hashlib
-import html
-import re
-from urllib.parse import urlsplit
 
 from notion_client import Client
 
 from assistant.components.captures.models import CaptureBrief, CaptureReceipt, RawCapture
 from assistant.components.captures.protocol import CapturePublisherProtocol
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.notion.config import CaptureSettings
 from plugins._shared.notion.markdown import page_markdown
+from plugins._shared.notion.schema import ensure_rich_text, ensure_checkbox
 
 BRIEF_START = "## Assistant brief"
 BRIEF_END = "## End of assistant brief"
-
-
-def canonical_notion_url(match: re.Match[str]) -> str:
-    """Compare Notion page links by page ID rather than display URL.
-
-    Args:
-        match: HTTP URL found in the Markdown being compared.
-
-    Returns:
-        Stable page reference for Notion pages, or the original external URL.
-    """
-    url = match.group(0)
-    parsed = urlsplit(url)
-    if parsed.hostname in {"notion.so", "www.notion.so", "notion.com", "www.notion.com", "app.notion.com"}:
-        page_id = re.search(r"([0-9a-fA-F]{32}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$", parsed.path)
-        if page_id:
-            url = "notion-page:" + page_id.group(1).replace("-", "").lower()
-    return url
-
-
-def normalize_brief_markdown(content: str) -> str:
-    """Normalize observed Notion export transformations, not missing content.
-
-    Args:
-        content: Generated or retrieved assistant-owned Markdown.
-
-    Returns:
-        Comparable text preserving words, external link targets, and order.
-    """
-    text = html.unescape(content)
-    text = re.sub(r'<mention-page\s+url="([^"]+)"\s*/>', r"\1", text)
-    # Export wraps bare URLs as links. Keep custom labels as well as targets,
-    # so changing a citation's destination cannot pass as a formatting change.
-    text = re.sub(
-        r"\[([^\]\n]*)\]\((https?://[^\s)]+)\)",
-        lambda match: match.group(2) if match.group(1) == match.group(2)
-        else match.group(1) + " " + match.group(2),
-        text,
-    )
-    text = re.sub(r'https?://[^\s<>"\])]+', canonical_notion_url, text)
-    normalized = " ".join(text.split())
-    return normalized
 
 
 def rich_text(text: str) -> list[dict]:
@@ -88,6 +44,7 @@ class CapturePublisher(CapturePublisherProtocol):
         self.settings = CaptureSettings.model_validate(options)
         self.logger = get_logger("plugins.captures.notion.publisher")
 
+    @trace_call("component", "captures.publish")
     def publish(self, capture: RawCapture, brief: CaptureBrief) -> CaptureReceipt:
         """Create or replace only the assistant-owned brief section.
 
@@ -122,8 +79,16 @@ class CapturePublisher(CapturePublisherProtocol):
             page_filter = {"property": property_name, "rich_text": {"equals": key}}
 
         section = self._brief_section(capture, brief, key)
-        self.logger.info("kind=script provider=notion Publishing organized capture: source_page=%s destination=%s evidence=%s.",
-                         capture.page_id, brief.destination, brief.evidence_level)
+        # Source identity locates the page; the receipt identifies this exact
+        # source version and report. Neither depends on Notion's Markdown export.
+        publication_key = "brief:" + hashlib.sha256(section.encode()).hexdigest()
+        self.logger.info(
+            'kind=script provider=notion Publishing organized capture: title=%r destination=%s evidence=%s.',
+            brief.title,
+            brief.destination,
+            brief.evidence_level,
+            extra={"details": {'source_page': capture.page_id}},
+        )
         with Client(auth=self.settings.token) as client:
             source = client.data_sources.retrieve(data_source_id=data_source_id)
             title_name = next(name for name, value in source["properties"].items() if value["type"] == "title")
@@ -133,23 +98,45 @@ class CapturePublisher(CapturePublisherProtocol):
                 matches, bibliographic_properties = self._bibliographic_matches(capture, source["properties"])
                 page_filter["or"].extend(matches)
             response = client.data_sources.query(data_source_id=data_source_id, filter=page_filter, page_size=2)
-            self.logger.debug("kind=script provider=notion Organized-output lookup: source_page=%s matches=%d.", capture.page_id, len(response["results"]))
+            self.logger.debug(
+                'kind=script provider=notion Organized-output lookup: matches=%d.',
+                len(response['results']),
+                extra={"details": {'source_page': capture.page_id}},
+            )
             if len(response["results"]) > 1:
                 raise ValueError(f"Multiple organized outputs for source {capture.url}")
 
+            reading_properties = {}
+            if brief.destination == "papers":
+                existing_properties = response["results"][0]["properties"] if response["results"] else {}
+                reading_properties = self._reading_properties(capture, brief, source["properties"], existing_properties)
+
             if response["results"]:
-                page_id = response["results"][0]["id"]
-                self.logger.debug("kind=script provider=notion Updating existing assistant brief: page=%s; human title and notes retained.", page_id)
-                # Canonicalize only the assistant-owned provenance property.
-                client.pages.update(page_id=page_id, properties={property_name: property_value})
-                body = page_markdown(client, page_id)
-                self._update_brief(client, page_id, body, section)
+                existing = response["results"][0]
+                page_id = existing["id"]
+                confirmed = self._publication_key(existing) == publication_key
+                if confirmed:
+                    self.logger.info(
+                        'kind=checkpoint Organized brief already confirmed: title=%r; preserving human notes.',
+                        brief.title,
+                        extra={"details": {"page": page_id}},
+                    )
+                else:
+                    self.logger.debug(
+                        'kind=script provider=notion Updating assistant brief: title=%r; human title and notes retained.',
+                        brief.title,
+                        extra={"details": {'page': page_id}},
+                    )
+                    body = page_markdown(client, page_id)
+                    self._update_brief(client, page_id, body, section)
             else:
-                self.logger.debug("kind=script provider=notion Creating organized %s page for source=%s.", brief.destination, capture.page_id)
+                self.logger.debug("kind=script provider=notion Creating organized %s page.", brief.destination,
+                                  extra={"details": {"source_page": capture.page_id}})
                 properties = {
                     title_name: {"title": rich_text(brief.title)},
                     property_name: property_value,
                     **bibliographic_properties,
+                    **reading_properties,
                 }
                 if brief.destination == "papers":
                     properties["Source Type"] = {"select": {"name": "Zotero" if capture.kind == "notero" else "SimpRead"}}
@@ -158,58 +145,130 @@ class CapturePublisher(CapturePublisherProtocol):
                     properties=properties, markdown=section,
                 )
                 page_id = page["id"]
+                confirmed = False
 
-            # Updating an existing entry never overwrites its title or human notes.
-            if brief.destination == "papers":
-                client.pages.update(page_id=page_id, properties={"Brief Status": {"select": {"name": "Reviewed"}}})
-            self.logger.debug("kind=script provider=notion Verifying organized capture readback: page=%s destination=%s.", page_id, brief.destination)
+            # Confirm only after the body API succeeds. Lost acknowledgements
+            # reuse the same page, and a matching receipt never rewrites content.
+            if not confirmed:
+                properties = {
+                    property_name: property_value,
+                    "Publication Key": {"rich_text": rich_text(publication_key)},
+                }
+                if brief.destination == "papers":
+                    properties["Brief Status"] = {"select": {"name": "Reviewed"}}
+                client.pages.update(page_id=page_id, properties=properties)
+            # Fill missing reading fields even when the body was already confirmed.
+            # Nonempty human-edited fields are deliberately preserved.
+            if response["results"] and reading_properties:
+                self.logger.info('Completing paper reading metadata: title=%r fields=%s.',
+                                 brief.title, ", ".join(reading_properties))
+                client.pages.update(page_id=page_id, properties=reading_properties)
+            self.logger.debug(
+                'kind=script provider=notion Verifying organized capture readback: destination=%s.',
+                brief.destination,
+                extra={"details": {'page': page_id}},
+            )
             verified = client.pages.retrieve(page_id=page_id)
-            body = page_markdown(client, page_id)
-            stored = verified["properties"][property_name]
-            stored_identity = stored["url"] if brief.destination == "papers" else "".join(part["plain_text"] for part in stored["rich_text"])
-            expected_identity = capture.url if brief.destination == "papers" else key
-            self._verify_brief(page_id, body, section, stored_identity, expected_identity)
-            if brief.destination == "papers" and verified["properties"]["Brief Status"]["select"]["name"] != "Reviewed":
-                self.logger.error("kind=script provider=notion Organized capture verification failed: page=%s mismatches=brief_status.", page_id)
-                raise ValueError(f"Brief status readback failed: {page_id}")
+            if self._publication_key(verified) != publication_key:
+                self.logger.error(
+                    'kind=script provider=notion Organized capture confirmation failed: title=%r.',
+                    brief.title,
+                    extra={"details": {'page': page_id}},
+                )
+                raise ValueError(f"Brief publication key readback failed: {page_id}")
             receipt = CaptureReceipt(page_id=page_id, url=verified["url"], key=key, fingerprint=capture.fingerprint)
-        self.logger.info("kind=script provider=notion Organized capture readback verified: destination=%s page=%s url=%s.",
-                         brief.destination, page_id, receipt.url)
+            if capture.kind == "notero" and brief.destination == "papers":
+                # Confirm the destination first, including on publication retries.
+                self.logger.info('Marking Notero entry as published to Papers: title=%r.', capture.title)
+                client.pages.update(page_id=capture.page_id,
+                                    properties={"Agent In Papers": {"checkbox": True}})
+                source = client.pages.retrieve(page_id=capture.page_id)
+                if not source["properties"]["Agent In Papers"]["checkbox"]:
+                    raise ValueError(f"Notero Papers flag readback failed: {capture.page_id}")
+                self.logger.info('Notero Papers flag verified: title=%r.', capture.title)
+        self.logger.info(
+            'kind=script provider=notion Organized capture readback verified: title=%r destination=%s.',
+            brief.title,
+            brief.destination,
+            extra={"details": {'page': page_id, 'url': receipt.url}},
+        )
         return receipt
 
-    def _verify_brief(
-        self, page_id: str, body: str, section: str, stored_identity: str, expected_identity: str,
-    ) -> None:
-        """Check the complete owned report and its separate provenance property.
+    def _publication_key(self, page: dict) -> str:
+        """Read a publication receipt independently of page Markdown.
 
         Args:
-            page_id: Destination page used in diagnostic logs.
-            body: Complete readback including human notes.
-            section: Expected assistant brief, evidence, reason, and source markers.
-            stored_identity: Provenance property retrieved from Notion.
-            expected_identity: Source URL or archive key submitted for publication.
+            page: Destination properties returned by a query or retrieval.
+
+        Returns:
+            Report receipt, or an empty string for an unconfirmed page.
         """
-        mismatches = []
-        if stored_identity != expected_identity:
-            mismatches.append("source_property")
+        fragments = page["properties"].get("Publication Key", {}).get("rich_text", [])
+        key = "".join(fragment["plain_text"] for fragment in fragments)
+        return key
 
-        if body.count(BRIEF_START) != 1 or body.count(BRIEF_END) != 1:
-            mismatches.append("brief_boundaries")
-        else:
-            start = body.index(BRIEF_START)
-            end = body.index(BRIEF_END) + len(BRIEF_END)
-            if end <= start:
-                mismatches.append("brief_boundary_order")
-            else:
-                actual = normalize_brief_markdown(body[start:end])
-                expected = normalize_brief_markdown(section)
-                if actual != expected:
-                    mismatches.append("brief_content_or_provenance")
+    @trace_call("component", "captures.initialize_schema")
+    def initialize_schema(self) -> None:
+        """Add destination receipts and the visible Notero publication flag."""
+        destinations = {self.settings.papers_data_source_id, self.settings.knowledge_data_source_id}
+        with Client(auth=self.settings.token) as client:
+            for data_source_id in sorted(destinations - {""}):
+                ensure_rich_text(client, data_source_id, "Publication Key")
+            if self.settings.papers_data_source_id:
+                ensure_rich_text(client, self.settings.papers_data_source_id, "Reading Summary")
+            if self.settings.notero_data_source_id:
+                ensure_checkbox(client, self.settings.notero_data_source_id, "Agent In Papers")
 
-        if mismatches:
-            details = ", ".join(mismatches)
-            self.logger.error("kind=script provider=notion Organized capture verification failed: page=%s mismatches=%s.", page_id, details)
-            raise ValueError(f"Brief publication readback failed: {page_id}; mismatches={details}")
+    def _reading_properties(self, capture: RawCapture, brief: CaptureBrief,
+                            schema: dict, existing: dict) -> dict:
+        """Fill empty reading properties while preserving human-owned values.
+
+        Args:
+            capture: Original source metadata.
+            brief: Evidence-grounded reading metadata.
+            schema: Available destination property definitions.
+            existing: Current destination values, or an empty mapping on creation.
+
+        Returns:
+            Nonempty supported property updates, excluding citation metadata.
+        """
+        metadata = capture.metadata
+        reading = brief.reading
+        source_tags = metadata.get("Collections", []) + metadata.get("Tags", [])
+        source_tags = [tag for tag in source_tags if isinstance(tag, str)
+                       and tag.strip().lower() not in {"ai-processed", "notion"}]
+        values = {
+            "Original Title": capture.title,
+            "Authors": metadata.get("Authors"),
+            "Abstract": metadata.get("Abstract") or reading.abstract,
+            "Reading Summary": reading.summary,
+            "Date": metadata.get("Date") or reading.publication_date,
+            "Publication": metadata.get("Publication") or metadata.get("Proceedings Title") or reading.publication,
+            "Year": metadata.get("Year"),
+            "Keywords": reading.keywords or metadata.get("Keywords"),
+            "Tags": source_tags or reading.tags,
+            "Link": metadata.get("URL") or metadata.get("Link"),
+            "Code": metadata.get("Code") or reading.code_url,
+        }
+        properties = {}
+        for name, value in values.items():
+            if not value or name not in schema:
+                continue
+            kind = schema[name]["type"]
+            if existing.get(name, {}).get(kind):
+                continue
+            if kind == "rich_text" and isinstance(value, str):
+                properties[name] = {kind: rich_text(value)}
+            elif kind == "number" and isinstance(value, (int, float)):
+                properties[name] = {kind: value}
+            elif kind == "url" and isinstance(value, str) and value.startswith(("https://", "http://")):
+                properties[name] = {kind: value}
+            elif kind == "multi_select" and isinstance(value, list):
+                names = list(dict.fromkeys(v.strip() for v in value if isinstance(v, str) and v.strip()))
+                names = [v for v in names if v.lower() not in {"ai-processed", "notion"}]
+                if names:
+                    properties[name] = {kind: [{"name": v.replace(",", ";")[:100]} for v in names[:20]]}
+        return properties
 
     def _bibliographic_matches(self, capture: RawCapture, schema: dict) -> tuple[list[dict], dict]:
         """Use available Zotero URI and DOI columns without inventing schema.
@@ -275,7 +334,10 @@ class CapturePublisher(CapturePublisherProtocol):
             section: New assistant-owned report.
         """
         if BRIEF_START not in body and BRIEF_END not in body:
-            self.logger.debug("kind=script provider=notion Appending assistant brief to existing page: page=%s.", page_id)
+            self.logger.debug(
+                'kind=script provider=notion Appending assistant brief to existing page.',
+                extra={"details": {'page': page_id}},
+            )
             client.pages.update_markdown(
                 page_id=page_id, type="insert_content",
                 insert_content={"content": "\n\n" + section, "position": {"type": "end"}},
@@ -283,7 +345,10 @@ class CapturePublisher(CapturePublisherProtocol):
             return
         if body.count(BRIEF_START) != 1 or body.count(BRIEF_END) != 1:
             raise ValueError(f"Ambiguous assistant brief boundaries: {page_id}")
-        self.logger.debug("kind=script provider=notion Replacing assistant-owned brief region: page=%s.", page_id)
+        self.logger.debug(
+            'kind=script provider=notion Replacing assistant-owned brief region.',
+            extra={"details": {'page': page_id}},
+        )
         start = body.index(BRIEF_START)
         end = body.index(BRIEF_END) + len(BRIEF_END)
         if end <= start:

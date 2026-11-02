@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from dbos import DBOS
 
-from logger import get_logger
+from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
     from assistant.runtime.application import Application
@@ -31,6 +31,7 @@ def bind(application: Application, *, serving: bool) -> None:
 
 
 @DBOS.workflow(name="scheduled_job")
+@trace_call("workflow", "scheduled_job")
 async def scheduled_job(scheduled_time: datetime, context: dict[str, str]):
     """Dispatch an explicitly enabled schedule through the configured application.
 

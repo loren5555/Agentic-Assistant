@@ -65,6 +65,10 @@ class BriefWriterProtocol(Protocol):
 class CapturePublisherProtocol(Protocol):
     """Publish organized outputs while preserving human discussion."""
 
+    def initialize_schema(self) -> None:
+        """Initialize publication receipt properties in organized destinations."""
+        ...
+
     def publish(self, capture: RawCapture, brief: CaptureBrief) -> CaptureReceipt:
         """Create or update one destination under a stable source key.
 

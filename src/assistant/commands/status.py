@@ -1,5 +1,15 @@
 """Inspect persisted schedules and the most recent workflow executions.
 
+Input origin:
+    Application opens the configured DBOS system database. The handler reads its
+    saved schedules and recent workflow metadata through DBOS APIs; it does not
+    fetch Workbench or other Notion rows to construct this status output.
+
+Output destination:
+    display() prints schedule/workflow summaries as JSON on stdout for the human
+    operator. Workflow IDs can be used as resume input. The handler itself writes
+    no business destination; startup recovery effects are noted below.
+
 Inputs:
     Application pointing to the selected local runtime database and parsed
     command options. No source page or business task is selected.
@@ -27,12 +37,13 @@ import argparse
 from dbos import DBOS
 
 from assistant.commands.run import display
-from logger import get_logger
+from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
     from assistant.runtime.application import Application
 
 
+@trace_call("command", "status")
 async def run(application: Application, options: argparse.Namespace) -> None:
     """Display persisted schedules and recent workflow statuses.
 

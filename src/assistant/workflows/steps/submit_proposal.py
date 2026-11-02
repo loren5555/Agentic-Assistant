@@ -1,5 +1,16 @@
 """Share proposal submission across intake, capture escalation, and revision.
 
+Input origin:
+    intake passes Inbox/TODO material from InputSource. organize_capture
+    can adapt a Notero/SimpRead record into SourceMaterial. reviews
+    supplies revised sources and Workbench feedback when a proposal needs revision.
+
+Output destination:
+    The draft goes to a DBOS step checkpoint, then Workbench.submit/revise
+    publishes the report in Notion Workbench. Source/item state goes to DBOS and
+    WorkIndex; eligible source acknowledgements go to Inbox/TODO/SimpRead. The
+    Workbench URL returns to the parent workflow and awaits human approval.
+
 Inputs:
     Stable source key, SourceMaterial snapshot, and optional prior WorkbenchItem
     carrying the previous proposal and human feedback.
@@ -37,7 +48,7 @@ from assistant.components.inputs.models import SourceMaterial
 from assistant.components.proposer.models import Proposal
 from assistant.components.workbench.models import WorkbenchItem
 from assistant.runtime.records import digest, capture_material
-from logger import get_logger
+from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
     from assistant.runtime.application import WorkbenchWorkflows
@@ -46,6 +57,7 @@ logger = get_logger("assistant.workflows.steps.submit_proposal")
 
 
 @DBOS.workflow(name="ProposalWorkflows.intake_item")
+@trace_call("workflow", "submit_proposal")
 async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMaterial, previous: WorkbenchItem | None = None) -> str:
     """Publish one source proposal and end at the human approval boundary.
 
@@ -57,16 +69,23 @@ async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMate
     Returns:
         Verified Workbench URL.
     """
-    logger.info("Proposal intake started: source_page=%s workflow=%s.", source.page_id, DBOS.workflow_id)
+    logger.info(
+        'Proposal intake started.',
+        extra={"details": {'source_page': source.page_id, 'workflow': DBOS.workflow_id}},
+    )
     proposal = await self.draft(source, previous)
     item = self.publish_proposal(source, proposal, previous)
     await self.save_checkpoint(key, source, item)
     self.acknowledge(source)
-    logger.info("Proposal intake completed: source_page=%s workbench=%s; waiting for human approval.", source.page_id, item.url)
+    logger.info(
+        'Proposal intake completed; waiting for human approval.',
+        extra={"details": {'source_page': source.page_id, 'workbench': item.url}},
+    )
     return item.url
 
 
 @DBOS.step(name="ProposalWorkflows.draft")
+@trace_call("step", "draft")
 async def draft(self: WorkbenchWorkflows, source: SourceMaterial, previous: WorkbenchItem | None = None) -> Proposal:
     """Checkpoint one provider draft separately from external publication.
 
@@ -77,14 +96,26 @@ async def draft(self: WorkbenchWorkflows, source: SourceMaterial, previous: Work
     Returns:
         Provider-generated proposal.
     """
-    logger.info("Drafting proposal: source=%s page=%s mode=%s.",
-                source.kind, source.page_id, "revision" if previous else "new")
+    logger.info(
+        'Drafting proposal: title=%r source=%s mode=%s.',
+        source.title,
+        source.kind,
+        'revision' if previous else 'new',
+        extra={"details": {'page': source.page_id}},
+    )
     proposal = await self.services.proposer.draft(source, previous)
-    logger.info("Proposal drafted: source_page=%s version=%d plan_steps=%d.", source.page_id, proposal.version, len(proposal.plan))
+    logger.info(
+        'Proposal drafted: title=%r version=%d plan_steps=%d.',
+        proposal.title,
+        proposal.version,
+        len(proposal.plan),
+        extra={"details": {'source_page': source.page_id}},
+    )
     return proposal
 
 
 @DBOS.step(name="ProposalWorkflows.publish_proposal")
+@trace_call("step", "publish_proposal")
 def publish_proposal(self: WorkbenchWorkflows, source: SourceMaterial, proposal: Proposal, previous: WorkbenchItem | None = None) -> WorkbenchItem:
     """Publish and re-fetch one proposal with its confirmation property.
 
@@ -96,7 +127,13 @@ def publish_proposal(self: WorkbenchWorkflows, source: SourceMaterial, proposal:
     Returns:
         Verified page retaining the runtime payload.
     """
-    logger.info("Publishing proposal: source_page=%s version=%d updating=%s.", source.page_id, proposal.version, previous is not None)
+    logger.info(
+        'Publishing proposal: title=%r version=%d updating=%s.',
+        proposal.title,
+        proposal.version,
+        previous is not None,
+        extra={"details": {'source_page': source.page_id}},
+    )
     if self.read_current_source(source).text != source.text:
         raise RuntimeError("Source changed during proposal drafting")
     if previous is None:
@@ -119,11 +156,18 @@ def publish_proposal(self: WorkbenchWorkflows, source: SourceMaterial, proposal:
             item = self.services.workbench.revise(previous, proposal)
     item.proposal = proposal
     item.source_kind = source.kind
-    logger.info("Proposal publication verified: page=%s version=%d status=%s.", item.page_id, proposal.version, item.status)
+    logger.info(
+        'Proposal publication verified: title=%r version=%d status=%s.',
+        item.title,
+        proposal.version,
+        item.status,
+        extra={"details": {'page': item.page_id}},
+    )
     return item
 
 
 @DBOS.step(name="ProposalWorkflows.checkpoint")
+@trace_call("step", "save_checkpoint")
 async def save_checkpoint(self: WorkbenchWorkflows, key: str, source: SourceMaterial, item: WorkbenchItem) -> None:
     """Save machine state in DBOS before advancing its local index pointer.
 
@@ -142,11 +186,15 @@ async def save_checkpoint(self: WorkbenchWorkflows, key: str, source: SourceMate
         path.write_text(json.dumps(traces, ensure_ascii=False, indent=2), encoding="utf-8")
     await DBOS.set_event_async("state", state)
     self.index.save(key, digest(source.text), DBOS.workflow_id, item.page_id, item.status)
-    logger.debug("Business state checkpoint saved: page=%s status=%s workflow=%s.",
-                 item.page_id, item.status, DBOS.workflow_id)
+    logger.debug(
+        'Business state checkpoint saved: status=%s.',
+        item.status,
+        extra={"details": {'page': item.page_id, 'workflow': DBOS.workflow_id}},
+    )
 
 
 @DBOS.step(name="ProposalWorkflows.acknowledge")
+@trace_call("step", "acknowledge")
 def acknowledge(self: WorkbenchWorkflows, source: SourceMaterial) -> None:
     """Close raw intake only after its destination is verified.
 
@@ -165,6 +213,7 @@ def acknowledge(self: WorkbenchWorkflows, source: SourceMaterial) -> None:
 
 
 @DBOS.step(name="ProposalWorkflows.read_source")
+@trace_call("step", "read_source")
 def read_source(self: WorkbenchWorkflows, source: SourceMaterial) -> SourceMaterial:
     """Refresh the raw input while respecting independent source interfaces.
 

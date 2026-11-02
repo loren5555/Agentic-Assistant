@@ -12,7 +12,7 @@ from pydantic_ai.native_tools import WebSearchTool
 from assistant.components.investigator.models import InvestigationReport, InvestigationRequest
 from assistant.components.investigator.protocol import InvestigatorProtocol
 from assistant.runtime.records import ExecutionProcess
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.local.config import LocalSettings
 
 
@@ -48,6 +48,7 @@ class Investigator(InvestigatorProtocol):
             ),
         )
 
+    @trace_call("component", "investigator.investigate")
     async def investigate(self, request: InvestigationRequest) -> InvestigationReport:
         """Research one question and return an attributed report.
 
@@ -58,8 +59,8 @@ class Investigator(InvestigatorProtocol):
             Verified findings and limitations.
         """
         started = monotonic()
-        self.logger.info("kind=agent provider=local action=investigate_question Starting public-source investigation: model=%s context_items=%d timeout=%.0fs.",
-                         self.agent.model.model_name, len(request.context), self.settings.investigator_timeout_seconds)
+        self.logger.info("kind=agent provider=local action=investigate_question Starting public-source investigation: question=%r model=%s context_items=%d timeout=%.0fs.",
+                         request.question[:180], self.agent.model.model_name, len(request.context), self.settings.investigator_timeout_seconds)
         try:
             async with asyncio.timeout(self.settings.investigator_timeout_seconds):
                 async with self.agent:
@@ -77,6 +78,12 @@ class Investigator(InvestigatorProtocol):
             usage={"input_tokens": usage.input_tokens, "cached_input_tokens": usage.cache_read_tokens,
                    "output_tokens": usage.output_tokens, "requests": usage.requests},
         )
-        self.logger.info("kind=agent provider=local action=investigate_question Investigation completed: elapsed=%.2fs sources=%d limitations=%d usage=%s.",
-                         monotonic() - started, len(report.sources), len(report.limitations), report.process.usage)
+        self.logger.info(
+            'kind=agent provider=local action=investigate_question Investigation completed: question=%r elapsed=%.2fs sources=%d limitations=%d.',
+            request.question[:180],
+            monotonic() - started,
+            len(report.sources),
+            len(report.limitations),
+            extra={"details": {'usage': report.process.usage}},
+        )
         return report

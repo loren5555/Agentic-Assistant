@@ -18,6 +18,7 @@ class LocalSettings(BaseModel):
         worker_model: Model used for self-contained approved tasks.
         worker_effort: Reasoning effort for task completion.
         worker_timeout_seconds: Maximum duration of one task invocation.
+        worker_toolsets: Tool plugin modules and options enabled for the worker.
         curator_model: Model extracting reusable accepted outcomes.
         curator_effort: Reasoning effort for curation.
         curator_timeout_seconds: Maximum duration of one extraction.
@@ -40,6 +41,7 @@ class LocalSettings(BaseModel):
         "none", "minimal", "low", "medium", "high", "xhigh", "max"
     ] | None = "low"
     worker_timeout_seconds: float = 180
+    worker_toolsets: dict[str, dict[str, object]] = {"calculator.local": {}}
     curator_model: str
     curator_effort: Literal[
         "none", "minimal", "low", "medium", "high", "xhigh", "max"

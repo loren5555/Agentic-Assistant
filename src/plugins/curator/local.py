@@ -13,7 +13,7 @@ from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 from assistant.components.curator.models import CurationDecision
 from assistant.components.curator.protocol import CuratorProtocol
 from assistant.components.workbench.models import WorkbenchItem
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.local.config import LocalSettings
 
 CURATOR_INSTRUCTIONS = """Curate the result of a human-accepted task for a personal
@@ -63,6 +63,7 @@ class Curator(CuratorProtocol):
             output_type=NativeOutput(CurationDecision), model_settings=model_settings,
         )
 
+    @trace_call("component", "curator.extract")
     async def extract(self, item: WorkbenchItem) -> CurationDecision:
         """Extract one accepted result without changing storage.
 
@@ -73,8 +74,12 @@ class Curator(CuratorProtocol):
             A grounded extraction with its result fingerprint.
         """
         started = monotonic()
-        self.logger.info("kind=agent provider=local action=curate_result Extracting reusable outcomes from accepted result: page=%s model=%s timeout=%.0fs.",
-                         item.page_id, self.settings.curator_model, self.settings.curator_timeout_seconds)
+        self.logger.info(
+            'kind=agent provider=local action=curate_result Extracting reusable outcomes from accepted result: model=%s timeout=%.0fs.',
+            self.settings.curator_model,
+            self.settings.curator_timeout_seconds,
+            extra={"details": {'page': item.page_id}},
+        )
         material = self._material(item)
         try:
             async with asyncio.timeout(self.settings.curator_timeout_seconds):
@@ -88,8 +93,12 @@ class Curator(CuratorProtocol):
             raise
         decision = response.output
         decision.result_fingerprint = hashlib.sha256(material.encode()).hexdigest()
-        self.logger.info("kind=agent provider=local action=curate_result Curation extraction completed: page=%s elapsed=%.2fs artifacts=%d usage=%s.",
-                         item.page_id, monotonic() - started, len(decision.artifacts), response.usage)
+        self.logger.info(
+            'kind=agent provider=local action=curate_result Curation extraction completed: elapsed=%.2fs artifacts=%d.',
+            monotonic() - started,
+            len(decision.artifacts),
+            extra={"details": {'page': item.page_id, 'usage': response.usage}},
+        )
         return decision
 
     def _material(self, item: WorkbenchItem) -> str:

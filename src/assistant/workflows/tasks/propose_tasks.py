@@ -1,4 +1,15 @@
-"""Run intake: convert eligible human inputs into proposals awaiting approval.
+"""Run propose-tasks: convert eligible human inputs into proposals awaiting approval.
+
+Input origin:
+    commands/run.dispatch selects propose-tasks, manually or via a
+    schedule. InputSource reads Notion Inbox/TODO, while WorkIndex and DBOS
+    supply any earlier proposal for the same meaningful source version.
+
+Output destination:
+    Source snapshots go to steps/submit_proposal, which invokes Proposer and
+    publishes to Notion Workbench. Proposal state goes to DBOS/index; source
+    acknowledgements go back to Inbox/TODO. Workbench URLs return to dispatch
+    and the triggering command; later run process-workbench consumes human decisions.
 
 Inputs:
     InputSource reads Inbox Status != Archived and TODO Status = elevated.
@@ -16,7 +27,7 @@ Workflow:
 
 Participants and effects:
     Input reader, proposal-drafting agent, Workbench publisher, and human approver.
-    Called by run intake or its configured schedule. Reads/writes Notion and
+    Called by run propose-tasks or its configured schedule. Reads/writes Notion and
     saves DBOS/index state; it never routes or executes the new proposal itself.
 """
 
@@ -30,16 +41,17 @@ from assistant.components.inputs.models import SourceMaterial
 from assistant.components.workbench.models import WorkbenchItem
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
-from logger import get_logger
+from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
     from assistant.runtime.application import TaskWorkflows
 
-logger = get_logger("assistant.workflows.tasks.process_inputs")
+logger = get_logger("assistant.workflows.tasks.propose_tasks")
 
 
 @DBOS.workflow(name="JobWorkflows.intake")
-async def process_inputs(self: TaskWorkflows) -> list[str]:
+@trace_call("workflow", "propose_tasks")
+async def propose_tasks(self: TaskWorkflows) -> list[str]:
     """Create proposals and stop at human review, never execute implicitly.
 
     Returns:
@@ -49,13 +61,22 @@ async def process_inputs(self: TaskWorkflows) -> list[str]:
     sources = self.read_inputs()
     skipped = 0
     for position, source in enumerate(sources, start=1):
-        logger.info("Intake item %d/%d: source=%s page=%s title=%r.",
-                    position, len(sources), source.kind, source.page_id, source.title[:120])
+        logger.info(
+            'Intake item %d/%d: source=%s title=%r.',
+            position,
+            len(sources),
+            source.kind,
+            source.title[:120],
+            extra={"details": {'page': source.page_id}},
+        )
         key = f"proposal:{source.kind}:{source.page_id}"
         record, state = await self.load_previous(key)
         if record is not None and record["fingerprint"] == digest(source.text):
             # A lost acknowledgement must not create another proposal.
-            logger.info("Skipping unchanged proposal: page=%s; checking source acknowledgement.", source.page_id)
+            logger.info(
+                'Skipping unchanged proposal; checking source acknowledgement.',
+                extra={"details": {'page': source.page_id}},
+            )
             skipped += 1
             self.proposals.acknowledge(source)
             continue
@@ -63,13 +84,17 @@ async def process_inputs(self: TaskWorkflows) -> list[str]:
         operation = "intake:" + digest(key + source.text)
         url = await invoke(operation, self.proposals.submit_proposal, key, source, previous)
         urls.append(url)
-        logger.info("Intake item resolved: page=%s workbench=%s.", source.page_id, url)
+        logger.info(
+            'Intake item resolved.',
+            extra={"details": {'page': source.page_id, 'workbench': url}},
+        )
     logger.info("Intake completed: read=%d submitted_or_reused=%d unchanged=%d.",
                 len(sources), len(urls), skipped)
     return urls
 
 
 @DBOS.step(name="JobWorkflows.inputs")
+@trace_call("step", "read_inputs")
 def read_inputs(self: TaskWorkflows) -> list[SourceMaterial]:
     """Read eligible Inbox and elevated TODO inputs.
 
@@ -101,6 +126,7 @@ async def load_previous(self: TaskWorkflows, key: str) -> tuple[dict | None, dic
 
 
 @DBOS.step(name="JobWorkflows.lookup")
+@trace_call("step", "lookup")
 def lookup(self: TaskWorkflows, key: str) -> dict | None:
     """Locate the latest durable owner of one source.
 

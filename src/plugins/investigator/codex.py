@@ -10,7 +10,7 @@ import os
 
 from assistant.components.investigator.models import InvestigationReport, InvestigationRequest
 from assistant.components.investigator.protocol import InvestigatorProtocol
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.codex.config import CodexSettings
 from plugins._shared.codex.process import read_process
 
@@ -64,6 +64,7 @@ class Investigator(InvestigatorProtocol):
         self.executable = settings.executable
         self.logger = get_logger("plugins.investigator.codex")
 
+    @trace_call("component", "investigator.investigate")
     async def investigate(self, request: InvestigationRequest) -> InvestigationReport:
         """Research the original material and return a sourced answer.
 
@@ -126,7 +127,8 @@ class Investigator(InvestigatorProtocol):
             command.append("-")
 
             self.logger.info(
-                f"kind=agent provider=codex action=investigate_question harness=codex Investigating public sources: model={self.model}, effort={self.effort}."
+                "kind=agent provider=codex action=investigate_question harness=codex Investigating public sources: question=%r model=%s effort=%s.",
+                request.question[:180], self.model, self.effort,
             )
             started_at = perf_counter()
             process = await asyncio.create_subprocess_exec(
@@ -171,10 +173,10 @@ class Investigator(InvestigatorProtocol):
             report.process = read_process(stdout.decode(errors="replace"))
             usage = report.process.usage
             elapsed_seconds = perf_counter() - started_at
-            usage_summary = json.dumps(usage, indent=2) if usage else "Unavailable"
             self.logger.info(
-                f"kind=agent provider=codex action=investigate_question harness=codex Investigation completed in {elapsed_seconds:.2f} seconds.\n"
-                f"Token usage:\n{usage_summary}"
+                "kind=agent provider=codex action=investigate_question harness=codex Investigation completed: question=%r elapsed=%.2fs.",
+                request.question[:180], elapsed_seconds,
+                extra={"details": {"token_usage": usage}},
             )
 
         return report

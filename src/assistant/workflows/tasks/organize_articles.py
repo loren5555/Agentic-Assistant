@@ -1,4 +1,15 @@
-"""Run articles: turn pending SimpRead captures into organized reading material.
+"""Run organize-articles: turn pending SimpRead captures into organized reading material.
+
+Input origin:
+    commands/run.dispatch selects organize-articles. Shared capture steps read pending
+    entries from the independent Notion SimpRead database, or the explicit
+    --page supplied by the operator. The local index supplies handled versions.
+
+Output destination:
+    Briefs go through the capture publisher to Notion Papers/Knowledge, or through
+    proposal submission to Workbench. Confirmed links return to dispatch and
+    command output; DBOS/index save progress and SimpRead receives Agent Archived
+    acknowledgement. Proposed further work is later handled by process-workbench.
 
 Inputs:
     Optional explicit SimpRead page ID, including archived pages; otherwise up to
@@ -16,7 +27,7 @@ Workflow:
 
 Participants and effects:
     SimpRead reader, briefing agent, organized-content publisher, and optionally
-    proposal drafter and human approver. Called by run articles or a schedule.
+    proposal drafter and human approver. Called by run organize-articles or a schedule.
     Reads/writes Notion and local state, but does not execute proposed further work.
 """
 
@@ -25,12 +36,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from dbos import DBOS
+from logger import trace_call
 
 if TYPE_CHECKING:
     from assistant.runtime.application import TaskWorkflows
 
 
-@DBOS.workflow(name="organize_articles")
+@DBOS.workflow(name="JobWorkflows.articles")
+@trace_call("workflow", "organize_articles")
 async def organize_articles(self: TaskWorkflows, page_id: str | None = None) -> list[str]:
     """Organize SimpRead articles and acknowledge only verified outputs.
 

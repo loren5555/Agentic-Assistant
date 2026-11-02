@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse
 
 JOB_HELP = {
-    "intake": {
+    "propose-tasks": {
         "help": "Draft Workbench proposals from Inbox and elevated TODO items.",
         "description": (
             "Read eligible Notion inputs, draft proposals, and submit them to Workbench\n"
@@ -17,14 +17,14 @@ JOB_HELP = {
 
 Next step:
   Review the proposal in Notion. Set Human Review to Approved, Revision Requested,
-  or Rejected; put planning feedback in Human Instruction. Then run reviews.
+  or Rejected; put planning feedback in Human Instruction. Then run process-workbench.
 
 Examples:
-  python -m assistant run intake
-  python -m assistant --config config.local.yaml run intake
-  python -m assistant run reviews""",
+  python -m assistant run propose-tasks
+  python -m assistant --config config.local.yaml run propose-tasks
+  python -m assistant run process-workbench""",
     },
-    "reviews": {
+    "process-workbench": {
         "help": "Process human decisions, execute approved work, and curate accepted results.",
         "description": (
             "Read human decisions for locally managed Workbench items and advance each\n"
@@ -47,12 +47,12 @@ Scope and writes:
   This job can call models and write Notion reports, statuses, and retained outputs.
 
 Examples:
-  python -m assistant run reviews
-  python -m assistant --config config.local.yaml run reviews
+  python -m assistant run process-workbench
+  python -m assistant --config config.local.yaml run process-workbench
 
 Approve and accept results in Notion; this command does not approve them for you.""",
     },
-    "papers": {
+    "organize-papers": {
         "help": "Organize read-only Notero captures into paper briefs or proposals.",
         "description": (
             "Read raw Zotero-synced records from Notero and organize the supplied\n"
@@ -75,11 +75,11 @@ Batch and reading scope:
   Zotero attachments are not downloaded. Abstracts and notes are not full-text reads.
 
 Examples:
-  python -m assistant run papers
-  python -m assistant run papers --page NOTERO_PAGE_ID
-  python -m assistant --config config.local.yaml run papers""",
+  python -m assistant run organize-papers
+  python -m assistant run organize-papers --page NOTERO_PAGE_ID
+  python -m assistant --config config.local.yaml run organize-papers""",
     },
-    "articles": {
+    "organize-articles": {
         "help": "Organize independent SimpRead captures into briefs, knowledge, or proposals.",
         "description": (
             "Read captured articles from the independent SimpRead Notion database.\n"
@@ -100,11 +100,11 @@ Batch and reprocessing:
   The source database must already have the Agent Archived checkbox property.
 
 Examples:
-  python -m assistant run articles
-  python -m assistant run articles --page SIMPREAD_PAGE_ID
-  python -m assistant --config config.local.yaml run articles""",
+  python -m assistant run organize-articles
+  python -m assistant run organize-articles --page SIMPREAD_PAGE_ID
+  python -m assistant --config config.local.yaml run organize-articles""",
     },
-    "recommendations": {
+    "recommend-papers": {
         "help": "Assess research candidates within evidence gates and daily maxima.",
         "description": (
             "Discover candidates, read available primary evidence, assess relevance,\n"
@@ -130,8 +130,8 @@ Persistence and output:
   To retry a failed run, use status to find its ID, then resume WORKFLOW_ID.
 
 Examples:
-  python -m assistant run recommendations
-  python -m assistant --config config.local.yaml run recommendations
+  python -m assistant run recommend-papers
+  python -m assistant --config config.local.yaml run recommend-papers
   python -m assistant status""",
     },
 }
@@ -144,6 +144,11 @@ def arguments() -> argparse.Namespace:
         Command options, including the selected job and optional raw page ID.
     """
     formatter = argparse.RawDescriptionHelpFormatter
+    verbose_options = argparse.ArgumentParser(add_help=False)
+    verbose_options.add_argument(
+        "-v", "--verbose", action="store_true", default=argparse.SUPPRESS,
+        help="Include workflow/page IDs, query keys, and full tracebacks; keep log levels unchanged.",
+    )
     parser = argparse.ArgumentParser(
         prog="agentic-assistant",
         formatter_class=formatter,
@@ -162,10 +167,17 @@ Runtime behaviour:
   before running another command. Launching DBOS can recover previously unfinished
   work, including during status or setup. Help exits before launching the runtime.
 
+Logging:
+  Log levels select which records are emitted; -v does not change those levels.
+  Add -v or --verbose before or after the command/job for diagnostic fields,
+  token usage details, and full exception tracebacks on emitted records.
+  JSON business results on stdout are unchanged.
+
 Examples:
-  python -m assistant run intake
-  python -m assistant run papers --help
-  python -m assistant --config config.local.yaml run reviews
+  python -m assistant run propose-tasks
+  python -m assistant run process-workbench -v
+  python -m assistant run organize-papers --help
+  python -m assistant --config config.local.yaml run process-workbench
   python -m assistant serve
 
 The agentic-assistant console command accepts the same arguments.
@@ -175,35 +187,39 @@ Use COMMAND --help or run JOB --help for detailed behaviour and examples.""",
         "--config", type=Path, metavar="FILE",
         help="YAML configuration file (default: config.yaml in the assistant package); place before COMMAND.",
     )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="Include workflow/page IDs, query keys, and full tracebacks; keep log levels unchanged.",
+    )
     commands = parser.add_subparsers(dest="command", required=True, title="commands", metavar="COMMAND")
 
     # Job subcommands retain existing invocation syntax while exposing their own help.
     run = commands.add_parser(
         "run", help="Run one named job once, print its result, and exit.",
-        formatter_class=formatter,
+        formatter_class=formatter, parents=[verbose_options],
         description=(
             "Run one named workflow pass without enabling recurring schedules.\n"
             "The job may call models and update Notion; human approval boundaries remain."
         ),
         epilog="""Options and configuration:
   Select a job below; run JOB --help describes its sources, writes, and examples.
-  --page PAGE_ID is available only for papers and articles.
+  --page PAGE_ID is available only for organize-papers and organize-articles.
   Configure providers, model settings, and batch limits in YAML, not as CLI overrides.
   Previously unfinished workflows can also recover when DBOS starts.
 
 Examples:
-  python -m assistant run intake
-  python -m assistant run reviews
-  python -m assistant run papers --page NOTERO_PAGE_ID
-  python -m assistant run recommendations --help
+  python -m assistant run propose-tasks
+  python -m assistant run process-workbench
+  python -m assistant run organize-papers --page NOTERO_PAGE_ID
+  python -m assistant run recommend-papers --help
 
 Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run.""",
     )
     run.set_defaults(page=None)
     jobs = run.add_subparsers(dest="job", required=True, title="jobs", metavar="JOB")
     for name, documentation in JOB_HELP.items():
-        job = jobs.add_parser(name, formatter_class=formatter, **documentation)
-        if name in {"papers", "articles"}:
+        job = jobs.add_parser(name, formatter_class=formatter, parents=[verbose_options], **documentation)
+        if name in {"organize-papers", "organize-articles"}:
             job.add_argument(
                 "--page", metavar="PAGE_ID",
                 help=(
@@ -214,7 +230,7 @@ Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run
 
     commands.add_parser(
         "serve", help="Stay running and dispatch schedules explicitly enabled in YAML.",
-        formatter_class=formatter,
+        formatter_class=formatter, parents=[verbose_options],
         description=(
             "Start the persistent DBOS scheduler and keep this process running.\n"
             "Dispatch only jobs listed in runtime.schedules; each execution uses the\n"
@@ -223,13 +239,14 @@ Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run
         epilog="""Schedule configuration:
   runtime:
     schedules:
-      intake: "0 0 7 * * *"
-      reviews: "0 */15 * * * *"
+      propose-tasks: "0 0 7 * * *"
+      process-workbench: "0 */15 * * * *"
 
   Use six cron fields: second minute hour day-of-month month day-of-week.
-  Timezone: Asia/Shanghai. The example runs intake at 07:00 and reviews every
+  Timezone: Asia/Shanghai. The example proposes tasks at 07:00 and processes reviews every
   15 minutes. With schedules: {} (default), the process waits without new jobs.
-  Available jobs: intake, reviews, papers, articles, recommendations.
+  Available jobs: propose-tasks, process-workbench, organize-papers,
+  organize-articles, recommend-papers.
 
 Persistence and shutdown:
   Schedules persist in DBOS. This command updates configured schedules and pauses
@@ -246,7 +263,7 @@ Use run JOB to debug a single pass before enabling a schedule.""",
     )
     commands.add_parser(
         "status", help="Print saved schedules and the 20 most recent workflow statuses.",
-        formatter_class=formatter,
+        formatter_class=formatter, parents=[verbose_options],
         description=(
             "Print JSON containing persisted schedules and the 20 most recent workflows.\n"
             "Workflow entries include id, status, and name; inputs and outputs are not loaded."
@@ -265,7 +282,7 @@ Use a workflow id from this output with resume WORKFLOW_ID after fixing its erro
     )
     resume = commands.add_parser(
         "resume", help="Recover an existing workflow using its saved checkpoints.",
-        formatter_class=formatter,
+        formatter_class=formatter, parents=[verbose_options],
         description=(
             "Recover the selected workflow rather than starting a new business task.\n"
             "For ERROR workflows, rewind from the failed step and retain earlier successful\n"
@@ -285,7 +302,7 @@ Examples:
   python -m assistant resume WORKFLOW_ID
   python -m assistant --config config.local.yaml resume WORKFLOW_ID
 
-Use run reviews for newly recorded human decisions, not resume.""",
+Use run process-workbench for newly recorded human decisions, not resume.""",
     )
     resume.add_argument(
         "workflow_id", metavar="WORKFLOW_ID",
@@ -293,14 +310,16 @@ Use run reviews for newly recorded human decisions, not resume.""",
     )
     commands.add_parser(
         "setup", help="Explicitly add required Notion schema fields and status options.",
-        formatter_class=formatter,
+        formatter_class=formatter, parents=[verbose_options],
         description=(
             "Initialize the Notion schema additions needed by the configured stores.\n"
             "This command modifies database structure; it is not a connection-only check."
         ),
         epilog="""Schema additions:
-  Workbench: add the Finished option to Status.
+  Workbench: add Finished to Status, Publication Key text, and Proposal Version number.
+  Workbench: also add Source Kind and Execution Error text properties.
   Knowledge / Ideas: add the Archive Key rich-text property when configured.
+  Papers / Knowledge: add the Publication Key rich-text property for brief receipts.
   Inbox: add the Research Feed Key rich-text property.
   Existing additions are retained; successful writes are independently read back.
 

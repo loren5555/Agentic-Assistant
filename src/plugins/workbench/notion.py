@@ -10,11 +10,11 @@ from assistant.components.curator.models import CurationDecision
 from assistant.components.inputs.models import SourceMaterial
 from assistant.components.proposer.models import Proposal
 from assistant.components.task_worker.models import TaskResult
-from assistant.components.workbench.models import WorkbenchItem
+from assistant.components.workbench.models import WorkbenchItem, result_publication_key
 from assistant.components.workbench.protocol import WorkbenchProtocol
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.notion.config import NotionSettings
-from plugins._shared.notion.schema import ensure_rich_text, ensure_select_option
+from plugins._shared.notion.schema import ensure_number, ensure_rich_text, ensure_select_option
 
 
 def publication_key(kind: str, value: str) -> str:
@@ -43,6 +43,7 @@ class Workbench(WorkbenchProtocol):
         self.settings = NotionSettings.model_validate(options)
         self.logger = get_logger("plugins.workbench.notion")
 
+    @trace_call("component", "workbench.list_items")
     def list_items(self, statuses: list[str]) -> list[WorkbenchItem]:
         """Read current proposals and reviews directly from page properties.
 
@@ -67,6 +68,7 @@ class Workbench(WorkbenchProtocol):
         self.logger.info("kind=script provider=notion Workbench status query completed: statuses=%s pages=%d.", statuses, len(items))
         return items
 
+    @trace_call("component", "workbench.read_item")
     def read_item(self, page_id: str) -> WorkbenchItem:
         """Read a proposal immediately before acting on its review.
 
@@ -76,14 +78,22 @@ class Workbench(WorkbenchProtocol):
         Returns:
             Current proposal page and human review values.
         """
-        self.logger.debug("kind=script provider=notion Reading Workbench properties: page=%s.", page_id)
+        self.logger.debug(
+            'kind=script provider=notion Reading Workbench properties.',
+            extra={"details": {'page': page_id}},
+        )
         with Client(auth=self.settings.token) as client:
             page = client.pages.retrieve(page_id=page_id)
             item = self._parse_item(page)
-        self.logger.debug("kind=script provider=notion Workbench properties read: page=%s status=%s confirmed=%s.",
-                          page_id, item.status, item.publication_applied)
+        self.logger.debug(
+            'kind=script provider=notion Workbench properties read: status=%s confirmed=%s.',
+            item.status,
+            item.publication_applied,
+            extra={"details": {'page': page_id}},
+        )
         return item
 
+    @trace_call("component", "workbench.submit")
     def submit(self, source: SourceMaterial, proposal: Proposal, workflow_id: str = "") -> WorkbenchItem:
         """Create a proposal report awaiting human review.
 
@@ -95,14 +105,22 @@ class Workbench(WorkbenchProtocol):
         Returns:
             Created Workbench page with its report and review properties.
         """
-        self.logger.info("kind=script provider=notion Submitting Workbench proposal: source=%s page=%s version=%d workflow=%s.",
-                         source.kind, source.page_id, proposal.version, workflow_id)
+        self.logger.info(
+            'kind=script provider=notion Submitting Workbench proposal: title=%r source=%s version=%d.',
+            proposal.title,
+            source.kind,
+            proposal.version,
+            extra={"details": {'page': source.page_id, 'workflow': workflow_id}},
+        )
         properties = {
             "Name": {"title": self._rich_text(proposal.title)},
             "Status": {"select": {"name": "Open"}},
             "Source": {"rich_text": self._rich_text(source.url)},
+            "Source Kind": {"rich_text": self._rich_text(source.kind)},
+            "Execution Error": {"rich_text": []},
             "Human Review": {"select": {"name": "Pending"}},
             "Result Review": {"select": {"name": "Pending"}},
+            "Proposal Version": {"number": proposal.version},
         }
         report = self._report_text(source, proposal)
         key = publication_key("proposal", proposal.model_dump_json(exclude={"process"}))
@@ -121,9 +139,16 @@ class Workbench(WorkbenchProtocol):
                     raise ValueError(f"Duplicate Workbench workflow: {workflow_id}")
             if existing:
                 page = existing[0]
-                self.logger.info("kind=script provider=notion Recovering existing Workbench proposal: page=%s; checking confirmation.", page["id"])
+                self.logger.info(
+                    'kind=script provider=notion Recovering existing Workbench proposal; checking confirmation.',
+                    extra={"details": {'page': page['id']}},
+                )
             else:
-                self.logger.info("kind=script provider=notion Creating Workbench proposal for source_page=%s.", source.page_id)
+                self.logger.info(
+                    'kind=script provider=notion Creating Workbench proposal: title=%r.',
+                    proposal.title,
+                    extra={"details": {'source_page': source.page_id}},
+                )
                 page = client.pages.create(
                     parent={"type": "data_source_id", "data_source_id": self.settings.workbench_data_source_id},
                     properties=properties,
@@ -139,15 +164,28 @@ class Workbench(WorkbenchProtocol):
                         page_id=page_id, type="replace_content",
                         replace_content={"new_str": report},
                     )
-                self._confirm_publication(client, page_id, key)
+                self._confirm_publication(client, page_id, key, {
+                    "Proposal Version": {"number": proposal.version},
+                    "Source Kind": {"rich_text": self._rich_text(source.kind)},
+                    "Execution Error": {"rich_text": []},
+                })
             else:
-                self.logger.info("kind=checkpoint Workbench proposal already confirmed: page=%s; preserving human review.", page_id)
+                self.logger.info(
+                    'kind=checkpoint Workbench proposal already confirmed; preserving human review.',
+                    extra={"details": {'page': page_id}},
+                )
         item = self.read_item(page_id)
         item.proposal = proposal
         item.source_kind = source.kind
-        self.logger.info("kind=script provider=notion Workbench proposal verified: page=%s status=%s url=%s.", item.page_id, item.status, item.url)
+        self.logger.info(
+            'kind=script provider=notion Workbench proposal verified: title=%r status=%s.',
+            item.title,
+            item.status,
+            extra={"details": {'page': item.page_id, 'url': item.url}},
+        )
         return item
 
+    @trace_call("component", "workbench.revise")
     def revise(self, item: WorkbenchItem, proposal: Proposal) -> WorkbenchItem:
         """Publish a revision, then confirm its review reset through properties.
 
@@ -158,14 +196,21 @@ class Workbench(WorkbenchProtocol):
         Returns:
             Confirmed proposal with current human review values.
         """
-        self.logger.info("kind=script provider=notion Revising Workbench proposal: page=%s version=%d.",
-                         item.page_id, proposal.version)
+        self.logger.info(
+            'kind=script provider=notion Revising Workbench proposal: title=%r version=%d.',
+            proposal.title,
+            proposal.version,
+            extra={"details": {'page': item.page_id}},
+        )
         key = publication_key("proposal", proposal.model_dump_json(exclude={"process"}))
         current = self.read_item(item.page_id)
         if current.publication_key == key:
             current.proposal = proposal
             current.source_kind = item.source_kind
-            self.logger.info("kind=checkpoint Proposal revision already confirmed: page=%s; human review preserved.", item.page_id)
+            self.logger.info(
+                'kind=checkpoint Proposal revision already confirmed; human review preserved.',
+                extra={"details": {'page': item.page_id}},
+            )
             return current
 
         source = self._report_source(item)
@@ -177,6 +222,9 @@ class Workbench(WorkbenchProtocol):
             )
             self._confirm_publication(client, item.page_id, key, {
                 "Name": {"title": self._rich_text(proposal.title)},
+                "Proposal Version": {"number": proposal.version},
+                "Source Kind": {"rich_text": self._rich_text(source.kind)},
+                "Execution Error": {"rich_text": []},
                 "Status": {"select": {"name": "Open"}},
                 "Human Review": {"select": {"name": "Pending"}},
                 "Result Review": {"select": {"name": "Pending"}},
@@ -184,10 +232,16 @@ class Workbench(WorkbenchProtocol):
         revised = self.read_item(item.page_id)
         revised.proposal = proposal
         revised.source_kind = item.source_kind
-        self.logger.info("kind=script provider=notion Proposal revision confirmed: page=%s version=%d approval=%s.",
-                         item.page_id, proposal.version, revised.human_review)
+        self.logger.info(
+            'kind=script provider=notion Proposal revision confirmed: title=%r version=%d approval=%s.',
+            revised.title,
+            proposal.version,
+            revised.human_review,
+            extra={"details": {'page': item.page_id}},
+        )
         return revised
 
+    @trace_call("component", "workbench.set_status")
     def set_status(self, item: WorkbenchItem, status: str) -> None:
         """Update a proposal lifecycle status while retaining human feedback.
 
@@ -195,7 +249,13 @@ class Workbench(WorkbenchProtocol):
             item: Workbench page to update.
             status: Lifecycle value such as Deprecated or Archived.
         """
-        self.logger.info("kind=script provider=notion Updating Workbench status: page=%s from=%s to=%s.", item.page_id, item.status, status)
+        self.logger.info(
+            'kind=script provider=notion Updating Workbench status: title=%r from=%s to=%s.',
+            item.title,
+            item.status,
+            status,
+            extra={"details": {'page': item.page_id}},
+        )
         with Client(auth=self.settings.token) as client:
             client.pages.update(
                 page_id=item.page_id,
@@ -204,8 +264,14 @@ class Workbench(WorkbenchProtocol):
             page = client.pages.retrieve(page_id=item.page_id)
             if self._select(page["properties"], "Status") != status:
                 raise ValueError(f"Workbench status readback failed: {item.page_id}")
-        self.logger.info("kind=script provider=notion Workbench status verified: page=%s status=%s.", item.page_id, status)
+        self.logger.info(
+            'kind=script provider=notion Workbench status verified: title=%r status=%s.',
+            item.title,
+            status,
+            extra={"details": {'page': item.page_id}},
+        )
 
+    @trace_call("component", "workbench.save_result")
     def save_result(self, item: WorkbenchItem, result: TaskResult) -> None:
         """Write the deliverable before confirming its Executed state.
 
@@ -213,15 +279,34 @@ class Workbench(WorkbenchProtocol):
             item: Proposal snapshot defining the approved scope.
             result: Completed deliverable, excluding execution telemetry.
         """
-        self.logger.info("kind=script provider=notion Saving execution result: page=%s characters=%d action=%s.",
-                         item.page_id, len(result.content), result.action_id)
+        self.logger.info(
+            'kind=script provider=notion Saving execution result: title=%r characters=%d action=%s.',
+            item.title,
+            len(result.content),
+            result.action_id,
+            extra={"details": {'page': item.page_id}},
+        )
         if item.proposal is None:
             raise ValueError("Cannot save execution results for an unmanaged proposal")
-        key = publication_key("result", result.content)
+        key = result_publication_key(item.proposal.version, result.content)
         current = self.read_item(item.page_id)
         if current.publication_key == key:
-            self.logger.info("kind=checkpoint Execution result already confirmed: page=%s status=%s; human acceptance preserved.",
-                             item.page_id, current.status)
+            if current.status == "Open" or (current.status == "Executed" and current.result_review == "Unqualified" and item.result_review == "Unqualified"):
+                with Client(auth=self.settings.token) as client:
+                    self._confirm_publication(client, item.page_id, key, {
+                        "Status": {"select": {"name": "Executed"}},
+                        "Result Review": {"select": {"name": "Pending"}},
+                        "Execution Error": {"rich_text": []},
+                    })
+                self.logger.info('Existing result advanced to Executed: title=%r.', item.title)
+                return
+            if current.execution_error:
+                self.save_error(current, "")
+            self.logger.info(
+                'kind=checkpoint Execution result already confirmed: status=%s; human acceptance preserved.',
+                current.status,
+                extra={"details": {'page': item.page_id}},
+            )
             return
 
         source = self._report_source(item)
@@ -237,10 +322,15 @@ class Workbench(WorkbenchProtocol):
             self._confirm_publication(client, item.page_id, key, {
                 "Status": {"select": {"name": "Executed"}},
                 "Result Review": {"select": {"name": "Pending"}},
+                "Execution Error": {"rich_text": []},
             })
-        self.logger.info("kind=script provider=notion Execution result confirmed: page=%s status=Executed acceptance=Pending.",
-                         item.page_id)
+        self.logger.info(
+            'kind=script provider=notion Execution result confirmed: title=%r status=Executed acceptance=Pending.',
+            item.title,
+            extra={"details": {'page': item.page_id}},
+        )
 
+    @trace_call("component", "workbench.request_input")
     def request_input(self, item: WorkbenchItem, question: str) -> None:
         """Publish a question, then confirm its return to human review.
 
@@ -248,14 +338,20 @@ class Workbench(WorkbenchProtocol):
             item: Managed proposal requiring additional user input.
             question: Focused clarification requested by the router.
         """
-        self.logger.info("kind=script provider=notion Publishing clarification: page=%s question_characters=%d.",
-                         item.page_id, len(question))
+        self.logger.info(
+            'kind=script provider=notion Publishing clarification: question_characters=%d.',
+            len(question),
+            extra={"details": {'page': item.page_id}},
+        )
         if item.proposal is None:
             raise ValueError("Cannot request execution input for an unmanaged proposal")
         key = publication_key("clarification", question)
         current = self.read_item(item.page_id)
         if current.publication_key == key:
-            self.logger.info("kind=checkpoint Clarification already confirmed: page=%s; human review preserved.", item.page_id)
+            self.logger.info(
+                'kind=checkpoint Clarification already confirmed; human review preserved.',
+                extra={"details": {'page': item.page_id}},
+            )
             return
 
         source = self._report_source(item)
@@ -269,9 +365,14 @@ class Workbench(WorkbenchProtocol):
             self._confirm_publication(client, item.page_id, key, {
                 "Status": {"select": {"name": "Open"}},
                 "Human Review": {"select": {"name": "Pending"}},
+                "Execution Error": {"rich_text": []},
             })
-        self.logger.info("kind=script provider=notion Clarification confirmed: page=%s status=Open approval=Pending.", item.page_id)
+        self.logger.info(
+            'kind=script provider=notion Clarification confirmed: status=Open approval=Pending.',
+            extra={"details": {'page': item.page_id}},
+        )
 
+    @trace_call("component", "workbench.save_error")
     def save_error(self, item: WorkbenchItem, error: str) -> None:
         """Retain the latest error without changing human feedback or approval.
 
@@ -279,9 +380,22 @@ class Workbench(WorkbenchProtocol):
             item: Proposal whose execution failed.
             error: Actual exception description for manual diagnosis or retry.
         """
-        # Machine failures belong to the runtime log, not Notion properties.
-        self.logger.error("kind=script provider=notion Workbench operation failed: page=%s url=%s error=%s.", item.page_id, item.url, error)
+        self.logger.info("kind=script provider=notion Publishing execution error.",
+                         extra={"details": {"page": item.page_id}})
+        # Keep a short human-facing diagnosis; DBOS and logs retain full details.
+        summary = error[:4000]
+        with Client(auth=self.settings.token) as client:
+            client.pages.update(page_id=item.page_id, properties={
+                "Execution Error": {"rich_text": self._rich_text(summary)},
+            })
+            page = client.pages.retrieve(page_id=item.page_id)
+            stored = self._plain_text(page["properties"]["Execution Error"]["rich_text"])
+            if stored != summary:
+                raise ValueError(f"Execution error readback failed: {item.page_id}")
+        self.logger.info("kind=script provider=notion Execution error published; review state unchanged.",
+                         extra={"details": {"page": item.page_id}})
 
+    @trace_call("component", "workbench.save_curation")
     def save_curation(self, item: WorkbenchItem, decision: CurationDecision) -> None:
         """Replace the current extraction checkpoint and verify its readback.
 
@@ -307,8 +421,13 @@ class Workbench(WorkbenchProtocol):
         pages = []
         cursor = None
         query_number = 0
-        self.logger.debug("kind=script provider=notion Querying Notion collection: data_source=%s limit=%s.", data_source_id, limit or "all matching")
-        self.logger.debug("kind=script provider=notion Notion collection filter: %s.", page_filter)
+        self.logger.debug(
+            'kind=script provider=notion Querying Notion collection: limit=%s.',
+            limit or 'all matching',
+            extra={"details": {'data_source': data_source_id}},
+        )
+        self.logger.debug("kind=script provider=notion Notion collection filter.",
+                          extra={"details": {"filter": page_filter}})
         while True:
             arguments = {"data_source_id": data_source_id, "page_size": 100, "result_type": "page"}
             if limit is not None:
@@ -351,12 +470,14 @@ class Workbench(WorkbenchProtocol):
             result_review=self._select(properties, "Result Review"),
             result_feedback=self._plain_text(properties.get("Result Feedback", {}).get("rich_text", [])),
             source_url=self._source_url(properties),
-            source_kind=None,
+            source_kind=self._plain_text(properties.get("Source Kind", {}).get("rich_text", [])) or None,
             proposal=proposal,
             result=None,
             curation=None,
             publication_key=self._plain_text(properties.get("Publication Key", {}).get("rich_text", [])),
             publication_applied=bool(properties.get("Publication Key", {}).get("rich_text", [])),
+            proposal_version=properties.get("Proposal Version", {}).get("number"),
+            execution_error=self._plain_text(properties.get("Execution Error", {}).get("rich_text", [])),
         )
         return item
 
@@ -400,11 +521,15 @@ class Workbench(WorkbenchProtocol):
         report = "\n\n".join(lines)
         return report
 
+    @trace_call("component", "workbench.initialize_schema")
     def initialize_schema(self) -> None:
-        """Initialize the final status option and publication confirmation field."""
+        """Initialize lifecycle, visible proposal version, and publication receipt."""
         with Client(auth=self.settings.token) as client:
             ensure_select_option(client, self.settings.workbench_data_source_id, "Status", "Finished")
             ensure_rich_text(client, self.settings.workbench_data_source_id, "Publication Key")
+            ensure_number(client, self.settings.workbench_data_source_id, "Proposal Version")
+            ensure_rich_text(client, self.settings.workbench_data_source_id, "Source Kind")
+            ensure_rich_text(client, self.settings.workbench_data_source_id, "Execution Error")
 
     def _report_source(self, item: WorkbenchItem) -> SourceMaterial:
         """Build display provenance without rereading a raw input database.
@@ -432,7 +557,10 @@ class Workbench(WorkbenchProtocol):
             key: Deterministic receipt for this report.
             properties: Lifecycle fields applied together with the receipt.
         """
-        self.logger.info("kind=script provider=notion Confirming Workbench publication: page=%s.", page_id)
+        self.logger.info(
+            'kind=script provider=notion Confirming Workbench publication.',
+            extra={"details": {'page': page_id}},
+        )
         updates = dict(properties or {})
         updates["Publication Key"] = {"rich_text": self._rich_text(key)}
         try:
@@ -442,9 +570,15 @@ class Workbench(WorkbenchProtocol):
             if stored != key:
                 raise ValueError(f"Workbench publication key readback failed: {page_id}")
         except Exception:
-            self.logger.exception("kind=script provider=notion Workbench publication confirmation failed: page=%s.", page_id)
+            self.logger.exception(
+                'kind=script provider=notion Workbench publication confirmation failed.',
+                extra={"details": {'page': page_id}},
+            )
             raise
-        self.logger.info("kind=script provider=notion Workbench publication confirmed: page=%s.", page_id)
+        self.logger.info(
+            'kind=script provider=notion Workbench publication confirmed.',
+            extra={"details": {'page': page_id}},
+        )
 
     def _rich_text(self, text: str) -> list[dict]:
         """Split text into the SDK's rich-text fragments.

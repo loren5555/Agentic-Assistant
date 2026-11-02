@@ -6,7 +6,7 @@ from notion_client import Client
 
 from assistant.components.captures.models import CaptureBatch, CaptureKind, RawCapture
 from assistant.components.captures.protocol import CaptureSourceProtocol
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.notion.markdown import page_markdown
 from plugins._shared.notion.config import CaptureSettings
 
@@ -23,6 +23,7 @@ class CaptureSource(CaptureSourceProtocol):
         self.settings = CaptureSettings.model_validate(options)
         self.logger = get_logger("plugins.captures.notion.source")
 
+    @trace_call("component", "captures.list_captures")
     def list_captures(
         self, kind: CaptureKind, limit: int = 20, cursor: str | None = None,
         handled_revisions: Mapping[str, str] | None = None,
@@ -47,12 +48,17 @@ class CaptureSource(CaptureSourceProtocol):
         if kind == "simpread":
             arguments["filter"] = {"property": "Agent Archived", "checkbox": {"equals": False}}
 
-        self.logger.info("kind=script provider=notion Querying raw captures: source=%s limit=%d continuing=%s filter=%s.",
-                         kind, arguments["page_size"], cursor is not None,
-                         "Agent Archived = false" if kind == "simpread" else "read-only Notero scan")
+        self.logger.info(
+            'kind=script provider=notion Querying raw captures: source=%s limit=%d continuing=%s.',
+            kind,
+            arguments['page_size'],
+            cursor is not None,
+            extra={"details": {'filter': 'Agent Archived = false' if kind == 'simpread' else 'read-only Notero scan'}},
+        )
         handled_revisions = handled_revisions or {}
         captures = []
         skipped = 0
+        scanned = 0
         with Client(auth=self.settings.token) as client:
             while True:
                 # Bound the query by remaining capacity so no unconsumed rows
@@ -60,26 +66,33 @@ class CaptureSource(CaptureSourceProtocol):
                 arguments["page_size"] = min(limit - len(captures), 100)
                 response = client.data_sources.query(**arguments)
                 pages = response["results"]
+                scanned += len(pages)
                 self.logger.debug("kind=script provider=notion Raw capture query returned: source=%s pages=%d has_more=%s.",
                                  kind, len(pages), response["has_more"])
                 for position, page in enumerate(pages, start=1):
-                    # Notero stays read-only. A cheap properties query supplies
+                    # A cheap Notero properties query supplies
                     # the revision; unchanged pages need no markdown request.
                     if kind == "notero" and handled_revisions.get(page["id"]) == page["last_edited_time"]:
                         skipped += 1
                         continue
-                    self.logger.debug("kind=script provider=notion Reading capture body %d/%d: source=%s page=%s.",
-                                     position, len(pages), kind, page["id"])
+                    self.logger.debug(
+                        'kind=script provider=notion Reading capture body %d/%d: source=%s.',
+                        position,
+                        len(pages),
+                        kind,
+                        extra={"details": {'page': page['id']}},
+                    )
                     captures.append(self._read_capture(client, page, kind))
 
                 if len(captures) >= limit or not response["has_more"]:
                     break
                 arguments["start_cursor"] = response["next_cursor"]
         batch = CaptureBatch(captures=captures, next_cursor=response["next_cursor"])
-        self.logger.info("kind=script provider=notion Raw capture read completed: source=%s pending=%d unchanged_skipped=%d body_characters=%d.",
-                         kind, len(captures), skipped, sum(len(capture.text) for capture in captures))
+        self.logger.info("kind=script provider=notion Raw capture read completed: source=%s properties_scanned=%d bodies_read=%d unchanged_skipped=%d body_characters=%d.",
+                         kind, scanned, len(captures), skipped, sum(len(capture.text) for capture in captures))
         return batch
 
+    @trace_call("component", "captures.read_capture")
     def read_capture(self, page_id: str, kind: CaptureKind) -> RawCapture:
         """Retrieve the current source without modifying raw data.
 
@@ -90,7 +103,11 @@ class CaptureSource(CaptureSourceProtocol):
         Returns:
             Current material and its meaningful-content fingerprint.
         """
-        self.logger.debug("kind=script provider=notion Refreshing raw capture: source=%s page=%s.", kind, page_id)
+        self.logger.debug(
+            'kind=script provider=notion Refreshing raw capture: source=%s.',
+            kind,
+            extra={"details": {'page': page_id}},
+        )
         with Client(auth=self.settings.token) as client:
             page = client.pages.retrieve(page_id=page_id)
             parent = page["parent"].get("data_source_id", "")
@@ -99,6 +116,7 @@ class CaptureSource(CaptureSourceProtocol):
             capture = self._read_capture(client, page, kind)
         return capture
 
+    @trace_call("component", "captures.mark_handled")
     def mark_handled(self, capture: RawCapture) -> None:
         """Mark only SimpRead consumed after a verified downstream publication.
 
@@ -106,9 +124,15 @@ class CaptureSource(CaptureSourceProtocol):
             capture: Input whose output or proposal has been verified.
         """
         if capture.kind == "notero":
-            self.logger.debug("kind=script provider=notion Notero acknowledgement skipped: read-only source page=%s.", capture.page_id)
+            self.logger.debug(
+                'kind=script provider=notion Notero local acknowledgement; Papers flag is owned by the publisher.',
+                extra={"details": {'page': capture.page_id}},
+            )
             return
-        self.logger.info("kind=script provider=notion Marking SimpRead handled after publication: page=%s.", capture.page_id)
+        self.logger.info(
+            'kind=script provider=notion Marking SimpRead handled after publication.',
+            extra={"details": {'page': capture.page_id}},
+        )
         current = self.read_capture(capture.page_id, capture.kind)
         if current.fingerprint != capture.fingerprint:
             raise ValueError(f"Capture changed before completion: {capture.page_id}")
@@ -120,7 +144,10 @@ class CaptureSource(CaptureSourceProtocol):
             page = client.pages.retrieve(page_id=capture.page_id)
             if not page["properties"]["Agent Archived"]["checkbox"]:
                 raise ValueError(f"Capture completion readback failed: {capture.page_id}")
-        self.logger.info("kind=script provider=notion SimpRead Agent Archived verified: page=%s.", capture.page_id)
+        self.logger.info(
+            'kind=script provider=notion SimpRead Agent Archived verified.',
+            extra={"details": {'page': capture.page_id}},
+        )
 
     def _source_id(self, kind: CaptureKind) -> str:
         """Select the configured raw collection.
@@ -179,6 +206,12 @@ class CaptureSource(CaptureSourceProtocol):
             kind=kind, page_id=page["id"], url=page["url"], title=title,
             text=body, metadata=metadata, revision=page["last_edited_time"],
         )
-        self.logger.debug("kind=script provider=notion Capture body read: source=%s page=%s characters=%d metadata_fields=%d full_text_verified=%s.",
-                          kind, capture.page_id, len(body), len(metadata), capture.full_text_verified)
+        self.logger.debug(
+            'kind=script provider=notion Capture body read: source=%s characters=%d metadata_fields=%d full_text_verified=%s.',
+            kind,
+            len(body),
+            len(metadata),
+            capture.full_text_verified,
+            extra={"details": {'page': capture.page_id}},
+        )
         return capture

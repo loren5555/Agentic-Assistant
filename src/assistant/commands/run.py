@@ -1,9 +1,21 @@
 """Manually trigger one complete business task and await its result.
 
+Input origin:
+    The operator supplies run JOB and optional --page through cli.py/main.py.
+    Application passes parsed options and YAML settings to run(); dispatch then
+    invokes the selected task, whose own readers fetch its business material.
+
+Output destination:
+    dispatch returns task output to run(), then display() prints JSON on stdout.
+    The selected task, not this display function, publishes Workbench proposals
+    or results, Papers/Knowledge briefs, or Research Feed recommendations and
+    stores its checkpoints in the configured local runtime.
+
 Inputs:
-    Application and CLI options selecting intake, reviews, papers, articles, or
-    recommendations; an optional page ID narrows raw-capture processing. The
-    current Asia/Shanghai date identifies a daily recommendation run.
+    Application and CLI options selecting propose-tasks, process-workbench,
+    organize-papers, organize-articles, or recommend-papers. An optional page ID
+    narrows raw-capture processing. The current Asia/Shanghai date identifies
+    a daily recommendation run.
 
 Outputs:
     JSON destination links or a RecommendationRun summary on stdout, with
@@ -11,14 +23,14 @@ Outputs:
 
 Workflow relationship:
     dispatch is the durable entry shared with scheduled execution. Its mapping is
-    intake -> tasks/process_inputs, reviews -> tasks/process_reviews,
-    papers -> tasks/organize_papers, articles -> tasks/organize_articles,
-    recommendations -> tasks/recommend_papers. Each task owns its business order.
+    propose-tasks -> tasks/propose_tasks, process-workbench -> tasks/process_workbench,
+    organize-papers -> tasks/organize_papers, organize-articles -> tasks/organize_articles,
+    recommend-papers -> tasks/recommend_papers. Each task owns its business order.
 
 Participants and effects:
     Human operator, DBOS dispatcher, selected task, and its capability plugins.
     Depending on the task, execution may call models and write Notion records.
-    Running intake does not execute the proposals it creates; human review is a
+    Running propose-tasks does not execute the proposals it creates; human review is a
     separate boundary. This command runs once, not as a scheduler.
 """
 
@@ -36,7 +48,7 @@ from pydantic import BaseModel
 
 from assistant.components.recommendations.models import CATEGORIES, RecommendationRun
 from assistant.runtime.recovery import invoke
-from logger import get_logger
+from logger import get_logger, trace_call
 
 logger = get_logger("commands.run")
 
@@ -46,11 +58,12 @@ if TYPE_CHECKING:
 
 
 @DBOS.workflow(name="JobWorkflows.dispatch")
+@trace_call("workflow", "dispatch")
 async def dispatch(self: TaskWorkflows, job: str, day: str, page_id: str | None = None):
     """Run one named job and return its actual outputs.
 
     Args:
-        job: Intake, reviews, papers, articles, or recommendations.
+        job: Action-and-object task name matching a run subcommand.
         day: Asia/Shanghai date used for daily recommendation identity.
         page_id: Optional raw capture for manual reprocessing.
 
@@ -58,28 +71,44 @@ async def dispatch(self: TaskWorkflows, job: str, day: str, page_id: str | None 
         Job links or an evidence-grounded recommendation report.
     """
     started = monotonic()
-    logger.info("Job started: job=%s workflow=%s day=%s page=%s.", job, DBOS.workflow_id, day, page_id or "batch")
+    logger.info(
+        'Job started: job=%s day=%s.',
+        job,
+        day,
+        extra={"details": {'workflow': DBOS.workflow_id, 'page': page_id or 'batch'}},
+    )
     try:
-        if job == "intake":
-            output = await self.process_inputs()
-        elif job == "reviews":
-            output = await self.process_reviews()
-        elif job == "papers":
-            output = await self.organize_papers(page_id)
-        elif job == "articles":
-            output = await self.organize_articles(page_id)
-        elif job == "recommendations":
-            mode = "demo" if self.services.config.providers.discovery == "demo" else "real"
-            output = await invoke(f"recommendations:{mode}:{day}", self.research.recommend_papers, day)
-            logger.info("Recommendation result: demo=%s selected=%d published=%d rejected=%d source_failures=%d pending_recovery=%d.",
-                        output.demo, len(output.selected), len(output.published), len(output.rejected),
-                        len(output.source_failures), len(output.pending_recovery))
-        else:
-            raise ValueError(f"Unknown job: {job}")
+        match job:
+            case "propose-tasks":
+                output = await self.propose_tasks()
+            case "process-workbench":
+                output = await self.process_workbench()
+            case "organize-papers":
+                output = await self.organize_papers(page_id)
+            case "organize-articles":
+                output = await self.organize_articles(page_id)
+            case "recommend-papers":
+                mode = "demo" if self.services.config.providers.discovery == "demo" else "real"
+                output = await invoke(f"recommendations:{mode}:{day}", self.research.recommend_papers, day)
+                logger.info("Recommendation result: demo=%s selected=%d published=%d rejected=%d source_failures=%d pending_recovery=%d.",
+                            output.demo, len(output.selected), len(output.published), len(output.rejected),
+                            len(output.source_failures), len(output.pending_recovery))
+            case _:
+                raise ValueError(f"Unknown job: {job}")
     except Exception:
-        logger.exception("Job failed: job=%s workflow=%s elapsed=%.2fs.", job, DBOS.workflow_id, monotonic() - started)
+        logger.exception(
+            'Job failed: job=%s elapsed=%.2fs.',
+            job,
+            monotonic() - started,
+            extra={"details": {'workflow': DBOS.workflow_id}},
+        )
         raise
-    logger.info("Job completed: job=%s workflow=%s elapsed=%.2fs.", job, DBOS.workflow_id, monotonic() - started)
+    logger.info(
+        'Job completed: job=%s elapsed=%.2fs.',
+        job,
+        monotonic() - started,
+        extra={"details": {'workflow': DBOS.workflow_id}},
+    )
     return output
 
 
@@ -102,6 +131,7 @@ def display(output) -> None:
     print(json.dumps(document, ensure_ascii=False, indent=2, default=str))
 
 
+@trace_call("command", "run")
 async def run(application: Application, options: argparse.Namespace) -> None:
     """Start the selected task once and await its durable output.
 
@@ -111,6 +141,10 @@ async def run(application: Application, options: argparse.Namespace) -> None:
     """
     day = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
     handle = await DBOS.start_workflow_async(application.tasks.dispatch, options.job, day, options.page)
-    logger.info("Manual task submitted: job=%s workflow=%s.", options.job, handle.workflow_id)
+    logger.info(
+        'Manual task submitted: job=%s.',
+        options.job,
+        extra={"details": {'workflow': handle.workflow_id}},
+    )
     output = await handle.get_result()
     display(output)

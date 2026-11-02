@@ -79,6 +79,28 @@ class CaptureBatch(BaseModel):
     next_cursor: str | None = None
 
 
+class PaperReadingMetadata(BaseModel):
+    """Describe reading fields supported by the supplied paper material.
+
+    Attributes:
+        abstract: Original abstract, only when actually supplied.
+        summary: Concise reading summary at the available evidence level.
+        publication_date: Source publication date, preserving partial dates.
+        publication: Journal, conference, or repository explicitly named by the source.
+        keywords: Research topics and methods useful for browsing.
+        tags: Broad research areas for organizing the reading library.
+        code_url: Explicitly supplied official code link, or empty when unknown.
+    """
+
+    abstract: str = ""
+    summary: str = ""
+    publication_date: str = ""
+    publication: str = ""
+    keywords: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    code_url: str = ""
+
+
 class CaptureBrief(BaseModel):
     """Describe a grounded organized output or the need for human-approved work.
 
@@ -88,6 +110,7 @@ class CaptureBrief(BaseModel):
         content: Brief with claims, evidence, limitations, and source links.
         evidence_level: Material actually read, not the apparent file type.
         reason: Classification explanation or proposed investigation rationale.
+        reading: Structured paper reading fields, separate from citation management.
     """
 
     destination: Literal["papers", "knowledge", "proposal"]
@@ -95,6 +118,7 @@ class CaptureBrief(BaseModel):
     content: str = Field(min_length=1)
     evidence_level: Literal["full_text", "abstract", "notes", "metadata"]
     reason: str = Field(min_length=1)
+    reading: PaperReadingMetadata = Field(default_factory=PaperReadingMetadata)
 
 
 class CaptureReceipt(BaseModel):

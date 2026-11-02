@@ -81,6 +81,7 @@ class BaseLogger:
             style=self.config.style,
             use_color=use_color,
             additional_indent=self.config.multi_line_indent,
+            verbose=self.config.verbose,
         )
         return formatter
 

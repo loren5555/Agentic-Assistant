@@ -1,5 +1,15 @@
 """Select reusable knowledge and ideas from a human-accepted result.
 
+Input origin:
+    reviews invokes extract after Result Review = Qualified in Workbench.
+    It supplies a WorkbenchItem whose structured proposal/result is loaded from
+    DBOS state and whose current acceptance/feedback comes from Notion properties.
+
+Output destination:
+    CurationDecision returns to reviews.extract. The workflow sends each
+    selected artifact to ArchiveStore for Knowledge/Ideas publication, saves the
+    receipts, and marks Workbench Archived, or Finished when nothing is retained.
+
 Responsibility:
     Decide what remains useful beyond the completed task and extract grounded,
     standalone material. An empty extraction is a valid outcome.
@@ -12,7 +22,7 @@ Outputs:
     for knowledge or ideas. Publication receipts are attached by the workflow.
 
 Participants:
-    Curation agent, process_reviews after Qualified acceptance, ArchiveStore,
+    Curation agent, reviews after Qualified acceptance, ArchiveStore,
     and the human who later reads retained material.
 
 Boundaries:

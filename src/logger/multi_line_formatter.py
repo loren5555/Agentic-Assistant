@@ -1,8 +1,26 @@
-"""Align multiline log messages and optionally color console output."""
+"""Render readable progress or verbose diagnostics without changing log records.
+
+Input origin:
+    Shared logging handlers supply records with a current operation, a business
+    message, and optional structured details or exception information.
+
+Output destination:
+    Console/file output shows the operation and business message by default.
+    Verbose formatters append diagnostic fields and the full exception chain.
+
+Boundaries:
+    Details are explicitly supplied by callers, not extracted from rendered
+    message text. Each handler formats a copy, allowing different verbosity
+    without losing metadata or mutating another handler's message/traceback.
+"""
 
 import logging
 import textwrap
+from copy import copy
+import json
 from typing import Literal
+
+from .call_context import current_call_path, current_operation
 
 
 # ANSI Colors for different log levels
@@ -55,7 +73,8 @@ class MultiLineFormatter(logging.Formatter):
         style: Literal['%', '{', '$'] = '{',
         validate: bool = True,
         use_color: bool = False,
-        additional_indent: int = 0
+        additional_indent: int = 0,
+        verbose: bool = False,
     ):
         """Set the record format and multiline appearance.
 
@@ -66,10 +85,27 @@ class MultiLineFormatter(logging.Formatter):
             validate: Whether logging validates the format string.
             use_color: Whether to add ANSI severity colors.
             additional_indent: Extra spaces before continuation lines.
+            verbose: Whether to show diagnostic fields and exception tracebacks.
         """
         super().__init__(fmt, datefmt, style, validate=validate)
         self.use_color = use_color
         self.additional_indent = additional_indent
+        self.verbose = verbose
+
+    def formatException(self, exc_info) -> str:
+        """Keep full exception chains behind verbose mode.
+
+        Args:
+            exc_info: Exception type, value, and traceback from the logging record.
+
+        Returns:
+            Full traceback in verbose mode, otherwise its type and a debug hint.
+        """
+        if self.verbose:
+            text = super().formatException(exc_info)
+        else:
+            text = f"{exc_info[0].__name__}; use -v for diagnostic details."
+        return text
 
     def format(self, record: logging.LogRecord) -> str:
         """Format a record with continuation lines aligned to its message.
@@ -80,9 +116,30 @@ class MultiLineFormatter(logging.Formatter):
         Returns:
             Formatted message, optionally decorated with ANSI colors.
         """
+        # A console/file handler may use different verbosity on the same record.
+        # Never overwrite the original message or cache a traceback on it.
+        record = copy(record)
+        record.exc_text = None
+        details = getattr(record, "details", None)
+        if self.verbose and details:
+            diagnostic = json.dumps(details, ensure_ascii=False, default=str)
+            record.msg = record.getMessage() + "\nDetails: " + diagnostic
+            record.args = ()
+
         # Inject {shortname}: last segment of the dotted logger name.
         # e.g. "assistant.codex.router" -> "router".
         record.shortname = record.name.rsplit('.', 1)[-1]
+        if not hasattr(record, "call_path"):
+            record.call_path = current_call_path()
+        if not hasattr(record, "operation"):
+            operation = current_operation()
+            record.operation = operation if operation != "-" else record.name.removeprefix("assistant.")
+
+        # Indent semantic layers, not the number of nested calls: subworkflows
+        # remain readable and component/tool details never drift further right.
+        kind = record.operation.partition(":")[0]
+        indentation = {"step": 1, "component": 2, "tool": 2}.get(kind, 0)
+        record.operation = "    " * indentation + record.operation
         
         formatted_message = super().format(record).split('\n')
         

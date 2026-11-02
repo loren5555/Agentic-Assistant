@@ -1,5 +1,16 @@
 """Translate user commands into task execution or runtime administration.
 
+Input origin:
+    The human CLI is parsed by assistant/cli.py; main.py loads YAML and creates
+    Application, whose execute() selects the matching command module. Application
+    supplies configured services and the selected local DBOS runtime.
+
+Output destination:
+    run/serve hand work to the task dispatcher; resume targets existing DBOS work;
+    setup updates configured storage schemas; status reads DBOS administration
+    state. Result JSON goes to stdout and operational logs go to shared handlers.
+    Each business task owns its eventual Notion destinations.
+
 Responsibility:
     Provide one module for each CLI command: setup, run, serve, status, and resume.
     main.py parses arguments and Application prepares the runtime before calling

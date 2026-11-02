@@ -3,7 +3,6 @@
 from collections.abc import Mapping
 from time import perf_counter
 import asyncio
-import json
 
 from pydantic_ai import Agent, NativeOutput
 from pydantic_ai.models import infer_model
@@ -12,7 +11,7 @@ from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 from assistant.components.router.models import RouterDecision, RouterInput
 from assistant.components.router.prompt import ROUTER_INSTRUCTIONS, validate_decision
 from assistant.components.router.protocol import RouterProtocol
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.local.config import LocalSettings
 
 
@@ -52,6 +51,7 @@ class DecisionRouter(RouterProtocol):
             model_settings=model_settings,
         )
 
+    @trace_call("component", "router.decide")
     async def decide(self, request: RouterInput) -> RouterDecision:
         """Interpret one request without executing the proposed action.
 
@@ -90,10 +90,9 @@ class DecisionRouter(RouterProtocol):
             "requests": reported_usage.requests,
         }
         elapsed_seconds = perf_counter() - started_at
-        usage_summary = json.dumps(usage, indent=2)
         self.logger.info(
-            f"kind=agent provider=local action=decide Local decision completed in {elapsed_seconds:.2f} seconds.\n"
-            f"Token usage:\n{usage_summary}"
+            f"kind=agent provider=local action=decide Local decision completed in {elapsed_seconds:.2f} seconds.",
+            extra={"details": {"token_usage": usage}},
         )
 
         return validated_decision

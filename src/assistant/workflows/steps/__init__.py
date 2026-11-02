@@ -1,5 +1,16 @@
 """Share durable operations used by more than one complete task.
 
+Input origin:
+    intake and review revisions call proposal operations; paper/article
+    tasks call capture operations. Parent tasks supply source/scope and runtime
+    dependencies, and the relevant readers fetch current external records.
+
+Output destination:
+    submit_proposal returns Workbench links to its parent; organize_capture
+    returns Papers/Knowledge/Workbench links. Both save DBOS/index progress and
+    acknowledge eligible raw sources. The parent task returns these results to
+    the original command/schedule, or continues to its next human boundary.
+
 Responsibility:
     Keep proposal submission and raw-capture organization consistent across
     callers without collecting every low-level function into a common toolbox.

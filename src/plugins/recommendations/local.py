@@ -8,7 +8,7 @@ import json
 from pydantic_ai import Agent, NativeOutput
 
 from assistant.components.recommendations.models import PaperCandidate, PaperEvidence, RecommendationAssessment, ResearchInterest
-from logger import get_logger
+from logger import get_logger, trace_call
 
 INSTRUCTIONS = """Assess a paper for a personal research feed using only supplied primary
 evidence. Reject irrelevant, unverifiable, low-quality, or insufficiently supported material.
@@ -37,6 +37,7 @@ class Recommender:
         self.agent = Agent(str(model), instructions=INSTRUCTIONS,
                            output_type=NativeOutput(RecommendationAssessment))
 
+    @trace_call("component", "recommendations.assess")
     async def assess(self, candidate: PaperCandidate, evidence: PaperEvidence,
                      interests: list[ResearchInterest]) -> RecommendationAssessment:
         """Assess exactly the source content provided by the reader.
@@ -55,8 +56,13 @@ class Recommender:
         }
         prompt = json.dumps(material, ensure_ascii=False)
         started = monotonic()
-        self.logger.info("kind=agent provider=local action=assess_recommendation Requesting recommendation assessment: candidate=%s model=%s evidence_characters=%d timeout=%.0fs.",
-                         candidate.id, self.agent.model.model_name, len(evidence.text), self.timeout_seconds)
+        self.logger.info(
+            'kind=agent provider=local action=assess_recommendation Requesting recommendation assessment: model=%s evidence_characters=%d timeout=%.0fs.',
+            self.agent.model.model_name,
+            len(evidence.text),
+            self.timeout_seconds,
+            extra={"details": {'candidate': candidate.id}},
+        )
         try:
             async with asyncio.timeout(self.timeout_seconds):
                 async with self.agent:
@@ -68,6 +74,11 @@ class Recommender:
             self.logger.exception("kind=agent provider=local action=assess_recommendation Agent invocation failed: elapsed=%.2fs.", monotonic() - started)
             raise
         assessment = response.output
-        self.logger.info("kind=agent provider=local action=assess_recommendation Recommendation assessment completed: candidate=%s elapsed=%.2fs qualified=%s category=%s usage=%s.",
-                         candidate.id, monotonic() - started, assessment.qualified, assessment.category, response.usage)
+        self.logger.info(
+            'kind=agent provider=local action=assess_recommendation Recommendation assessment completed: elapsed=%.2fs qualified=%s category=%s.',
+            monotonic() - started,
+            assessment.qualified,
+            assessment.category,
+            extra={"details": {'candidate': candidate.id, 'usage': response.usage}},
+        )
         return assessment

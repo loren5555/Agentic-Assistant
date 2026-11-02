@@ -1,5 +1,15 @@
 """Keep the runtime alive and trigger explicitly configured recurring tasks.
 
+Input origin:
+    YAML runtime.schedules is supplied by Application. DBOS persists the schedule
+    definitions and later supplies scheduled_time/context to scheduled_job in
+    runtime/schedules.py; that trigger calls commands/run.dispatch.
+
+Output destination:
+    Schedule definitions and entry jobs go to DBOS. Each triggered job enters the
+    same tasks used by manual run, and writes the destinations described by that
+    task. Serve itself reports progress through logs rather than stdout reports.
+
 Inputs:
     Application settings with runtime.schedules: job names mapped to cron
     expressions. Schedules use Asia/Shanghai and the existing DBOS database.
@@ -33,12 +43,13 @@ import asyncio
 from dbos import DBOS
 
 from assistant.runtime import schedules
-from logger import get_logger
+from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
     from assistant.runtime.application import Application
 
 
+@trace_call("command", "serve")
 async def run(application: Application, options: argparse.Namespace) -> None:
     """Apply enabled schedules and serve until interrupted.
 

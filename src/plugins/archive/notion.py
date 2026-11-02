@@ -8,7 +8,7 @@ from assistant.components.archive.models import ArchiveReceipt
 from assistant.components.archive.protocol import ArchiveStoreProtocol
 from assistant.components.curator.models import RetainedArtifact
 from assistant.components.workbench.models import WorkbenchItem
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.notion.config import ArchiveSettings
 from plugins._shared.notion.schema import ensure_rich_text
 
@@ -31,6 +31,7 @@ class ArchiveStore(ArchiveStoreProtocol):
         self.title_properties: dict[str, str] = {}
         self.logger = get_logger("plugins.archive.notion")
 
+    @trace_call("component", "archive.initialize_schema")
     def initialize_schema(self) -> None:
         """Explicitly add Archive Key to configured destination databases.
 
@@ -42,6 +43,7 @@ class ArchiveStore(ArchiveStoreProtocol):
                 if data_source_id:
                     ensure_rich_text(client, data_source_id, "Archive Key")
 
+    @trace_call("component", "archive.publish")
     def publish(
         self, item: WorkbenchItem, artifact: RetainedArtifact, key: str,
     ) -> ArchiveReceipt:
@@ -60,7 +62,11 @@ class ArchiveStore(ArchiveStoreProtocol):
             "idea": self.settings.ideas_data_source_id,
         }
         data_source_id = destinations[artifact.kind]
-        self.logger.info("kind=script provider=notion Publishing retained outcome: workbench_page=%s destination=%s key=%s.", item.page_id, artifact.kind, key)
+        self.logger.info(
+            'kind=script provider=notion Publishing retained outcome: destination=%s.',
+            artifact.kind,
+            extra={"details": {'workbench_page': item.page_id, 'key': key}},
+        )
         if not data_source_id:
             raise ValueError(f"No Notion data source configured for {artifact.kind}")
         if item.proposal is None:
@@ -81,7 +87,11 @@ class ArchiveStore(ArchiveStoreProtocol):
             )
             if response["results"]:
                 page_id = response["results"][0]["id"]
-                self.logger.info("kind=script provider=notion Recovering existing retained outcome: destination=%s page=%s; verifying content.", artifact.kind, page_id)
+                self.logger.info(
+                    'kind=script provider=notion Recovering existing retained outcome: destination=%s; verifying content.',
+                    artifact.kind,
+                    extra={"details": {'page': page_id}},
+                )
             else:
                 self.logger.info("kind=script provider=notion Creating retained outcome in %s.", artifact.kind)
                 page = client.pages.create(
@@ -107,7 +117,11 @@ class ArchiveStore(ArchiveStoreProtocol):
             ):
                 raise ValueError(f"Archive readback failed: {page_id}")
             receipt = ArchiveReceipt(key=key, url=verified["url"])
-        self.logger.info("kind=script provider=notion Retained outcome readback verified: destination=%s url=%s.", artifact.kind, receipt.url)
+        self.logger.info(
+            'kind=script provider=notion Retained outcome readback verified: destination=%s.',
+            artifact.kind,
+            extra={"details": {'url': receipt.url}},
+        )
         return receipt
 
     def _title_property(self, client: Client, data_source_id: str) -> str:

@@ -3,6 +3,40 @@
 from notion_client import Client
 
 
+def ensure_checkbox(client: Client, data_source_id: str, name: str) -> None:
+    """Create a visible completion flag without changing existing properties.
+
+    Args:
+        client: Connection owned by the storage component.
+        data_source_id: Collection requiring the completion flag.
+        name: Checkbox property name.
+    """
+    source = client.data_sources.retrieve(data_source_id=data_source_id)
+    if name not in source["properties"]:
+        client.data_sources.update(data_source_id=data_source_id,
+                                   properties={name: {"checkbox": {}}})
+        source = client.data_sources.retrieve(data_source_id=data_source_id)
+    if source["properties"][name]["type"] != "checkbox":
+        raise ValueError(f"Expected checkbox property {name}: {data_source_id}")
+
+
+def ensure_number(client: Client, data_source_id: str, name: str) -> None:
+    """Create a missing numeric property and verify its schema.
+
+    Args:
+        client: Connection owned by the storage component.
+        data_source_id: Collection containing the version property.
+        name: Numeric property used by that component.
+    """
+    source = client.data_sources.retrieve(data_source_id=data_source_id)
+    if name not in source["properties"]:
+        client.data_sources.update(data_source_id=data_source_id,
+                                   properties={name: {"number": {}}})
+        source = client.data_sources.retrieve(data_source_id=data_source_id)
+    if source["properties"][name]["type"] != "number":
+        raise ValueError(f"Expected number property {name}: {data_source_id}")
+
+
 def ensure_rich_text(client: Client, data_source_id: str, name: str) -> None:
     """Create a missing text property and verify the resulting schema.
 

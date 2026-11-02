@@ -8,7 +8,7 @@ import hashlib
 from notion_client import Client
 
 from assistant.components.recommendations.models import PaperCandidate, Recommendation, ResearchInterest
-from logger import get_logger
+from logger import get_logger, trace_call
 from plugins._shared.notion.config import ResearchFeedSettings
 from plugins._shared.notion.schema import ensure_rich_text
 
@@ -25,11 +25,13 @@ class ResearchFeed:
         self.settings = ResearchFeedSettings.model_validate(options)
         self.logger = get_logger("plugins.recommendations.notion")
 
+    @trace_call("component", "recommendations.initialize_schema")
     def initialize_schema(self) -> None:
         """Explicitly add stable write keys; do not remove existing properties."""
         with Client(auth=self.settings.token) as client:
             ensure_rich_text(client, self.settings.inbox_data_source_id, "Research Feed Key")
 
+    @trace_call("component", "recommendations.read_active_interests")
     def read_active_interests(self) -> list[ResearchInterest]:
         """Read active interests without changing any priority or feedback.
 
@@ -37,8 +39,11 @@ class ResearchFeed:
             Priorities including their complete current Markdown descriptions.
         """
         settings = self.settings
-        self.logger.info("kind=script provider=notion Reading research interests: property=%s active_value=%s.",
-                         settings.interests_status_property, settings.interests_active_value)
+        self.logger.info(
+            'kind=script provider=notion Reading research interests: active_value=%s.',
+            settings.interests_active_value,
+            extra={"details": {'property': settings.interests_status_property}},
+        )
         with Client(auth=settings.token) as client:
             source = client.data_sources.retrieve(data_source_id=settings.research_interests_data_source_id)
             kind = source["properties"][settings.interests_status_property]["type"]
@@ -47,13 +52,19 @@ class ResearchFeed:
             pages = self._query(client, settings.research_interests_data_source_id, condition)
             interests = []
             for position, page in enumerate(pages, start=1):
-                self.logger.debug("kind=script provider=notion Reading interest body %d/%d: page=%s.", position, len(pages), page["id"])
+                self.logger.debug(
+                    'kind=script provider=notion Reading interest body %d/%d.',
+                    position,
+                    len(pages),
+                    extra={"details": {'page': page['id']}},
+                )
                 description = self._body(client, page["id"])
                 interests.append(ResearchInterest(id=page["id"], title=self._title(page),
                                                   description=description))
         self.logger.info("kind=script provider=notion Active research interests read: pages=%d.", len(interests))
         return interests
 
+    @trace_call("component", "recommendations.publish")
     def publish(self, recommendation: Recommendation, key: str) -> str:
         """Publish a real qualified recommendation and verify its readable body.
 
@@ -75,7 +86,11 @@ class ResearchFeed:
             raise ValueError("Publication requires accessible primary evidence")
         if assessment.category == "Mainline Deep Read" and not evidence.full_text:
             raise ValueError("Mainline Deep Read requires complete primary text")
-        self.logger.info("kind=script provider=notion Publishing Research Feed entry: candidate=%s category=%s.", candidate.id, assessment.category)
+        self.logger.info(
+            'kind=script provider=notion Publishing Research Feed entry: category=%s.',
+            assessment.category,
+            extra={"details": {'candidate': candidate.id}},
+        )
 
         sections = [f"Source: {candidate.url}", f"Evidence: {evidence.source_url}",
                     f"Reading scope: {'full text' if evidence.full_text else 'partial text'}",
@@ -109,18 +124,28 @@ class ResearchFeed:
             matches = self._query(client, settings.research_feed_data_source_id, condition)
             if matches:
                 page_id = matches[0]["id"]
-                self.logger.info("kind=script provider=notion Recovering existing Research Feed publication: page=%s.", page_id)
+                self.logger.info(
+                    'kind=script provider=notion Recovering existing Research Feed publication.',
+                    extra={"details": {'page': page_id}},
+                )
             else:
-                self.logger.info("kind=script provider=notion Creating Research Feed entry: candidate=%s.", candidate.id)
+                self.logger.info(
+                    'kind=script provider=notion Creating Research Feed entry.',
+                    extra={"details": {'candidate': candidate.id}},
+                )
                 page = client.pages.create(
                     parent={"type": "data_source_id", "data_source_id": settings.research_feed_data_source_id},
                     properties=properties, markdown=body,
                 )
                 page_id = page["id"]
             url = self._verify(client, page_id, "Stable ID", key, candidate.title, body)
-        self.logger.info("kind=script provider=notion Research Feed publication verified: candidate=%s page=%s url=%s.", candidate.id, page_id, url)
+        self.logger.info(
+            'kind=script provider=notion Research Feed publication verified.',
+            extra={"details": {'candidate': candidate.id, 'page': page_id, 'url': url}},
+        )
         return url
 
+    @trace_call("component", "recommendations.list_interested")
     def list_interested(self) -> list[dict[str, str]]:
         """Read Interested feedback without clearing or changing it.
 
@@ -138,6 +163,7 @@ class ResearchFeed:
         self.logger.info("kind=script provider=notion Interested Research Feed query completed: pages=%d.", len(records))
         return records
 
+    @trace_call("component", "recommendations.find_existing")
     def find_existing(self, candidate: PaperCandidate) -> str | None:
         """Find historical recommendations without reading every feed page.
 
@@ -168,6 +194,7 @@ class ResearchFeed:
             url = matches[0]["url"] if matches else None
         return url
 
+    @trace_call("component", "recommendations.create_follow_up")
     def create_follow_up(self, feed_page_id: str) -> str:
         """Create one Inbox follow-up per Interested recommendation, never Papers.
 
@@ -183,18 +210,27 @@ class ResearchFeed:
             feedback = feed_page["properties"][settings.feed_feedback_property]
             selection = feedback[feedback["type"]]
             if selection is None or selection["name"] != "Interested":
-                self.logger.info("kind=script provider=notion Skipping withdrawn Interested feedback: feed_page=%s.", feed_page_id)
+                self.logger.info(
+                    'kind=script provider=notion Skipping withdrawn Interested feedback.',
+                    extra={"details": {'feed_page': feed_page_id}},
+                )
                 return ""
             # Honor follow-ups already created by the previous Inbox Intake workflow.
             old_status = feed_page["properties"].get("Inbox Status")
             if old_status is not None:
                 old_value = old_status[old_status["type"]]
                 if isinstance(old_value, dict) and old_value.get("name") == "Submitted":
-                    self.logger.info("kind=script provider=notion Skipping previously submitted follow-up: feed_page=%s.", feed_page_id)
+                    self.logger.info(
+                        'kind=script provider=notion Skipping previously submitted follow-up.',
+                        extra={"details": {'feed_page': feed_page_id}},
+                    )
                     return ""
             old_page = feed_page["properties"].get("Inbox Page")
             if old_page is not None and old_page[old_page["type"]]:
-                self.logger.info("kind=script provider=notion Skipping follow-up with existing Inbox link: feed_page=%s.", feed_page_id)
+                self.logger.info(
+                    'kind=script provider=notion Skipping follow-up with existing Inbox link.',
+                    extra={"details": {'feed_page': feed_page_id}},
+                )
                 return ""
             title = f"Read and discuss: {self._title(feed_page)}"
             body = (f"Human feedback: Interested\n\nSource recommendation: {feed_page['url']}\n\n"
@@ -204,9 +240,15 @@ class ResearchFeed:
             matches = self._query(client, settings.inbox_data_source_id, condition)
             if matches:
                 page_id = matches[0]["id"]
-                self.logger.info("kind=script provider=notion Recovering Inbox follow-up: feed_page=%s inbox_page=%s.", feed_page_id, page_id)
+                self.logger.info(
+                    'kind=script provider=notion Recovering Inbox follow-up.',
+                    extra={"details": {'feed_page': feed_page_id, 'inbox_page': page_id}},
+                )
             else:
-                self.logger.info("kind=script provider=notion Creating Inbox follow-up for Interested feed_page=%s.", feed_page_id)
+                self.logger.info(
+                    'kind=script provider=notion Creating Inbox follow-up for Interested.',
+                    extra={"details": {'feed_page': feed_page_id}},
+                )
                 properties = {
                     self._title_name(source): {"title": self._rich_text(title)},
                     "Research Feed Key": {"rich_text": self._rich_text(feed_page_id)},
@@ -217,7 +259,10 @@ class ResearchFeed:
                 )
                 page_id = page["id"]
             url = self._verify(client, page_id, "Research Feed Key", feed_page_id, title, body)
-        self.logger.info("kind=script provider=notion Inbox follow-up verified: feed_page=%s inbox_page=%s url=%s.", feed_page_id, page_id, url)
+        self.logger.info(
+            'kind=script provider=notion Inbox follow-up verified.',
+            extra={"details": {'feed_page': feed_page_id, 'inbox_page': page_id, 'url': url}},
+        )
         return url
 
     def _query(self, client: Client, source_id: str, condition: dict) -> list[dict]:
@@ -234,8 +279,12 @@ class ResearchFeed:
         arguments = {"data_source_id": source_id, "filter": condition, "page_size": 100}
         pages = []
         query_number = 0
-        self.logger.debug("kind=script provider=notion Querying research collection: data_source=%s.", source_id)
-        self.logger.debug("kind=script provider=notion Research collection filter: %s.", condition)
+        self.logger.debug(
+            'kind=script provider=notion Querying research collection.',
+            extra={"details": {'data_source': source_id}},
+        )
+        self.logger.debug("kind=script provider=notion Research collection filter.",
+                          extra={"details": {"filter": condition}})
         while True:
             response = client.data_sources.query(**arguments)
             pages.extend(response["results"])
