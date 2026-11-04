@@ -29,7 +29,7 @@ def initialize_schema(services: Services) -> None:
         services: Configured storage providers.
     """
     logger = get_logger("main")
-    logger.info("Initializing Workbench lifecycle including Needs Input, proposal versions and publication keys.")
+    logger.info("Initializing Workbench lifecycle, Selected Action, proposal versions and publication keys.")
     services.workbench.initialize_schema()
     logger.info("Initializing accepted output publication schema.")
     services.publisher.initialize_schema()

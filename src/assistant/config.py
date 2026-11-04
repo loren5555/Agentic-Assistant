@@ -42,6 +42,7 @@ class ProviderSettings(BaseModel):
     reconciler: str = "local"
     publisher: str = "notion"
     direction_proposer: str = "local"
+    planner: str = "local"
 
 
 class RuntimeSettings(BaseModel):

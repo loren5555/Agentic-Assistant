@@ -4,11 +4,13 @@ Input origin:
     Managed Workbench approvals and accepted results; feedback is collected by
     reconcile-feedback before this workflow selects executable items.
 Output destination:
-    Execution returns to Workbench. Accepted outcomes pass through Curator and
-    Information Publisher to Papers, Knowledge, Ideas or Research Interests.
+    Execution returns to Workbench. Accepted plans return to Proposer via source
+    history and receive fresh execution approval. Other accepted outcomes pass
+    through Curator and Information Publisher to their knowledge destinations.
 Responsibility:
-    Workers execute one complete snapshot. Revision, rejection and unqualified
-    results never invoke a worker directly; source re-entry belongs to Reconciler.
+    Workers execute the saved, reviewed capability on one complete snapshot.
+    Revision, rejection and unqualified results never invoke a worker directly;
+    source re-entry belongs to Reconciler.
 """
 
 from __future__ import annotations
@@ -22,8 +24,6 @@ from assistant.components.archive.models import ArchiveReceipt
 from assistant.components.curator.models import CurationDecision, RetainedArtifact
 from assistant.components.inputs.models import SourceMaterial
 from assistant.components.investigator.models import InvestigationRequest
-from assistant.components.router.actions import EXECUTION_ACTIONS
-from assistant.components.router.models import RouterDecision, RouterInput
 from assistant.components.task_worker.models import TaskRequest, TaskResult
 from assistant.components.workbench.models import WorkbenchItem, result_publication_key
 from assistant.components.captures.models import RawCapture
@@ -61,14 +61,24 @@ async def process_workbench(self: TaskWorkflows) -> list[str]:
         if current.needs_input:
             logger.info('Awaiting human input: title=%r; answer in Human Instruction, then submit Human Review.', current.title)
             continue
+        accepted_plan = (
+            current.result is not None and current.result.action_id == "plan"
+            and current.status in {"Executed", "Finished"} and current.result_review == "Qualified"
+        )
         actionable = (
             current.status == "Open" and current.human_review == "Approved"
             or current.status == "Executed" and current.result_review == "Qualified"
+            or accepted_plan
         )
         if not actionable:
             logger.info('Waiting for human review: title=%r.', current.title)
             continue
-        signal = {"owner": record["workflow_id"], "item": current.model_dump(exclude={"proposal", "result", "curation"})}
+        excluded = {"proposal", "result", "curation"}
+        if accepted_plan:
+            # Preserve the operation identity when a terminal write succeeds but
+            # its acknowledgement is lost before the checkpoint is saved.
+            excluded.add("status")
+        signal = {"owner": record["workflow_id"], "item": current.model_dump(exclude=excluded)}
         operation = "review:v2:" + digest(json.dumps(signal, sort_keys=True))
         urls.append(await invoke(operation, self.proposals.review_item, record["source_key"], state))
     logger.info('Workbench pass completed: advanced=%d.', len(urls))
@@ -93,6 +103,15 @@ async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
     if item.needs_input:
         logger.info('Clarification proposal awaits feedback reconciliation: title=%r.', item.title)
         return item.url
+    if (
+        item.result is not None and item.result.action_id == "plan"
+        and item.status in {"Executed", "Finished"} and item.result_review == "Qualified"
+    ):
+        updated = self.accept_plan(source, item)
+        item.status = "Finished"
+        await self.save_checkpoint(key, source, item)
+        logger.info("Proposing execution of the accepted plan: title=%r.", item.result.plan.title)
+        return await invoke("intake:v2:" + updated.fingerprint, self.submit_proposal, key, updated)
     current_source = self.read_source(source)
     if current_source.fingerprint != source.fingerprint:
         logger.info('Source changed; returning work to normal intake: title=%r.', item.title)
@@ -104,13 +123,12 @@ async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
         task = TaskRequest(workbench_url=item.url, proposal=item.proposal,
                            instruction=item.human_instruction, source=source)
         try:
-            decision = await self.decide(self.route(task, source))
-            if decision.selected_action_id == "ask_user":
-                question = decision.clarification_question or decision.suggested_next_step
-                self.request_input(source, item, question)
+            result = await self.execute(task, item)
+            if result.questions:
+                self.request_input(source, item, "\n".join(result.questions))
+                item.result = result
                 item = self.read_review(item)
             else:
-                result = await self.execute(task, source, decision)
                 item = self.save_result(source, item, result)
         except Exception as error:
             try:
@@ -179,57 +197,28 @@ def read_review(self: WorkbenchWorkflows, saved: WorkbenchItem) -> WorkbenchItem
     return current
 
 
-@DBOS.step(name="ProposalWorkflows.route")
-@trace_call("step", "route")
-def route(self: WorkbenchWorkflows, task: TaskRequest, source: SourceMaterial) -> RouterInput:
-    """Build the execution request independently of the routing provider.
-
-    Args:
-        task: Approved scope and human instructions.
-        source: Original input.
-
-    Returns:
-        Router input with available executable capabilities.
-    """
-    request = RouterInput(
-        text=task.model_dump_json(exclude={"proposal": {"process"}}),
-        context=[source.context_content], candidates=EXECUTION_ACTIONS,
-    )
-    return request
-
-
-@DBOS.step(name="ProposalWorkflows.decide")
-@trace_call("step", "decide")
-async def decide(self: WorkbenchWorkflows, request: RouterInput) -> RouterDecision:
-    """Checkpoint routing separately from task execution.
-
-    Args:
-        request: Approved task and available actions.
-
-    Returns:
-        Selected capability and reasoning.
-    """
-    logger.info("Requesting execution route: candidates=%d input_characters=%d.", len(request.candidates), len(request.text))
-    decision = await self.services.router.decide(request)
-    logger.info("Execution route selected: action=%s clarification=%s.",
-                decision.selected_action_id, decision.clarification_question is not None)
-    return decision
-
-
 @DBOS.step(name="ProposalWorkflows.execute")
 @trace_call("step", "execute")
-async def execute(self: WorkbenchWorkflows, task: TaskRequest, source: SourceMaterial, decision: RouterDecision) -> TaskResult:
+async def execute(self: WorkbenchWorkflows, task: TaskRequest, item: WorkbenchItem) -> TaskResult:
     """Checkpoint the actual deliverable before its Notion write.
 
     Args:
         task: Approved scope.
-        source: Original grounded content.
-        decision: Selected executable action.
+        item: Current approval and the capability displayed with its proposal.
 
     Returns:
         Completed deliverable with provider telemetry.
     """
-    action = decision.selected_action_id
+    selected = task.proposal.selected_action
+    if selected is None:
+        raise RuntimeError("This proposal has no reviewed workflow; request revision and submit a fresh proposal")
+    if item.selected_action_id != selected.id:
+        raise RuntimeError("Selected Action differs from the capability approved with this proposal")
+    if item.proposal_version != task.proposal.version:
+        raise RuntimeError("Proposal Version differs from the reviewed proposal snapshot")
+    source = task.source
+    self.check_authorization(source, item)
+    action = selected.id
     logger.info(
         'Executing approved task: title=%r task=%r action=%s source_version=%d.',
         task.proposal.title,
@@ -238,9 +227,16 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, source: SourceMat
         source.version,
         extra={"details": {'workbench': task.workbench_url}},
     )
-    if action == "investigate_question":
+    if action == "plan":
+        result = await self.services.planner.execute(task)
+        if result.plan is None and not result.questions:
+            raise ValueError("Planner returned neither a concrete plan nor clarification questions")
+    elif action == "investigate_question":
         logger.info("Dispatching approved action: title=%r capability=investigator action=%s.", task.proposal.title, action)
-        request = InvestigationRequest(question=task.proposal.action, context=[source.context_content, task.instruction])
+        context = [source.context_content, task.instruction]
+        if task.proposal.execution_plan is not None:
+            context.append(task.proposal.execution_plan.markdown())
+        request = InvestigationRequest(question=task.proposal.action, context=context)
         report = await self.services.investigator.investigate(request)
         sections = [report.answer]
         sections.extend(f"- [{e.title}]({e.url}): {e.finding}" for e in report.sources)
@@ -248,7 +244,8 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, source: SourceMat
         result = TaskResult(content="\n\n".join(sections), process=report.process)
     elif action == "organize_material" and source.kind in {"notero", "simpread"}:
         capture = RawCapture(kind=source.kind, page_id=source.page_id, url=source.url,
-                             title=source.title, text=source.context_content,
+                             title=source.title, text="\n\n".join([source.context_content, task.instruction,
+                                 task.proposal.execution_plan.markdown() if task.proposal.execution_plan else ""]),
                              metadata=source.metadata, revision=source.revision,
                              full_text_verified=source.full_text_verified)
         brief = await self.services.briefs.brief(capture)
@@ -265,6 +262,8 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, source: SourceMat
         result = await self.services.worker.execute(task)
     else:
         raise ValueError(f"Unsupported executable action: {action}")
+    if action != "plan" and result.plan is not None:
+        raise ValueError("Only the approved Planner capability can return an execution plan")
     result.action_id = action
     logger.info(
         'Task execution completed: title=%r action=%s result_characters=%d.',
@@ -457,6 +456,6 @@ def check_authorization(self: WorkbenchWorkflows, source: SourceMaterial, item: 
     """
     current = self.services.workbench.read_item(item.page_id)
     current_source = self.read_current_source(source)
-    fields = ("status", "human_review", "human_instruction", "result_review", "result_feedback", "publication_key")
+    fields = ("status", "human_review", "human_instruction", "result_review", "result_feedback", "publication_key", "selected_action_id", "proposal_version")
     if current_source.fingerprint != source.fingerprint or any(getattr(current, field) != getattr(item, field) for field in fields):
         raise RuntimeError("Source, publication, or human authorization changed; publication stopped")

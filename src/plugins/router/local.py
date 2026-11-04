@@ -5,6 +5,7 @@ from time import perf_counter
 import asyncio
 
 from pydantic_ai import Agent, NativeOutput
+from pydantic_ai.messages import ModelMessagesTypeAdapter
 from pydantic_ai.models import infer_model
 from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 
@@ -12,6 +13,7 @@ from assistant.components.router.models import RouterDecision, RouterInput
 from assistant.components.router.prompt import ROUTER_INSTRUCTIONS, validate_decision
 from assistant.components.router.protocol import RouterProtocol
 from logger import get_logger, trace_call
+from assistant.runtime.records import ExecutionProcess
 from plugins._shared.local.config import LocalSettings
 
 
@@ -89,6 +91,10 @@ class DecisionRouter(RouterProtocol):
             "output_tokens": reported_usage.output_tokens,
             "requests": reported_usage.requests,
         }
+        validated_decision.process = ExecutionProcess(
+            events=ModelMessagesTypeAdapter.dump_python(response.all_messages(), mode="json"),
+            usage=usage,
+        )
         elapsed_seconds = perf_counter() - started_at
         self.logger.info(
             f"kind=agent provider=local action=decide Local decision completed in {elapsed_seconds:.2f} seconds.",

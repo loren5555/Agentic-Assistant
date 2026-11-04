@@ -15,10 +15,12 @@ class ActionCandidate(BaseModel):
     Attributes:
         id: Action identifier understood by the workflow.
         description: Capability purpose and expected output.
+        name: Human-readable capability name shown with the proposal.
     """
 
     id: str
     description: str
+    name: str = ""
 
 
 class RouterInput(BaseModel):
@@ -64,25 +66,15 @@ class RouterInput(BaseModel):
 
 
 class RouterDecision(BaseModel):
-    """Describe the input's meaning and propose one next action.
+    """Select one action without generating execution parameters or prose.
 
     Attributes:
-        content_types: Semantic labels such as note, question, idea, or request.
-        user_intent: What the user appears to want from the input.
-        suggested_next_step: Concrete proposal, without claiming it was executed.
-        reason: Brief user-facing justification for the proposal.
-        clarification_question: Question needed to proceed, or None when clear.
         selected_action_id: Available workflow action matching the proposal.
         process: Actual provider execution events and usage, when available.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    content_types: list[str]
-    user_intent: str
-    suggested_next_step: str
-    reason: str
-    clarification_question: str | None
     selected_action_id: str
 
     # Runtime telemetry belongs to the result, not the model's output contract.

@@ -37,5 +37,6 @@ class TaskReconciler:
         return Reconciliation(status="Superseded", feedback=SourceHistory(
             key=digest(identity), workbench_url=item.url, feedback=feedback,
             result=item.result.model_dump_json(exclude={"process"}) if item.result else "",
-            proposal=item.proposal.model_dump_json(exclude={"process"}) if item.proposal else "",
+            proposal=item.proposal.model_dump_json(exclude={"process", "routing_process"}) if item.proposal else "",
+            accepted_plan=item.proposal.execution_plan if item.needs_input and item.proposal else None,
         ))

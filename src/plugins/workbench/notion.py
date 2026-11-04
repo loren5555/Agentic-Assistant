@@ -123,9 +123,10 @@ class Workbench(WorkbenchProtocol):
             "Result Review": {"select": {"name": "Pending"}},
             "Proposal Version": {"number": proposal.version},
             "Source Version": {"number": source.version},
+            "Selected Action": {"rich_text": self._rich_text(proposal.selected_action.id if proposal.selected_action else "")},
         }
         report = self._report_text(source, proposal)
-        key = publication_key("proposal", proposal.model_dump_json(exclude={"process"}))
+        key = publication_key("proposal", proposal.model_dump_json(exclude={"process", "routing_process"}))
         if workflow_id:
             report += f"\n\nWorkflow: {workflow_id}"
 
@@ -169,6 +170,7 @@ class Workbench(WorkbenchProtocol):
                 self._confirm_publication(client, page_id, key, {
                     "Proposal Version": {"number": proposal.version},
                     "Source Kind": {"rich_text": self._rich_text(source.kind)},
+                    "Selected Action": properties["Selected Action"],
                     "Execution Error": {"rich_text": []},
                 })
             else:
@@ -257,7 +259,13 @@ class Workbench(WorkbenchProtocol):
 
         source = self._report_source(item)
         report = self._report_text(source, item.proposal)
-        content = report + "\n\n## Execution result\n\n" + result.content
+        heading = "Plan for review" if result.plan is not None else "Execution result"
+        body = result.plan.markdown() if result.plan is not None else result.content
+        content = report + f"\n\n## {heading}\n\n" + body
+        if result.plan is not None:
+            content += ("\n\nSet Result Review to Qualified to confirm this plan. "
+                        "The assistant will prepare a new execution proposal with the confirmed plan; "
+                        "that proposal requires fresh approval before execution.")
         for artifact in result.artifacts:
             content += f"\n\n## Proposed {artifact.kind}: {artifact.title}\n\n{artifact.content}\n\nRetention reason: {artifact.reason}"
             if artifact.reading:
@@ -429,6 +437,7 @@ class Workbench(WorkbenchProtocol):
             publication_applied=bool(properties.get("Publication Key", {}).get("rich_text", [])),
             proposal_version=properties.get("Proposal Version", {}).get("number"),
             execution_error=self._plain_text(properties.get("Execution Error", {}).get("rich_text", [])),
+            selected_action_id=self._plain_text(properties.get("Selected Action", {}).get("rich_text", [])),
         )
         return item
 
@@ -473,6 +482,9 @@ class Workbench(WorkbenchProtocol):
                 "The answer returns to the source for a fresh proposal before execution.",
             ])
         else:
+            if proposal.selected_action is not None:
+                selected = proposal.selected_action
+                lines.extend([f"## Proposed workflow: {selected.name or selected.id}", selected.description])
             lines.extend([
                 f"Purpose: {proposal.purpose}",
                 f"Action: {proposal.action}",
@@ -480,6 +492,8 @@ class Workbench(WorkbenchProtocol):
                 *[f"{index}. {step}" for index, step in enumerate(proposal.plan, start=1)],
                 f"Expected result: {proposal.expected_result}",
             ])
+            if proposal.execution_plan is not None:
+                lines.extend(["## Confirmed execution plan", proposal.execution_plan.markdown()])
         report = "\n\n".join(lines)
         return report
 
@@ -495,6 +509,7 @@ class Workbench(WorkbenchProtocol):
             ensure_number(client, self.settings.workbench_data_source_id, "Source Version")
             ensure_rich_text(client, self.settings.workbench_data_source_id, "Source Kind")
             ensure_rich_text(client, self.settings.workbench_data_source_id, "Execution Error")
+            ensure_rich_text(client, self.settings.workbench_data_source_id, "Selected Action")
 
     def _report_source(self, item: WorkbenchItem) -> SourceMaterial:
         """Build display provenance without rereading a raw input database.

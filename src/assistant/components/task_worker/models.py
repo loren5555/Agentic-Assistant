@@ -7,6 +7,7 @@ from assistant.components.proposer.models import Proposal
 from assistant.runtime.records import ExecutionProcess
 from assistant.components.inputs.models import SourceMaterial
 from assistant.components.curator.models import RetainedArtifact
+from assistant.components.planner.models import ExecutionPlan
 
 
 class TaskRequest(BaseModel):
@@ -33,11 +34,15 @@ class TaskResult(BaseModel):
         action_id: Capability selected by the execution router.
         process: Runtime telemetry, not model-generated content.
         artifacts: Structured outputs proposed for retention after acceptance.
+        plan: Concrete plan produced by the Planner for separate review.
+        questions: Essential user-owned information needed to complete the task.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     content: str
     artifacts: list[RetainedArtifact] = Field(default_factory=list)
+    plan: ExecutionPlan | None = None
+    questions: list[str] = Field(default_factory=list)
     action_id: SkipJsonSchema[str] = ""
     process: SkipJsonSchema[ExecutionProcess | None] = None

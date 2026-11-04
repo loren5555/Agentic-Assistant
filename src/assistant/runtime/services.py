@@ -6,6 +6,7 @@ from assistant.components.captures.protocol import BriefWriterProtocol
 from assistant.components.curator.protocol import CuratorProtocol
 from assistant.components.investigator.protocol import InvestigatorProtocol
 from assistant.components.proposer.protocol import ProposerProtocol
+from assistant.components.planner.protocol import PlannerProtocol
 from assistant.components.recommendations.protocol import DiscoveryProtocol, EvidenceReaderProtocol, RecommenderProtocol, ResearchFeedProtocol
 from assistant.components.router.protocol import RouterProtocol
 from assistant.components.task_worker.protocol import TaskWorkerProtocol
@@ -94,6 +95,12 @@ class Services:
         plugin = get_plugin("proposer", name)
         service = plugin.Proposer(self.config.provider_options[name])
         return service
+
+    @cached_property
+    def planner(self) -> PlannerProtocol:
+        """Provide tool-free planning as a separately approved capability."""
+        name = self.config.providers.planner
+        return get_plugin("planner", name).Planner(self.config.provider_options[name])
 
     @cached_property
     def router(self) -> RouterProtocol:

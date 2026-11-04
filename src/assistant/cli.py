@@ -80,12 +80,14 @@ Example:
     "process-workbench": {
         "help": "Reconcile feedback, execute approvals and publish accepted outputs.",
         "description": (
-            "First reconcile revisions/rejections. Then route approved task snapshots and\n"
-            "save results as Executed. Accepted results are curated and published."
+            "First reconcile revisions/rejections. Execute each approved proposal's saved\n"
+            "workflow and return its result for review. Qualified plans create fresh execution\n"
+            "proposals; other accepted results are curated and published."
         ),
         "epilog": """Transitions:
   Needs Input: wait for an answer; submitted answers return to the source first.
-  Open / Approved: execute one snapshot; result becomes Executed / Pending.
+  Open / Approved: use the saved workflow; result becomes Executed / Pending.
+  plan / Executed / Qualified: finish planning and propose execution for fresh approval.
   Executed / Qualified: retain useful outputs, then Archived; otherwise Finished.
   Revision Requested / Unqualified: reopen source, never directly redo a worker.
   Rejected: Deprecated. Pending approvals and acceptance remain waiting.
@@ -298,7 +300,7 @@ Use run process-workbench for newly recorded human decisions, not resume.""",
         epilog="""Schema additions:
   Workbench: add Finished, Superseded and Needs Input to Status.
   Workbench: add Proposal Version / Source Version numbers, Publication Key,
-    Source Kind and Execution Error text properties.
+    Source Kind, Selected Action and Execution Error text properties.
   Knowledge / Ideas / Research Interests: add Archive Key when configured.
   Papers / Knowledge: add the Publication Key rich-text property for brief receipts.
   Papers: add Reading Summary and Interested; Notero: add Agent In Papers.

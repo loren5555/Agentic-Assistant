@@ -46,6 +46,7 @@ class WorkbenchItem(BaseModel):
         publication_applied: Whether the report has a publication receipt.
         proposal_version: Revision displayed in the Workbench number property.
         execution_error: Latest human-visible execution failure, cleared on success.
+        selected_action_id: Live storage property identifying the reviewed capability.
     """
 
     page_id: str
@@ -65,6 +66,7 @@ class WorkbenchItem(BaseModel):
     publication_applied: bool = False
     proposal_version: int | None = None
     execution_error: str = ""
+    selected_action_id: str = ""
 
     @property
     def needs_input(self) -> bool:

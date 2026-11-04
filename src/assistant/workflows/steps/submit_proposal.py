@@ -48,6 +48,7 @@ async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMate
     )
     source = await self.organize_source(source)
     proposal = await self.draft(source)
+    proposal = await self.select_action(source, proposal)
     item = self.publish_proposal(source, proposal)
     await self.save_checkpoint(key, source, item)
     self.acknowledge(source)
@@ -93,6 +94,8 @@ async def draft(self: WorkbenchWorkflows, source: SourceMaterial) -> Proposal:
         extra={"details": {'page': source.page_id}},
     )
     proposal = await self.services.proposer.draft(source)
+    if source.history:
+        proposal.execution_plan = source.history[-1].accepted_plan
     logger.info(
         'Proposal drafted: title=%r version=%d proposal_kind=%s plan_steps=%d questions=%d.',
         proposal.title,
@@ -150,7 +153,9 @@ async def save_checkpoint(self: WorkbenchWorkflows, key: str, source: SourceMate
         item: Current report, deliverable, extraction, and human decisions.
     """
     state = {"source": source.model_dump(mode="json"), "item": item.model_dump(mode="json")}
-    traces = {"proposal": item.proposal.process if item.proposal else None, "result": item.result.process if item.result else None}
+    traces = {"proposal": item.proposal.process if item.proposal else None,
+              "routing": item.proposal.routing_process if item.proposal else None,
+              "result": item.result.process if item.result else None}
     report_directory = self.directory / "process"
     report_directory.mkdir(parents=True, exist_ok=True)
     traces = {name: value.model_dump(mode="json") for name, value in traces.items() if value is not None}

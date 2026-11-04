@@ -13,6 +13,7 @@ from assistant.config import AssistantConfig, RuntimeSettings
 from assistant.runtime.index import WorkIndex
 from assistant.runtime.services import Services
 from assistant.workflows.steps import submit_proposal as proposal_steps, intake_sources as source_steps
+from assistant.workflows.steps import select_action as routing_steps, advance_plan as planning_steps
 from assistant.workflows.tasks import organize_papers as papers_task, organize_articles as articles_task
 from assistant.workflows.tasks import propose_tasks as proposal_task, process_workbench as workbench_task
 from assistant.workflows.tasks import reconcile_feedback as reconciliation_task, process_signals as signal_task
@@ -84,8 +85,8 @@ class WorkbenchWorkflows(DBOSConfiguredInstance):
     acknowledge = proposal_steps.acknowledge
     submit_proposal = proposal_steps.submit_proposal
     read_review = workbench_task.read_review
-    route = workbench_task.route
-    decide = workbench_task.decide
+    select_action = routing_steps.select_action
+    accept_plan = planning_steps.accept_plan
     execute = workbench_task.execute
     save_result = workbench_task.save_result
     save_error = workbench_task.save_error
@@ -116,9 +117,9 @@ class Application:
         """
         self.settings = settings
         get_logger("runtime.application").debug(
-            "Providers selected: proposer=%s router=%s worker=%s investigator=%s processors=%s discovery=%s.",
+            "Providers selected: proposer=%s router=%s worker=%s investigator=%s planner=%s processors=%s discovery=%s.",
             settings.providers.proposer, settings.providers.router, settings.providers.worker,
-            settings.providers.investigator, settings.providers.processors, settings.providers.discovery,
+            settings.providers.investigator, settings.providers.planner, settings.providers.processors, settings.providers.discovery,
         )
         # New workflow semantics must never replay v0.1 checkpoints in place.
         # The old runtime remains available to the immutable v0.1 release.

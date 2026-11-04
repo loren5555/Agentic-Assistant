@@ -43,6 +43,10 @@ not completed publications. Research interests must follow explicit approved sco
 inferred interests require human confirmation. Preserve links and uncertainty. Never
 invent an original abstract, code URL, publication detail or full-text access.
 Use the source snapshot, latest supplements and prior results as task context.
+When proposal.execution_plan is supplied, perform the approved operations within
+its parameters, budget and stopping conditions. Return focused questions when an
+essential user-owned gap blocks completion. Set plan=null; concrete planning is
+performed by the dedicated Planner capability.
 """
 
     def __init__(self, options: Mapping[str, object]) -> None:
@@ -75,7 +79,7 @@ Use the source snapshot, latest supplements and prior results as task context.
         Returns:
             Completed deliverable with actual model messages and token usage.
         """
-        prompt = task.model_dump_json(exclude={"proposal": {"process"}})
+        prompt = task.model_dump_json(exclude={"proposal": {"process", "routing_process"}})
         started = monotonic()
         self.logger.info("kind=agent provider=local action=complete_task Completing approved task: title=%r model=%s source_version=%d timeout=%.0fs.",
                          task.proposal.title[:120], self.settings.worker_model, task.source.version, self.settings.worker_timeout_seconds)

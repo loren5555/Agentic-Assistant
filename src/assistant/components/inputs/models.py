@@ -6,6 +6,7 @@ import hashlib
 import json
 
 from pydantic import BaseModel, Field
+from assistant.components.planner.models import ExecutionPlan
 
 SourceKind = Literal["inbox", "todo", "notero", "simpread", "paper", "interest", "feed"]
 
@@ -19,6 +20,7 @@ class SourceHistory(BaseModel):
         feedback: Human-requested change.
         result: Previous deliverable, when available.
         proposal: Previous proposal, including clarification questions and rationale.
+        accepted_plan: Human-qualified plan available to the next proposal.
     """
 
     key: str
@@ -26,6 +28,7 @@ class SourceHistory(BaseModel):
     feedback: str
     result: str = ""
     proposal: str = ""
+    accepted_plan: ExecutionPlan | None = None
 
 
 class SourceMaterial(BaseModel):

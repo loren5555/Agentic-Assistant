@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="component-information-map" name="Component Information Map">
-        <mxGraphModel dx="2710" dy="1410" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2450" pageHeight="2220" math="0" shadow="0">
+        <mxGraphModel dx="2103" dy="955" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2450" pageHeight="2220" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -32,39 +32,39 @@
                     <mxGeometry height="54" width="150" x="330" y="141" as="geometry"/>
                 </mxCell>
                 <mxCell id="proposer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Proposer" vertex="1">
-                    <mxGeometry height="54" width="150" x="964" y="306" as="geometry"/>
+                    <mxGeometry height="54" width="150" x="850" y="306" as="geometry"/>
                 </mxCell>
-                <mxCell id="workbench" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;fontColor=#172033;arcSize=12;" value="Workbench" vertex="1">
-                    <mxGeometry height="70" width="180" x="1250" y="295" as="geometry"/>
+                <mxCell id="workbench" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;fontColor=#172033;arcSize=12;" value="Workbench&#xa;Proposal + selected workflow&#xa;Human review" vertex="1">
+                    <mxGeometry height="90" width="210" x="1350" y="288" as="geometry"/>
                 </mxCell>
-                <mxCell id="router" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Router" vertex="1">
-                    <mxGeometry height="54" width="150" x="1140" y="640" as="geometry"/>
+                <mxCell id="router" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Router&#xa;Select action" vertex="1">
+                    <mxGeometry height="64" width="150" x="1080" y="301" as="geometry"/>
                 </mxCell>
                 <mxCell id="worker" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Task Worker" vertex="1">
-                    <mxGeometry height="54" width="150" x="1394" y="525" as="geometry"/>
+                    <mxGeometry height="54" width="190" x="1477" y="629" as="geometry"/>
                 </mxCell>
                 <mxCell id="investigator" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Investigator" vertex="1">
-                    <mxGeometry height="54" width="150" x="1394" y="640" as="geometry"/>
+                    <mxGeometry height="54" width="190" x="1477" y="744" as="geometry"/>
                 </mxCell>
                 <mxCell id="curator" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Curator" vertex="1">
-                    <mxGeometry height="54" width="150" x="1544" y="303" as="geometry"/>
+                    <mxGeometry height="54" width="150" x="1710" y="306" as="geometry"/>
                 </mxCell>
-                <mxCell id="u6ScwY6dVsJ611Cw1BWy-25" edge="1" parent="1" source="archive" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="interest-output">
+                <mxCell id="u6ScwY6dVsJ611Cw1BWy-25" edge="1" parent="1" source="archive" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="interest-output" value="Publish research interests">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="2000" y="330"/>
-                            <mxPoint x="2000" y="587"/>
+                            <mxPoint x="2130" y="333"/>
+                            <mxPoint x="2130" y="587"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="archive" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Information Publisher" vertex="1">
-                    <mxGeometry height="54" width="150" x="1807" y="303" as="geometry"/>
+                    <mxGeometry height="54" width="150" x="1930" y="306" as="geometry"/>
                 </mxCell>
                 <mxCell id="knowledge" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontColor=#172033;arcSize=12;" value="Knowledge" vertex="1">
-                    <mxGeometry height="54" width="180" x="2155" y="303" as="geometry"/>
+                    <mxGeometry height="54" width="180" x="2200" y="306" as="geometry"/>
                 </mxCell>
                 <mxCell id="ideas" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontColor=#172033;arcSize=12;" value="Ideas" vertex="1">
-                    <mxGeometry height="54" width="180" x="2155" y="193" as="geometry"/>
+                    <mxGeometry height="54" width="180" x="2200" y="196" as="geometry"/>
                 </mxCell>
                 <mxCell id="notero" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontColor=#172033;arcSize=12;" value="Notero / Zotero" vertex="1">
                     <mxGeometry height="54" width="160" x="40" y="360" as="geometry"/>
@@ -76,7 +76,7 @@
                     <mxGeometry height="54" width="180" x="607" y="306" as="geometry"/>
                 </mxCell>
                 <mxCell id="papers" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontColor=#172033;arcSize=12;" value="Papers" vertex="1">
-                    <mxGeometry height="54" width="180" x="2155" y="413" as="geometry"/>
+                    <mxGeometry height="54" width="180" x="2200" y="416" as="geometry"/>
                 </mxCell>
                 <mxCell id="interests" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontColor=#172033;arcSize=12;" value="Research Interests" vertex="1">
                     <mxGeometry height="54" width="160" x="40" y="570" as="geometry"/>
@@ -109,60 +109,56 @@
                         <mxPoint x="600.0000000000005" y="333" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e4" edge="1" parent="1" source="proposer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;" target="workbench" value="Execution / clarification proposal">
+                <mxCell id="e4" edge="1" parent="1" source="proposer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="router" value="Execution&#xa;proposal">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e7" edge="1" parent="1" source="workbench" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" target="router" value="Approved task">
-                    <mxGeometry relative="1" x="-0.598" as="geometry">
+                <mxCell id="e7" edge="1" parent="1" source="workbench" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;entryX=0;entryY=0.5;whiteSpace=wrap;labelWidth=155;" target="planner" value="Approved: plan">
+                    <mxGeometry relative="1" x="0.6316359696641387" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e8" edge="1" parent="1" source="workbench" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;entryX=0;entryY=0.5;whiteSpace=wrap;labelWidth=155;" target="worker" value="Approved: complete task">
+                    <mxGeometry relative="1" x="0.7051170858629662" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e9" edge="1" parent="1" source="workbench" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;entryX=0;entryY=0.5;whiteSpace=wrap;labelWidth=155;" target="investigator" value="Approved: investigate">
+                    <mxGeometry relative="1" x="0.7541576283441793" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e10" edge="1" parent="1" source="worker" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0.75;entryY=1;dashed=1;entryDx=0;entryDy=0;" target="workbench" value="Result for acceptance">
+                    <mxGeometry relative="1" x="-0.9338" as="geometry">
+                        <mxPoint x="90" y="-16" as="offset"/>
                         <Array as="points">
-                            <mxPoint x="1295" y="400"/>
-                            <mxPoint x="1070" y="400"/>
-                            <mxPoint x="1070" y="667"/>
+                            <mxPoint x="1720" y="656"/>
+                            <mxPoint x="1720" y="430"/>
+                            <mxPoint x="1507.5" y="430"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e8" edge="1" parent="1" source="router" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="worker" value="Select task execution">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e9" edge="1" parent="1" source="router" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="investigator" value="Select investigation">
-                    <mxGeometry relative="1" x="0.9231" y="-13" as="geometry">
-                        <mxPoint as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="e10" edge="1" parent="1" source="worker" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0.75;entryY=1;dashed=1;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="workbench" value="Publish result">
-                    <mxGeometry relative="1" x="-0.6185" y="-40" as="geometry">
-                        <mxPoint as="offset"/>
+                <mxCell id="e11" edge="1" parent="1" source="investigator" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0.75;entryY=1;dashed=1;entryDx=0;entryDy=0;" target="workbench" value="Findings for acceptance">
+                    <mxGeometry relative="1" x="-0.9453" as="geometry">
+                        <mxPoint x="90" y="-16" as="offset"/>
                         <Array as="points">
-                            <mxPoint x="1620" y="552"/>
-                            <mxPoint x="1620" y="400"/>
-                            <mxPoint x="1385" y="400"/>
+                            <mxPoint x="1720" y="771"/>
+                            <mxPoint x="1720" y="430"/>
+                            <mxPoint x="1507.5" y="430"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e11" edge="1" parent="1" source="investigator" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0.75;entryY=1;dashed=1;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="workbench" value="Publish findings">
-                    <mxGeometry relative="1" x="-0.7204" y="-50" as="geometry">
-                        <mxPoint as="offset"/>
-                        <Array as="points">
-                            <mxPoint x="1620" y="667"/>
-                            <mxPoint x="1620" y="400"/>
-                            <mxPoint x="1385" y="400"/>
-                        </Array>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="e12" edge="1" parent="1" source="workbench" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitDx=0;exitDy=0;" target="curator" value="Accepted result">
+                <mxCell id="e12" edge="1" parent="1" source="workbench" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="curator" value="Accepted deliverable">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e13" edge="1" parent="1" source="curator" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;" target="archive" value="Material to retain">
+                <mxCell id="e13" edge="1" parent="1" source="curator" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="archive" value="Material&#xa;to retain">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e15" edge="1" parent="1" source="archive" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="ideas" value="Publish ideas">
-                    <mxGeometry relative="1" x="0.461" y="-23" as="geometry">
-                        <mxPoint as="offset"/>
+                <mxCell id="e15" edge="1" parent="1" source="archive" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="ideas" value="Publish ideas">
+                    <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="2000" y="330"/>
-                            <mxPoint x="2000" y="220"/>
+                            <mxPoint x="2130" y="333"/>
+                            <mxPoint x="2130" y="223"/>
                         </Array>
-                        <mxPoint x="2215" y="233" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="e16" edge="1" parent="1" source="notero" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="notero-processor" value="Read papers">
@@ -171,27 +167,22 @@
                 <mxCell id="e17" edge="1" parent="1" source="simpread" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="simpread-processor" value="Read articles">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e20" edge="1" parent="1" source="capture" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;dashed=1;entryDx=0;entryDy=0;" target="proposer" value="Propose further work">
+                <mxCell id="e20" edge="1" parent="1" source="capture" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;dashed=1;entryDx=0;entryDy=0;whiteSpace=wrap;labelWidth=65;" target="proposer" value="Organized&#xa;input">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points"/>
                         <mxPoint x="759.9999999999995" y="333" as="sourcePoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e21" edge="1" parent="1" source="archive" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="papers" value="Publish paper brief">
-                    <mxGeometry relative="1" x="0.5195" y="-13" as="geometry">
-                        <mxPoint as="offset"/>
+                <mxCell id="e21" edge="1" parent="1" source="archive" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="papers" value="Publish paper brief">
+                    <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="2000" y="330"/>
-                            <mxPoint x="2000" y="440"/>
+                            <mxPoint x="2130" y="333"/>
+                            <mxPoint x="2130" y="443"/>
                         </Array>
-                        <mxPoint x="2160" y="442.9999999999998" as="sourcePoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e22" edge="1" parent="1" source="archive" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="knowledge" value="Publish knowledge">
-                    <mxGeometry relative="1" x="0.3627" as="geometry">
-                        <mxPoint x="2235" y="456.4999999999998" as="sourcePoint"/>
-                        <mxPoint x="2475" y="288" as="targetPoint"/>
-                    </mxGeometry>
+                <mxCell id="e22" edge="1" parent="1" source="archive" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="knowledge" value="Publish knowledge">
+                    <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="e27" edge="1" parent="1" source="external" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="recommender" value="">
                     <mxGeometry relative="1" as="geometry">
@@ -199,11 +190,11 @@
                         <mxPoint x="535" y="877" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="note" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#475569;" value="Answers and feedback return to the source. Processor / Organizer / Proposer forms the next proposal; execution follows fresh approval." vertex="1">
-                    <mxGeometry height="35" width="860" x="40" y="1350" as="geometry"/>
+                <mxCell id="note" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#475569;" value="The selected workflow is part of human approval. A confirmed plan becomes a new execution proposal and receives fresh approval." vertex="1">
+                    <mxGeometry height="45" width="1500" x="40" y="1350" as="geometry"/>
                 </mxCell>
-                <mxCell id="note2" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#475569;" value="Original text is preserved. Supplements and prior results remain traceable. Reconciliation and interest formation are proposed designs." vertex="1">
-                    <mxGeometry height="35" width="860" x="40" y="1395" as="geometry"/>
+                <mxCell id="note2" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#475569;" value="v0.2.1: pre-approval action selection and separately reviewed plans. Selected components prepare their own parameters and output." vertex="1">
+                    <mxGeometry height="45" width="1500" x="40" y="1405" as="geometry"/>
                 </mxCell>
                 <mxCell id="todo-processor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="TODO Processor" vertex="1">
                     <mxGeometry height="54" width="170" x="320" y="259" as="geometry"/>
@@ -244,7 +235,7 @@
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="interest-output" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontColor=#172033;arcSize=12;" value="Research Interests" vertex="1">
-                    <mxGeometry height="54" width="180" x="2155" y="560" as="geometry"/>
+                    <mxGeometry height="54" width="180" x="2200" y="560" as="geometry"/>
                 </mxCell>
                 <mxCell id="feedback-source" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontColor=#172033;arcSize=12;" value="Workbench / registered sources&#xa;Clarification answer / Revision / Unqualified" vertex="1">
                     <mxGeometry height="65" width="250" x="40" y="1120" as="geometry"/>
@@ -332,29 +323,71 @@
                 <mxCell id="u6ScwY6dVsJ611Cw1BWy-15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontColor=#172033;arcSize=12;" value="Papers: Interested" vertex="1">
                     <mxGeometry height="54" width="160" x="40" y="1020" as="geometry"/>
                 </mxCell>
-                <mxCell id="u6ScwY6dVsJ611Cw1BWy-22" edge="1" parent="1" source="router" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="u6ScwY6dVsJ611Cw1BWy-21" value="">
-                    <mxGeometry relative="1" x="0.1341" as="geometry">
-                        <mxPoint as="offset"/>
-                        <mxPoint x="1277" y="552" as="sourcePoint"/>
-                        <mxPoint x="1700" y="747" as="targetPoint"/>
+                <mxCell id="u6ScwY6dVsJ611Cw1BWy-22" edge="1" parent="1" source="workbench" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;entryX=0;entryY=0.5;whiteSpace=wrap;labelWidth=155;" target="u6ScwY6dVsJ611Cw1BWy-21" value="Approved: propose direction">
+                    <mxGeometry relative="1" x="0.7892126472411656" as="geometry">
+                        <mxPoint y="-12" as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="u6ScwY6dVsJ611Cw1BWy-23" edge="1" parent="1" source="u6ScwY6dVsJ611Cw1BWy-21" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.75;entryY=1;entryDx=0;entryDy=0;" target="workbench">
-                    <mxGeometry relative="1" x="0.0014" as="geometry">
+                <mxCell id="u6ScwY6dVsJ611Cw1BWy-23" edge="1" parent="1" source="u6ScwY6dVsJ611Cw1BWy-21" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0.75;entryY=1;dashed=1;entryDx=0;entryDy=0;" target="workbench" value="Directions for acceptance">
+                    <mxGeometry relative="1" x="-0.9457" as="geometry">
+                        <mxPoint x="90" y="-16" as="offset"/>
                         <Array as="points">
-                            <mxPoint x="1620" y="793"/>
-                            <mxPoint x="1620" y="400"/>
-                            <mxPoint x="1385" y="400"/>
+                            <mxPoint x="1720" y="886"/>
+                            <mxPoint x="1720" y="430"/>
+                            <mxPoint x="1507.5" y="430"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="u6ScwY6dVsJ611Cw1BWy-24" connectable="0" parent="u6ScwY6dVsJ611Cw1BWy-23" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];inheritText=1;" value="interested directions" vertex="1">
-                    <mxGeometry relative="1" x="-0.8881" y="2" as="geometry">
-                        <mxPoint x="95" y="2" as="offset"/>
+                <mxCell id="u6ScwY6dVsJ611Cw1BWy-21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Direction Proposer" vertex="1">
+                    <mxGeometry height="54" width="190" x="1477" y="859" as="geometry"/>
+                </mxCell>
+                <mxCell id="clarification-publish" edge="1" parent="1" source="proposer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.05;entryY=1;" target="workbench" value="Clarification: Needs Input">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="925" y="420"/>
+                            <mxPoint x="1360.5" y="420"/>
+                        </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="u6ScwY6dVsJ611Cw1BWy-21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="direction&lt;div&gt;proposer&lt;/div&gt;" vertex="1">
-                    <mxGeometry height="54" width="150" x="1394" y="766" as="geometry"/>
+                <mxCell id="confirmed-plan-proposal" edge="1" parent="1" source="workbench" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.1;exitY=0;entryX=0.5;entryY=0;" target="proposer" value="Confirmed plan: propose execution">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1371" y="240"/>
+                            <mxPoint x="925" y="240"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="human-decision" edge="1" parent="1" source="human-review" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;entryX=0.75;entryY=0;whiteSpace=wrap;labelWidth=150;exitDx=0;exitDy=0;" target="workbench" value="Approve / answer / feedback">
+                    <mxGeometry relative="1" x="0.6364" y="82" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="human-review" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;fontColor=#172033;arcSize=12;" value="Human" vertex="1">
+                    <mxGeometry height="54" width="210" x="1350" y="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="planner" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Planner" vertex="1">
+                    <mxGeometry height="54" width="190" x="1477" y="514" as="geometry"/>
+                </mxCell>
+                <mxCell id="planner-result" edge="1" parent="1" source="planner" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0.75;entryY=1;dashed=1;entryDx=0;entryDy=0;" target="workbench" value="Concrete plan for review">
+                    <mxGeometry relative="1" x="-0.9067" as="geometry">
+                        <mxPoint x="90" y="-16" as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="1720" y="541"/>
+                            <mxPoint x="1720" y="430"/>
+                            <mxPoint x="1507.5" y="430"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="review-request" edge="1" parent="1" source="workbench" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.25;exitY=0;entryX=0.25;entryY=1;whiteSpace=wrap;labelWidth=150;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="human-review" value="Review proposal / plan / result">
+                    <mxGeometry relative="1" x="0.7778" y="82" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="router-publish" edge="1" parent="1" source="router" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="workbench" value="Proposal +&#xa;selected workflow">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="routing-responsibility" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontSize=14;fontColor=#172033;arcSize=12;" value="Router selects an action.&#xa;The selected component prepares parameters and produces its output." vertex="1">
+                    <mxGeometry height="100" width="390" x="800" y="750" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>

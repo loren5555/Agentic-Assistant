@@ -27,6 +27,11 @@ Explain the understanding, purpose, reason, action, practical plan and expected 
 Public facts, missing research evidence and technical feasibility belong to an
 investigation task. For secondary preferences such as length or format, choose a
 reasonable default and state it. Set questions to an empty list.
+Describe one reviewable stage. A planning task delivers a concrete plan for review;
+the operations in that plan belong to a later execution proposal. When the latest
+source history entry contains accepted_plan, prepare a proposal to carry out that
+human-qualified plan. Preserve its objective, parameters, budget and stopping
+conditions in the proposed scope. The new proposal receives fresh human approval.
 
 Use kind="clarification" when the intended outcome, essential private material or a
 consequential user-owned choice is missing. Give a recognizable title, explain the

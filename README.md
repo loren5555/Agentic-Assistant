@@ -5,7 +5,7 @@ knowledge outputs. The editable architecture is in [information-flow.drawio](inf
 
 ## Releases and runtime state
 
-The current release is **v0.2.0**, following the shared-intake diagram. See
+The current release is **v0.2.1**, following the shared-intake diagram. See
 [CHANGELOG.md](CHANGELOG.md) for changes, setup instructions and known limitations.
 The pre-refactor implementation is preserved at Git tag **v0.1** (commit `ce8669e`).
 
@@ -36,11 +36,13 @@ Inbox / TODO / Notero / SimpRead / Papers / Feed / Interests
                          |
                       Proposer
                          |
+                  Router: select action
+                         |
                      Workbench
                          |
-                 Human approval → Router
+                  Human approval
                          |
-        Task Worker / Investigator / Direction Proposer
+    Planner / Task Worker / Investigator / Direction Proposer
                          |
                 Workbench result acceptance
                          |
@@ -50,7 +52,10 @@ Inbox / TODO / Notero / SimpRead / Papers / Feed / Interests
 ```
 
 Organizer understands input and possible outcomes; Proposer proposes execution or
-clarification. Execution proposals explain the intended work and wait for approval.
+clarification. Router selects one capability before an execution proposal is published.
+Workbench displays the saved capability, scope and expected result for approval.
+After approval, the dispatcher uses that saved choice. Router returns only an action
+identifier; each selected component prepares its own parameters and output.
 Clarification proposals explain the missing user-owned information and ask focused
 questions in Workbench with Status = Needs Input.
 Neither executes it. Workers consume one complete approved source snapshot containing
@@ -119,7 +124,8 @@ job reads one source without forcing duplicate publication.
 A normal manual cycle is:
 
 1. Submit sources with their input job.
-2. In Workbench, read the proposal and set Human Review to Approved.
+2. In Workbench, read the proposal and its Proposed workflow, then set Human Review
+   to Approved. Request Revision when the selected workflow does not match your intent.
 3. Run process-workbench. Inspect the Executed result.
 4. Set Result Review to Qualified, then run process-workbench to retain outputs.
 5. For changes, provide Human Instruction or Result Feedback and choose Revision
@@ -140,9 +146,33 @@ and repeating intake does not generate another proposal for the same source vers
 Proposer asks for essential goals, private material or consequential personal choices.
 Public facts and technical uncertainty belong to investigation; minor preferences
 use stated defaults. Follow-up drafting receives earlier questions and answers in
-source history. A new question should explain the new blocker it resolves. If Router
-finds an essential gap after approval, it uses the same Needs Input and feedback path.
-Run setup once after this change to add the Needs Input status option.
+source history. A new question should explain the new blocker it resolves. Executors
+can return focused questions through the same Needs Input and feedback path.
+Run setup after schema changes to add Needs Input and the Selected Action property.
+
+## Plan, review and execute
+
+The plan action selects Planner when a concrete design should be reviewed before
+the operations it describes. Approving this proposal authorizes planning. Planner
+returns steps, inputs, parameters, resources, budget, stopping conditions and acceptance
+criteria to Workbench as an Executed result, with Result Review = Pending.
+
+Set Result Review to Qualified and run process-workbench. The confirmed plan is
+recorded in the original source history as a new source version; the planning item
+becomes Finished. The command then drafts and routes a separate execution proposal.
+That proposal displays the confirmed plan and waits for fresh approval. It receives
+an execution capability, rather than selecting plan again. Workers receive the
+accepted plan with its parameters and limits. Actual execution remains bounded by
+the tools and resources available to the selected component.
+
+For plan changes, set Result Review to Unqualified and provide Result Feedback;
+the normal feedback path prepares a revised source for another proposal. A rejected
+planning proposal is Deprecated without calling Planner.
+
+If new-proposal drafting fails after plan acceptance, the source remains pending.
+Run its normal input job to recover the saved intake operation. Existing v0.2.0
+proposals without a pre-reviewed route require Revision Requested and resubmission
+before execution. Completed results retain their normal acceptance path.
 
 ## Source fields and queue ownership
 
@@ -184,6 +214,7 @@ Task Reconciler interprets feedback mechanically; it does not replan or dispatch
 | Human decision | Source effect | Old Workbench task |
 | --- | --- | --- |
 | Answer submitted on Needs Input | Append answer and prior proposal; version +1; reopen | Superseded |
+| Qualified planning result | Record accepted plan; version +1; submit a new execution proposal | Finished |
 | Revision Requested | Append supplements/history; version +1; reopen | Superseded |
 | Unqualified | Append feedback and prior result; version +1; reopen | Superseded |
 | Rejected | No new input version | Deprecated |
@@ -304,8 +335,9 @@ src/assistant/
     processors/                source extraction and feedback storage contracts
     organizer/                 grounded information interpretation
     proposer/                  reviewable task planning
+    planner/                   concrete plans and limits for separate review
     reconciler/                deterministic feedback-to-source transformation
-    router/                    approved action selection
+    router/                    pre-approval action selection
     task_worker/               stateless execution inputs and typed outputs
     investigator/              evidence-backed investigation
     curator/                   accepted result retention

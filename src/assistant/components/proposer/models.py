@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from assistant.runtime.records import ExecutionProcess
+from assistant.components.router.models import ActionCandidate
+from assistant.components.planner.models import ExecutionPlan
 
 
 class Proposal(BaseModel):
@@ -21,6 +23,9 @@ class Proposal(BaseModel):
         plan: Steps within the proposed scope.
         expected_result: Deliverable and criteria for judging it.
         questions: Essential user-owned information requested before planning.
+        selected_action: Capability snapshot selected before human approval.
+        execution_plan: Previously accepted plan governing this execution proposal.
+        routing_process: Actual pre-approval selection telemetry.
         source_fingerprint: Content digest assigned by the provider.
         version: Proposal revision assigned by the provider.
         process: Actual drafting telemetry, excluded from model output schemas.
@@ -37,6 +42,9 @@ class Proposal(BaseModel):
     plan: list[str] = Field(default_factory=list)
     expected_result: str = ""
     questions: list[str] = Field(default_factory=list)
+    selected_action: SkipJsonSchema[ActionCandidate | None] = None
+    execution_plan: SkipJsonSchema[ExecutionPlan | None] = None
+    routing_process: SkipJsonSchema[ExecutionProcess | None] = None
     source_fingerprint: SkipJsonSchema[str] = ""
     version: SkipJsonSchema[int] = 1
     process: SkipJsonSchema[ExecutionProcess | None] = None

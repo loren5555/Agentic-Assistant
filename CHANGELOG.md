@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.1 — 2026-11-05
+
+- Router selects an action before proposal publication and returns only the
+  selected identifier. Workbench displays the capability name and scope and
+  records Selected Action. Approval executes the stored choice without rerouting.
+- Added the plan action and a tool-free local Planner with independently
+  configurable model, effort and timeout. Plans contain concrete operations,
+  inputs, parameters, resources, budget bounds, stopping conditions and acceptance
+  criteria for human review.
+- Qualified plans return to the original source as typed accepted-plan history.
+  The planning task finishes and a fresh execution proposal is prepared. Execution
+  waits for its own approval and receives the confirmed plan and limits.
+- Executors can report focused questions through Needs Input. Human answers
+  continue through the shared feedback-to-source path; ask_user is removed from
+  the routing catalogue.
+- Selected capability and human authorization are checked before execution.
+  Reading-brief execution receives human instructions and any confirmed plan.
+- Updated the editable diagram, usage documentation, command help and example
+  configuration. Existing subscription-backed model providers remain available.
+
+### Updating
+
+- Run setup to add the Selected Action rich-text property to Workbench.
+- Existing proposals without a saved pre-approval capability require revision and
+  resubmission before execution. Existing completed results remain reviewable.
+- Runtime databases remain under v2. Incompatible unfinished workflows still
+  require explicit handling; the release does not delete or migrate their state.
+
 ## 0.2.0 — 2026-11-04
 
 This release connects source intake, human-reviewed proposals, execution and

@@ -10,7 +10,8 @@ Task map:
     organize_articles: SimpRead Processor -> shared intake -> Workbench.
     process_signals: Interested paper/feed and explicit interest requests -> intake.
     reconcile_feedback: Workbench feedback -> new source version or rejection.
-    process_workbench: approvals -> execution; acceptance -> curation/publication.
+    process_workbench: approvals -> saved capability execution; accepted plans ->
+        fresh execution proposals; other accepted results -> curation/publication.
     recommend_papers: interests and external evidence -> Research Feed.
 Boundaries:
     Job modules select business responsibilities. Components own capabilities;
