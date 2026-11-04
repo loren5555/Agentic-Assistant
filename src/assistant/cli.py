@@ -5,134 +5,114 @@ import argparse
 
 JOB_HELP = {
     "propose-tasks": {
-        "help": "Draft Workbench proposals from Inbox and elevated TODO items.",
+        "help": "Organize Inbox and elevated TODO inputs and propose work.",
         "description": (
-            "Read eligible Notion inputs, draft proposals, and submit them to Workbench\n"
-            "for human approval. This job does not execute the newly proposed tasks."
+            "Read pending source versions through independent processors. Shared Organizer and\n"
+            "Proposer submit Workbench proposals. No execution or final knowledge publication."
         ),
-        "epilog": """Inputs and writes:
-  Inbox: Status != Archived. TODO: Status = elevated.
-  After verified proposal publication, mark Inbox Archived or TODO handled.
-  Unchanged managed inputs reuse their existing proposal instead of redrafting.
+        "epilog": """Sources:
+  Inbox Status != Archived; TODO Status = elevated; Agent Processed unchecked.
+  After verified proposal publication, acknowledge the same source version.
+  Review and approve the proposal, then run process-workbench.
 
-Next step:
-  Review the proposal in Notion. Set Human Review to Approved, Revision Requested,
-  or Rejected; put planning feedback in Human Instruction. Then run process-workbench.
-
-Examples:
-  python -m assistant run propose-tasks
-  python -m assistant --config config.local.yaml run propose-tasks
-  python -m assistant run process-workbench""",
-    },
-    "process-workbench": {
-        "help": "Process human decisions, execute approved work, and curate accepted results.",
-        "description": (
-            "Read human decisions for locally managed Workbench items and advance each\n"
-            "eligible item to its next review boundary. Also turn Interested Research\n"
-            "Feed entries into deduplicated Inbox follow-ups, never directly into Papers."
-        ),
-        "epilog": """Human review transitions:
-  Open / Approved           Route and execute the approved task; save Executed.
-  Open / Revision Requested Revise the proposal; return to Pending approval.
-  Open / Rejected           Mark Deprecated.
-  Executed / Unqualified    Redo using Result Feedback; request acceptance again.
-  Executed / Qualified      Curate into Knowledge / Ideas, then Archived;
-                            without reusable output, mark Finished instead.
-
-Scope and writes:
-  Only items registered in the local workflow index are managed; old Notion rows
-  are not imported automatically. Pending decisions remain waiting.
-  Changed source content requires a revised proposal rather than executing the
-  old approval. Missing user-owned information returns the task to Pending.
-  This job can call models and write Notion reports, statuses, and retained outputs.
-
-Examples:
-  python -m assistant run process-workbench
-  python -m assistant --config config.local.yaml run process-workbench
-
-Approve and accept results in Notion; this command does not approve them for you.""",
+Example:
+  python -m assistant run propose-tasks""",
     },
     "organize-papers": {
-        "help": "Organize read-only Notero captures into paper briefs or proposals.",
+        "help": "Prepare Workbench proposals from pending Notero papers.",
         "description": (
-            "Read raw Zotero-synced records from Notero and organize the supplied\n"
-            "material into Papers briefs. Inputs needing further investigation or\n"
-            "human decisions are submitted as Workbench proposals instead."
+            "Read raw Notero papers, organize their supplied evidence and propose reading work.\n"
+            "Papers publication happens after execution and acceptance, not during intake."
         ),
-        "epilog": """Inputs and writes:
-  Notero is the raw source; Papers is the organized output, not the input library.
-  Notero remains read-only. Existing human titles and notes in Papers are retained
-  while the assistant-owned brief is updated. Source / Zotero URI / DOI matching
-  avoids duplicate paper outputs.
+        "epilog": """Sources and outputs:
+  Agent Processed unchecked selects pending Notero inputs. --page checks one record.
+  Publication retains Papers reading metadata and human notes. Agent In Papers is
+  checked only after successful Papers publication. Attachments are not downloaded.
 
-Batch and reading scope:
-  Without --page, select up to runtime.batch_size pending inputs (default: 20).
-  Compare queried page revisions with the local handled index before reading bodies.
-  Unchanged handled pages are skipped; changed content is checked again.
-  Advance the cursor after batch success. Notero receives no bookkeeping writes.
-  --page checks one raw Notero page without moving the collection cursor.
-  Unchanged content is still skipped; --page is not a force-regenerate option.
-  Zotero attachments are not downloaded. Abstracts and notes are not full-text reads.
-
-Examples:
-  python -m assistant run organize-papers
-  python -m assistant run organize-papers --page NOTERO_PAGE_ID
-  python -m assistant --config config.local.yaml run organize-papers""",
+Example:
+  python -m assistant run organize-papers --page NOTERO_PAGE_ID""",
     },
     "organize-articles": {
-        "help": "Organize independent SimpRead captures into briefs, knowledge, or proposals.",
+        "help": "Prepare work and knowledge proposals from pending SimpRead clips.",
         "description": (
-            "Read captured articles from the independent SimpRead Notion database.\n"
-            "Classify supplied material into Papers, Knowledge, or a Workbench proposal\n"
-            "when additional investigation or a human decision is required."
+            "SimpRead Processor reads clips and user notes. Shared Organizer identifies useful\n"
+            "knowledge and actionable findings; Proposer submits them to Workbench."
         ),
-        "epilog": """Inputs and writes:
-  Normal scans select captures with Agent Archived unchecked.
-  Verify the destination before marking the source Agent Archived.
-  Preserve existing human notes when updating organized paper briefs.
+        "epilog": """Sources and outputs:
+  Read Agent Archived unchecked and Agent Processed unchecked.
+  Acknowledge after proposal publication, not after downstream execution.
+  A source can lead to multiple accepted Knowledge, Papers, Ideas or Interests outputs.
+  Reconciled feedback reopens the same source with a new version.
 
-Batch and reprocessing:
-  Without --page, read up to runtime.batch_size pending captures (default: 20).
-  Start at the pending queue head on each run, since archiving removes query rows.
-  --page checks one raw SimpRead page, including an already archived capture,
-  without moving the collection cursor. Unchanged content is still skipped;
-  this is not a force-regenerate option.
-  The source database must already have the Agent Archived checkbox property.
+Example:
+  python -m assistant run organize-articles""",
+    },
+    "process-signals": {
+        "help": "Propose work from Interested papers/feed and explicit interest requests.",
+        "description": (
+            "Read Papers Interested, Research Feed Interested, and research interests marked\n"
+            "Agent Pending through source-specific processors and the shared proposal path."
+        ),
+        "epilog": """No Inbox copies are created. Ordinary Active research interests are used by
+recommend-papers without automatically generating proposals.
 
-Examples:
-  python -m assistant run organize-articles
-  python -m assistant run organize-articles --page SIMPREAD_PAGE_ID
-  python -m assistant --config config.local.yaml run organize-articles""",
+Example:
+  python -m assistant run process-signals""",
+    },
+    "reconcile-feedback": {
+        "help": "Return clarification answers and review feedback to their original sources.",
+        "description": (
+            "Collect managed Workbench feedback. Append human supplements and historical work\n"
+            "links to the source, advance its version and reopen it. No model or worker is called."
+        ),
+        "epilog": """Transitions:
+  Needs Input: answer in Human Instruction, then select Revision Requested or Approved.
+  Submitted answers: source v+1; old clarification Superseded; run its source job again.
+  Unanswered clarification proposals remain waiting.
+  Revision Requested / Unqualified: source v+1; old work Superseded.
+  Rejected: old work Deprecated, with no new source version.
+  Run the original source job next, then review and approve its fresh proposal.
+  Retries of the same feedback round do not increment the version again.
+
+Example:
+  python -m assistant run reconcile-feedback""",
+    },
+    "process-workbench": {
+        "help": "Reconcile feedback, execute approvals and publish accepted outputs.",
+        "description": (
+            "First reconcile revisions/rejections. Then route approved task snapshots and\n"
+            "save results as Executed. Accepted results are curated and published."
+        ),
+        "epilog": """Transitions:
+  Needs Input: wait for an answer; submitted answers return to the source first.
+  Open / Approved: execute one snapshot; result becomes Executed / Pending.
+  Executed / Qualified: retain useful outputs, then Archived; otherwise Finished.
+  Revision Requested / Unqualified: reopen source, never directly redo a worker.
+  Rejected: Deprecated. Pending approvals and acceptance remain waiting.
+
+Outputs:
+  Papers, Knowledge, Ideas and Research Interests share the acceptance boundary.
+  Interested recommendation input belongs to process-signals.
+
+Example:
+  python -m assistant run process-workbench""",
     },
     "recommend-papers": {
-        "help": "Assess research candidates within evidence gates and daily maxima.",
+        "help": "Autonomously discover, assess and publish daily paper recommendations.",
         "description": (
-            "Discover candidates, read available primary evidence, assess relevance,\n"
-            "and report selections, rejections, source failures, and publications.\n"
-            "The current discovery provider is an offline demo; AMiner is not connected."
+            "Read research interests, discover candidates, retrieve evidence and evaluate\n"
+            "relevance. Recommendations publish directly to Research Feed, outside Workbench."
         ),
-        "epilog": """Current demo behaviour:
-  With providers.discovery: demo, use synthetic candidates and fixed assessments.
-  Demo mode does not read real research interests, call the recommendation model,
-  or publish synthetic papers to Research Feed. Selection is not publication.
-
-Evidence and limits:
-  Mainline Deep Read requires complete primary text. Keep author claims,
-  experimental support, and agent inference separate; no graphical abstracts.
-  runtime.recommendation_maxima sets per-category upper bounds (default: one each
-  for Understanding Daily, Mainline Deep Read, Frontier Radar, Exceptional Event).
-  Zero recommendations is valid. Interests and Human Feedback remain unchanged.
-
-Persistence and output:
-  Use the current Asia/Shanghai date. Repeat runs on the same day and mode reuse
-  the same workflow result; they do not force a new search or model evaluation.
-  Print a JSON report and save it under runtime.directory/recommendations/.
-  To retry a failed run, use status to find its ID, then resume WORKFLOW_ID.
+        "epilog": """Scope:
+  Daily recommendation maxima are caps, not quotas. Mainline Deep Read requires
+  complete primary text. Missing evidence is reported, not fabricated.
+  With discovery: demo, use offline fixtures and never publish synthetic entries.
+  Same-day retries reuse their durable report. Interested feedback later enters
+  process-signals and the normal proposal path.
 
 Examples:
   python -m assistant run recommend-papers
-  python -m assistant --config config.local.yaml run recommend-papers
-  python -m assistant status""",
+  python -m assistant run process-signals""",
     },
 }
 
@@ -160,7 +140,7 @@ def arguments() -> argparse.Namespace:
   Read providers, models, credentials, batch limits, and schedules from YAML.
   Put --config FILE before COMMAND. Dotted CLI configuration overrides are not supported.
   runtime.directory selects the local DBOS database and source index
-  (default: data/assistant, relative to the current working directory).
+  (default: data/assistant/v2; v0.1 databases remain untouched).
 
 Runtime behaviour:
   Commands using the same runtime directory require exclusive access: stop serve
@@ -246,7 +226,7 @@ Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run
   Timezone: Asia/Shanghai. The example proposes tasks at 07:00 and processes reviews every
   15 minutes. With schedules: {} (default), the process waits without new jobs.
   Available jobs: propose-tasks, process-workbench, organize-papers,
-  organize-articles, recommend-papers.
+  organize-articles, process-signals, reconcile-feedback, recommend-papers.
 
 Persistence and shutdown:
   Schedules persist in DBOS. This command updates configured schedules and pauses
@@ -316,17 +296,20 @@ Use run process-workbench for newly recorded human decisions, not resume.""",
             "This command modifies database structure; it is not a connection-only check."
         ),
         epilog="""Schema additions:
-  Workbench: add Finished to Status, Publication Key text, and Proposal Version number.
-  Workbench: also add Source Kind and Execution Error text properties.
-  Knowledge / Ideas: add the Archive Key rich-text property when configured.
+  Workbench: add Finished, Superseded and Needs Input to Status.
+  Workbench: add Proposal Version / Source Version numbers, Publication Key,
+    Source Kind and Execution Error text properties.
+  Knowledge / Ideas / Research Interests: add Archive Key when configured.
   Papers / Knowledge: add the Publication Key rich-text property for brief receipts.
-  Inbox: add the Research Feed Key rich-text property.
+  Papers: add Reading Summary and Interested; Notero: add Agent In Papers.
+  Registered sources: add Agent Version, Agent Feedback, Agent History and Agent Processed.
+  SimpRead: add Agent Archived. Research Interests: add Agent Pending.
   Existing additions are retained; successful writes are independently read back.
 
 Scope and prerequisites:
   Configure the Notion token and data source IDs in YAML, and grant the integration
-  access to those databases. SimpRead must already have Agent Archived as a checkbox;
-  setup does not create that field or create missing databases.
+  access to those databases. Existing business fields such as Status and review
+  decisions must be present. Setup adds assistant fields to existing databases.
   Existing properties and rows are preserved; no migration or new model job is requested.
   DBOS still starts and can recover previously unfinished workflows.
 

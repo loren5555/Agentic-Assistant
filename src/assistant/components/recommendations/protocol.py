@@ -59,11 +59,19 @@ class ResearchFeedProtocol(Protocol):
     """Read research priorities and publish verified real recommendations."""
 
     def initialize_schema(self) -> None:
-        """Explicitly prepare stable identities for recommendation follow-ups."""
+        """Explicitly prepare stable recommendation publication identities."""
         ...
 
     def read_active_interests(self) -> list[ResearchInterest]:
         """Return active priorities without changing human-maintained fields."""
+        ...
+
+    def read_interested_papers(self) -> list[ResearchInterest]:
+        """Return liked papers as preference context, without consuming their signals.
+
+        Returns:
+            Human-selected reading preferences, not candidate evaluation evidence.
+        """
         ...
 
     def find_existing(self, candidate: PaperCandidate) -> str | None:
@@ -86,20 +94,5 @@ class ResearchFeedProtocol(Protocol):
 
         Returns:
             Verified destination URL.
-        """
-        ...
-
-    def list_interested(self) -> list[dict[str, str]]:
-        """Return Interested feed identities for Inbox follow-up dispatch."""
-        ...
-
-    def create_follow_up(self, feed_page_id: str) -> str:
-        """Publish one Inbox follow-up without touching Papers.
-
-        Args:
-            feed_page_id: Feed identity reviewed as Interested.
-
-        Returns:
-            Verified Inbox URL or an empty string for withdrawn interest.
         """
         ...

@@ -1,26 +1,28 @@
 """Approved work and the deliverable returned by an executor."""
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
 
 from assistant.components.proposer.models import Proposal
 from assistant.runtime.records import ExecutionProcess
+from assistant.components.inputs.models import SourceMaterial
+from assistant.components.curator.models import RetainedArtifact
 
 
 class TaskRequest(BaseModel):
-    """Hand off an approved proposal or requested redo to an executor.
+    """Hand off one approved source snapshot to an executor.
 
     Attributes:
         workbench_url: Proposal and review record.
         proposal: Approved scope, including its version.
         instruction: Human instructions supplementing this task.
-        redo: Whether this task addresses an unqualified result.
+        source: Effective source snapshot, including feedback and history.
     """
 
     workbench_url: str
     proposal: Proposal
     instruction: str
-    redo: bool = False
+    source: SourceMaterial
 
 
 class TaskResult(BaseModel):
@@ -30,10 +32,12 @@ class TaskResult(BaseModel):
         content: Completed answer or report in Markdown.
         action_id: Capability selected by the execution router.
         process: Runtime telemetry, not model-generated content.
+        artifacts: Structured outputs proposed for retention after acceptance.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     content: str
+    artifacts: list[RetainedArtifact] = Field(default_factory=list)
     action_id: SkipJsonSchema[str] = ""
     process: SkipJsonSchema[ExecutionProcess | None] = None

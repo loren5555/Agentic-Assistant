@@ -11,11 +11,11 @@ from dbos import DBOS, DBOSConfig, DBOSConfiguredInstance
 from assistant.commands import run as run_command
 from assistant.config import AssistantConfig, RuntimeSettings
 from assistant.runtime.index import WorkIndex
-from assistant.runtime.records import install_checkpoint_aliases
 from assistant.runtime.services import Services
-from assistant.workflows.steps import submit_proposal as proposal_steps, organize_capture as capture_steps
+from assistant.workflows.steps import submit_proposal as proposal_steps, intake_sources as source_steps
 from assistant.workflows.tasks import organize_papers as papers_task, organize_articles as articles_task
 from assistant.workflows.tasks import propose_tasks as proposal_task, process_workbench as workbench_task
+from assistant.workflows.tasks import reconcile_feedback as reconciliation_task, process_signals as signal_task
 from assistant.workflows.tasks.recommend_papers import RecommendationWorkflows
 from logger import get_logger
 
@@ -45,23 +45,16 @@ class TaskWorkflows(DBOSConfiguredInstance):
         self.index = index
         self.settings = settings
 
-    read_inputs = proposal_task.read_inputs
     lookup = proposal_task.lookup
-    load_previous = proposal_task.load_previous
     list_active = workbench_task.list_active
-    read_capture_batch = capture_steps.read_capture_batch
-    brief = capture_steps.brief
-    publish_capture = capture_steps.publish_capture
-    save_capture_checkpoint = capture_steps.save_capture_checkpoint
-    acknowledge_capture = capture_steps.acknowledge_capture
-    capture_item = capture_steps.capture_item
-    save_cursor = capture_steps.save_cursor
-    organize_captures = capture_steps.organize_captures
-    read_capture = capture_steps.read_capture
+    read_sources = source_steps.read_sources
+    intake_sources = source_steps.intake_sources
     propose_tasks = proposal_task.propose_tasks
     process_workbench = workbench_task.process_workbench
     organize_papers = papers_task.organize_papers
     organize_articles = articles_task.organize_articles
+    process_signals = signal_task.process_signals
+    reconcile_feedback = reconciliation_task.reconcile_feedback
     dispatch = run_command.dispatch
 
 
@@ -86,6 +79,7 @@ class WorkbenchWorkflows(DBOSConfiguredInstance):
     read_source = proposal_steps.read_source
     read_current_source = proposal_steps.read_current_source
     draft = proposal_steps.draft
+    organize_source = proposal_steps.organize_source
     publish_proposal = proposal_steps.publish_proposal
     acknowledge = proposal_steps.acknowledge
     submit_proposal = proposal_steps.submit_proposal
@@ -101,6 +95,8 @@ class WorkbenchWorkflows(DBOSConfiguredInstance):
     close_item = workbench_task.close_item
     review_item = workbench_task.review_item
     request_input = workbench_task.request_input
+    reconcile_item = reconciliation_task.reconcile_item
+    apply_reconciliation = reconciliation_task.apply_reconciliation
 
 
 class Application:
@@ -120,17 +116,18 @@ class Application:
         """
         self.settings = settings
         get_logger("runtime.application").debug(
-            "Providers selected: proposer=%s router=%s worker=%s investigator=%s captures=%s discovery=%s.",
+            "Providers selected: proposer=%s router=%s worker=%s investigator=%s processors=%s discovery=%s.",
             settings.providers.proposer, settings.providers.router, settings.providers.worker,
-            settings.providers.investigator, settings.providers.captures, settings.providers.discovery,
+            settings.providers.investigator, settings.providers.processors, settings.providers.discovery,
         )
-        directory = Path(settings.runtime.directory).resolve()
+        # New workflow semantics must never replay v0.1 checkpoints in place.
+        # The old runtime remains available to the immutable v0.1 release.
+        directory = Path(settings.runtime.directory).resolve() / "v2"
         self.services = Services(settings)
         index = WorkIndex(directory / "index.sqlite")
         proposals = WorkbenchWorkflows(self.services, index, directory)
         research = RecommendationWorkflows(self.services, index, directory, settings.runtime.recommendation_maxima)
         self.tasks = TaskWorkflows(self.services, proposals, research, index, settings.runtime)
-        install_checkpoint_aliases()
         config: DBOSConfig = {
             "name": "assistant", "system_database_url": f"sqlite:///{directory / 'dbos.sqlite'}",
             "log_level": "WARNING",

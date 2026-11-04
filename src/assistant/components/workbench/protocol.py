@@ -39,7 +39,7 @@ class WorkbenchProtocol(Protocol):
         ...
 
     def submit(self, source: SourceMaterial, proposal: Proposal, workflow_id: str = "") -> WorkbenchItem:
-        """Submit a proposal for human review.
+        """Submit execution work for approval or clarification for human input.
 
         Args:
             source: Original material.
@@ -48,18 +48,6 @@ class WorkbenchProtocol(Protocol):
 
         Returns:
             Created workbench row.
-        """
-        ...
-
-    def revise(self, item: WorkbenchItem, proposal: Proposal) -> WorkbenchItem:
-        """Replace the current proposal and request a fresh approval.
-
-        Args:
-            item: Existing proposal row.
-            proposal: Revised report.
-
-        Returns:
-            Updated workbench row.
         """
         ...
 
@@ -82,7 +70,7 @@ class WorkbenchProtocol(Protocol):
         ...
 
     def request_input(self, item: WorkbenchItem, question: str) -> None:
-        """Return a blocked proposal to human review without claiming execution.
+        """Publish a focused clarification and enter Needs Input.
 
         Args:
             item: Proposal requiring a user-owned choice or missing material.

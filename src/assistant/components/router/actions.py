@@ -7,6 +7,10 @@ This catalogue describes what each capability produces, not provider details.
 from assistant.components.router.models import ActionCandidate
 
 EXECUTION_ACTIONS = [
+    ActionCandidate(id="propose_direction", description=(
+        "Develop research directions, questions and interest proposals from the supplied material, "
+        "returning reviewable reasoning and possible next investigations."
+    )),
     ActionCandidate(
         id="complete_task",
         description=(
@@ -17,8 +21,9 @@ EXECUTION_ACTIONS = [
     ActionCandidate(
         id="organize_material",
         description=(
-            "Structure existing notes or material into a useful, reviewable "
-            "draft that preserves source attribution."
+            "Organize supplied papers, articles or notes into evidence-scoped reading "
+            "briefs and reusable knowledge products, including useful reading metadata "
+            "and source attribution."
         ),
     ),
     ActionCandidate(

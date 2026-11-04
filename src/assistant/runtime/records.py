@@ -2,16 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 import hashlib
-import json
 
 from pydantic import BaseModel, Field
-
-if TYPE_CHECKING:
-    from assistant.components.inputs.models import SourceMaterial
-    from assistant.components.captures.models import RawCapture
-
 
 class ExecutionProcess(BaseModel):
     """Preserve a provider's event sequence and reported token usage.
@@ -38,59 +31,3 @@ def digest(value: str) -> str:
     """
     key = hashlib.sha256(value.encode()).hexdigest()
     return key
-
-
-def capture_material(capture: RawCapture) -> SourceMaterial:
-    """Adapt meaningful capture content without losing metadata-only evidence.
-
-    Args:
-        capture: Raw title, body, and metadata from Notero or SimpRead.
-
-    Returns:
-        Vendor-neutral source material suitable for proposal drafting.
-    """
-    from assistant.components.inputs.models import SourceMaterial
-
-    text = json.dumps(
-        {"title": capture.title, "text": capture.text, "metadata": capture.metadata},
-        ensure_ascii=False, sort_keys=True,
-    )
-    source = SourceMaterial(
-        kind=capture.kind, page_id=capture.page_id, url=capture.url,
-        title=capture.title, text=text, revision=capture.revision,
-    )
-    return source
-
-
-def install_checkpoint_aliases() -> None:
-    """Resolve pre-refactor pickle paths without duplicating component models.
-
-    DBOS stores native Python objects with their defining module names. These
-    in-memory aliases let existing checkpoints load after the physical modules
-    have moved; newly saved values use the canonical component paths.
-    """
-    import importlib
-    import sys
-    from types import ModuleType
-
-    package = ModuleType("assistant.schemas")
-    package.__path__ = []
-    sys.modules[package.__name__] = package
-    historical = {
-        "proposal": {"SourceMaterial": "inputs", "Proposal": "proposer", "WorkbenchItem": "workbench", "ProposedTask": "task_worker"},
-        "task": {"TaskResult": "task_worker"},
-        "curation": {"RetainedArtifact": "curator", "CurationDecision": "curator", "ArchiveReceipt": "archive"},
-        "capture": {name: "captures" for name in ("RawCapture", "CaptureBatch", "CaptureBrief", "CaptureReceipt")},
-        "recommendation": {name: "recommendations" for name in ("ResearchInterest", "PaperCandidate", "PaperEvidence", "RecommendationAssessment", "Recommendation", "RecommendationRun")},
-        "routing": {name: "router" for name in ("ActionCandidate", "RouterInput", "RouterDecision")},
-        "investigation": {name: "investigator" for name in ("InvestigationRequest", "SourceEvidence", "InvestigationReport")},
-    }
-    for suffix, names in historical.items():
-        module = ModuleType("assistant.schemas." + suffix)
-        for name, component in names.items():
-            current_name = "TaskRequest" if name == "ProposedTask" else name
-            model = getattr(importlib.import_module(f"assistant.components.{component}.models"), current_name)
-            setattr(module, name, model)
-        sys.modules[module.__name__] = module
-        setattr(package, suffix, module)
-    sys.modules["assistant.schemas.process"] = sys.modules[__name__]

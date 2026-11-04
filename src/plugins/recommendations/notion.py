@@ -29,7 +29,7 @@ class ResearchFeed:
     def initialize_schema(self) -> None:
         """Explicitly add stable write keys; do not remove existing properties."""
         with Client(auth=self.settings.token) as client:
-            ensure_rich_text(client, self.settings.inbox_data_source_id, "Research Feed Key")
+            ensure_rich_text(client, self.settings.research_feed_data_source_id, "Stable ID")
 
     @trace_call("component", "recommendations.read_active_interests")
     def read_active_interests(self) -> list[ResearchInterest]:
@@ -63,6 +63,22 @@ class ResearchFeed:
                                                   description=description))
         self.logger.info("kind=script provider=notion Active research interests read: pages=%d.", len(interests))
         return interests
+
+    @trace_call("component", "recommendations.read_interested_papers")
+    def read_interested_papers(self) -> list[ResearchInterest]:
+        """Read persistent paper preferences independently of proposal intake.
+
+        Returns:
+            Interested paper notes used as research preference context only.
+        """
+        self.logger.info("Reading Interested Papers as recommendation preferences.")
+        with Client(auth=self.settings.token) as client:
+            pages = self._query(client, self.settings.papers_data_source_id,
+                                {"property": "Interested", "checkbox": {"equals": True}})
+            preferences = [ResearchInterest(id=page["id"], title="Interested paper: " + self._title(page),
+                                             description=self._body(client, page["id"])) for page in pages]
+        self.logger.info("Paper preferences read: count=%d.", len(preferences))
+        return preferences
 
     @trace_call("component", "recommendations.publish")
     def publish(self, recommendation: Recommendation, key: str) -> str:
@@ -145,24 +161,6 @@ class ResearchFeed:
         )
         return url
 
-    @trace_call("component", "recommendations.list_interested")
-    def list_interested(self) -> list[dict[str, str]]:
-        """Read Interested feedback without clearing or changing it.
-
-        Returns:
-            Feed page IDs, titles, and URLs for follow-up dispatch.
-        """
-        settings = self.settings
-        with Client(auth=settings.token) as client:
-            source = client.data_sources.retrieve(data_source_id=settings.research_feed_data_source_id)
-            kind = source["properties"][settings.feed_feedback_property]["type"]
-            condition = {"property": settings.feed_feedback_property, kind: {"equals": "Interested"}}
-            pages = self._query(client, settings.research_feed_data_source_id, condition)
-            records = [{"id": page["id"], "title": self._title(page), "url": page["url"]}
-                       for page in pages]
-        self.logger.info("kind=script provider=notion Interested Research Feed query completed: pages=%d.", len(records))
-        return records
-
     @trace_call("component", "recommendations.find_existing")
     def find_existing(self, candidate: PaperCandidate) -> str | None:
         """Find historical recommendations without reading every feed page.
@@ -192,77 +190,6 @@ class ResearchFeed:
                     clauses.append({"property": "DOI", doi_kind: {"equals": value}})
             matches = self._query(client, settings.research_feed_data_source_id, {"or": clauses})
             url = matches[0]["url"] if matches else None
-        return url
-
-    @trace_call("component", "recommendations.create_follow_up")
-    def create_follow_up(self, feed_page_id: str) -> str:
-        """Create one Inbox follow-up per Interested recommendation, never Papers.
-
-        Args:
-            feed_page_id: Reviewed feed page identity, also the stable follow-up key.
-
-        Returns:
-            Verified Inbox URL, or empty string if feedback is no longer Interested.
-        """
-        settings = self.settings
-        with Client(auth=settings.token) as client:
-            feed_page = client.pages.retrieve(page_id=feed_page_id)
-            feedback = feed_page["properties"][settings.feed_feedback_property]
-            selection = feedback[feedback["type"]]
-            if selection is None or selection["name"] != "Interested":
-                self.logger.info(
-                    'kind=script provider=notion Skipping withdrawn Interested feedback.',
-                    extra={"details": {'feed_page': feed_page_id}},
-                )
-                return ""
-            # Honor follow-ups already created by the previous Inbox Intake workflow.
-            old_status = feed_page["properties"].get("Inbox Status")
-            if old_status is not None:
-                old_value = old_status[old_status["type"]]
-                if isinstance(old_value, dict) and old_value.get("name") == "Submitted":
-                    self.logger.info(
-                        'kind=script provider=notion Skipping previously submitted follow-up.',
-                        extra={"details": {'feed_page': feed_page_id}},
-                    )
-                    return ""
-            old_page = feed_page["properties"].get("Inbox Page")
-            if old_page is not None and old_page[old_page["type"]]:
-                self.logger.info(
-                    'kind=script provider=notion Skipping follow-up with existing Inbox link.',
-                    extra={"details": {'feed_page': feed_page_id}},
-                )
-                return ""
-            title = f"Read and discuss: {self._title(feed_page)}"
-            body = (f"Human feedback: Interested\n\nSource recommendation: {feed_page['url']}\n\n"
-                    f"Research Feed Key: {feed_page_id}")
-            source = client.data_sources.retrieve(data_source_id=settings.inbox_data_source_id)
-            condition = {"property": "Research Feed Key", "rich_text": {"equals": feed_page_id}}
-            matches = self._query(client, settings.inbox_data_source_id, condition)
-            if matches:
-                page_id = matches[0]["id"]
-                self.logger.info(
-                    'kind=script provider=notion Recovering Inbox follow-up.',
-                    extra={"details": {'feed_page': feed_page_id, 'inbox_page': page_id}},
-                )
-            else:
-                self.logger.info(
-                    'kind=script provider=notion Creating Inbox follow-up for Interested.',
-                    extra={"details": {'feed_page': feed_page_id}},
-                )
-                properties = {
-                    self._title_name(source): {"title": self._rich_text(title)},
-                    "Research Feed Key": {"rich_text": self._rich_text(feed_page_id)},
-                }
-                page = client.pages.create(
-                    parent={"type": "data_source_id", "data_source_id": settings.inbox_data_source_id},
-                    properties=properties, markdown=body,
-                )
-                page_id = page["id"]
-            url = self._verify(client, page_id, "Research Feed Key", feed_page_id, title, body)
-        self.logger.info(
-            'kind=script provider=notion Inbox follow-up verified.',
-            extra={"details": {'feed_page': feed_page_id, 'inbox_page': page_id, 'url': url}},
-        )
         return url
 
     def _query(self, client: Client, source_id: str, condition: dict) -> list[dict]:

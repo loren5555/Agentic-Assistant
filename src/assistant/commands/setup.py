@@ -1,35 +1,12 @@
-"""Explicitly initialize the storage fields required by current workflows.
+"""Prepare assistant-owned source context and output publication properties.
 
 Input origin:
-    Application supplies storage services and database IDs from YAML to
-    initialize_schema(). The command uses those plugins to inspect the existing
-    Notion collection schemas, not Inbox or Workbench task contents.
-
+    Explicit setup command and configured storage plugins.
 Output destination:
-    Schema additions go to Notion Workbench, Papers, Knowledge, Ideas, and Inbox through
-    their storage components. Completion/failure goes to the shared log; no
-    Proposal, TaskResult, or recommendation is emitted to a business collection.
-
-Inputs:
-    Application services selected by YAML and their target collection settings.
-    No proposal, source page, or scheduled business job is supplied.
-
-Outputs:
-    Initialized schema and progress logs, rather than a task deliverable. Current
-    Notion plugins add Workbench Finished, Publication Key, Proposal Version,
-    Source Kind, Execution Error, archive publication keys, and the Research
-    Feed follow-up identity on Inbox. Papers/Knowledge receive brief receipts.
-
-Workflow relationship:
-    Calls initialize_schema on Workbench, ArchiveStore, ResearchFeed, and
-    CapturePublisher directly;
-    it does not run propose-tasks, reviews, captures, or recommendations itself.
-
-Participants and effects:
-    Human operator and storage plugins. Schema changes are explicit here rather
-    than repeated on every normal read/write. Application still launches DBOS
-    before this handler, so unrelated unfinished workflows may recover at startup.
-    This command does not approve or execute new proposals intentionally.
+    Additive schema changes in source databases, Workbench and output collections.
+Responsibility:
+    Prepare version/feedback/history flags, terminal work states and publication
+    keys. No task is proposed, approved or executed by this command itself.
 """
 
 from __future__ import annotations
@@ -52,14 +29,13 @@ def initialize_schema(services: Services) -> None:
         services: Configured storage providers.
     """
     logger = get_logger("main")
-    logger.info("Initializing Workbench lifecycle, Proposal Version, and Publication Key schema.")
+    logger.info("Initializing Workbench lifecycle including Needs Input, proposal versions and publication keys.")
     services.workbench.initialize_schema()
-    logger.info("Initializing Knowledge/Ideas archive keys.")
-    services.archive.initialize_schema()
-    logger.info("Initializing Inbox follow-up key.")
-    services.feed.initialize_schema()
-    logger.info("Initializing Papers/Knowledge brief publication keys.")
-    services.capture_publisher.initialize_schema()
+    logger.info("Initializing accepted output publication schema.")
+    services.publisher.initialize_schema()
+    for kind in ("inbox", "todo", "notero", "simpread", "paper", "feed", "interest"):
+        logger.info("Initializing source context schema: source=%s.", kind)
+        services.processor(kind).initialize_schema()
 
 
 @trace_call("command", "setup")

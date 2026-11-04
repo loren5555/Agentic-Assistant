@@ -2,10 +2,8 @@
 
 from functools import cached_property
 
-from assistant.components.archive.protocol import ArchiveStoreProtocol
-from assistant.components.captures.protocol import CapturePublisherProtocol, CaptureSourceProtocol, BriefWriterProtocol
+from assistant.components.captures.protocol import BriefWriterProtocol
 from assistant.components.curator.protocol import CuratorProtocol
-from assistant.components.inputs.protocol import InputSourceProtocol
 from assistant.components.investigator.protocol import InvestigatorProtocol
 from assistant.components.proposer.protocol import ProposerProtocol
 from assistant.components.recommendations.protocol import DiscoveryProtocol, EvidenceReaderProtocol, RecommenderProtocol, ResearchFeedProtocol
@@ -14,6 +12,11 @@ from assistant.components.task_worker.protocol import TaskWorkerProtocol
 from assistant.components.workbench.protocol import WorkbenchProtocol
 from assistant.config import AssistantConfig
 from plugins import get_plugin
+from assistant.components.inputs.models import SourceKind
+from assistant.components.processors.protocol import SourceProcessor
+from assistant.components.organizer.protocol import OrganizerProtocol
+from assistant.components.reconciler.protocol import ReconcilerProtocol
+from assistant.components.publisher.protocol import PublisherProtocol
 
 
 class Services:
@@ -30,14 +33,51 @@ class Services:
             config: Application settings loaded from YAML.
         """
         self.config = config
+        self._processors: dict[str, SourceProcessor] = {}
+
+    def processor(self, kind: SourceKind) -> SourceProcessor:
+        """Resolve the adapter owning one source collection.
+
+        Args:
+            kind: Registered input role, independent of its storage provider.
+
+        Returns:
+            Lazy processor exposing the shared source contract.
+        """
+        if kind not in self._processors:
+            name = self.config.providers.processors
+            plugin = get_plugin("processors", name)
+            classes = {"inbox": "InboxProcessor", "todo": "TodoProcessor",
+                       "notero": "NoteroProcessor", "simpread": "SimpReadProcessor",
+                       "paper": "PaperProcessor", "feed": "FeedProcessor", "interest": "InterestProcessor"}
+            options = dict(self.config.provider_options[name])
+            options["input_limit"] = self.config.runtime.batch_size
+            self._processors[kind] = getattr(plugin, classes[kind])(options)
+        return self._processors[kind]
 
     @cached_property
-    def inputs(self) -> InputSourceProtocol:
-        """Provide input reading and post-publication acknowledgements."""
-        name = self.config.providers.inputs
-        plugin = get_plugin("inputs", name)
-        service = plugin.InputSource(self.config.provider_options[name])
-        return service
+    def organizer(self) -> OrganizerProtocol:
+        """Provide shared source interpretation without publication effects."""
+        name = self.config.providers.organizer
+        return get_plugin("organizer", name).InformationOrganizer(self.config.provider_options[name])
+
+    @cached_property
+    def reconciler(self) -> ReconcilerProtocol:
+        """Provide deterministic human-feedback reconciliation, without a model."""
+        name = self.config.providers.reconciler
+        return get_plugin("reconciler", name).TaskReconciler()
+
+    @cached_property
+    def publisher(self) -> PublisherProtocol:
+        """Publish accepted typed outcomes to their destination collections."""
+        name = self.config.providers.publisher
+        return get_plugin("publisher", name).InformationPublisher(self.config.provider_options[name])
+
+    @cached_property
+    def direction_proposer(self) -> TaskWorkerProtocol:
+        """Develop directions as approved execution, not autonomous interest edits."""
+        name = self.config.providers.direction_proposer
+        return get_plugin("direction_proposer", name).DirectionProposer(self.config.provider_options[name])
 
     @cached_property
     def workbench(self) -> WorkbenchProtocol:
@@ -80,27 +120,11 @@ class Services:
         return service
 
     @cached_property
-    def archive(self) -> ArchiveStoreProtocol:
-        """Provide verified Knowledge and Ideas publication."""
-        name = self.config.providers.archive
-        plugin = get_plugin("archive", name)
-        service = plugin.ArchiveStore(self.config.provider_options[name])
-        return service
-
-    @cached_property
     def curator(self) -> CuratorProtocol:
         """Provide extraction without controlling workflow progression."""
         name = self.config.providers.curator
         plugin = get_plugin("curator", name)
         service = plugin.Curator(self.config.provider_options[name])
-        return service
-
-    @cached_property
-    def captures(self) -> CaptureSourceProtocol:
-        """Provide bounded reads of independent raw Notero and SimpRead inputs."""
-        name = self.config.providers.captures
-        plugin = get_plugin("captures", name)
-        service = plugin.CaptureSource(self.config.provider_options[name])
         return service
 
     @cached_property
@@ -112,16 +136,8 @@ class Services:
         return service
 
     @cached_property
-    def capture_publisher(self) -> CapturePublisherProtocol:
-        """Provide organized Papers and Knowledge publication."""
-        name = self.config.providers.captures
-        plugin = get_plugin("captures", name)
-        service = plugin.CapturePublisher(self.config.provider_options[name])
-        return service
-
-    @cached_property
     def feed(self) -> ResearchFeedProtocol:
-        """Provide research interests, recommendations, and Interested follow-ups."""
+        """Provide recommendation preferences and autonomous Feed publication."""
         name = self.config.providers.feed
         plugin = get_plugin("recommendations", name)
         service = plugin.ResearchFeed(self.config.provider_options[name])

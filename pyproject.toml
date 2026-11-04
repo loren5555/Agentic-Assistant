@@ -1,7 +1,7 @@
 [project]
 name = "agentic-assistant"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "Source-driven personal research assistant with human review"
 readme = "README.md"
 authors = [
     { name = "loren", email = "loren5555@foxmail.com" }
@@ -25,3 +25,5 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = ["assistant", "plugins", "logger"]
+source-include = ["CHANGELOG.md", "information-flow.drawio"]
+source-exclude = ["/src/assistant/config.yaml"]

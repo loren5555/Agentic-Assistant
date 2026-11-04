@@ -1,43 +1,15 @@
-"""Run recommend-papers: select new papers through explicit evidence gates.
+"""Discover and publish daily recommendations independently of Workbench.
 
 Input origin:
-    Manual/scheduled recommendations dispatch supplies the day. ResearchFeed
-    reads active Notion Research Interests; discovery and evidence plugins
-    supply candidate metadata and primary text; feed/local index supply duplicate
-    history. Demo mode replaces live discovery/assessment with fixtures.
-
+    Active research interests, discovery candidates and primary evidence readers.
 Output destination:
-    Passing real recommendations go through ResearchFeed.publish to Notion
-    Research Feed. RecommendationRun goes to DBOS and a local recommendations
-    JSON report, then command output. Human Interested feedback later flows
-    through reviews to Inbox, not directly to Papers.
-
-Inputs:
-    Asia/Shanghai day, configured category maxima, read-only active research
-    interests, discovery candidates, and primary material actually retrieved.
-    Services, local index, and report directory come from the runtime.
-
-Outputs:
-    RecommendationRun separating selections, real Feed publications, duplicates,
-    rejections, source failures, and pending recovery. A readable local JSON report
-    and DBOS event preserve the outcome independently of the command's display.
-
-Workflow:
-    Read interests -> discover -> deduplicate within/across runs -> retrieve
-    evidence -> assess relevance/quality -> enforce evidence gates and maxima ->
-    publish permitted recommendations -> save the report. Mainline Deep Read
-    requires full text; claims, experimental support, and inference stay separate.
-
-Participants and effects:
-    Discovery service, evidence reader, assessment agent, Research Feed storage,
-    and human reader. run recommend-papers and scheduled dispatch share the same
-    per-day operation identity. Real mode may call models and publish Feed rows.
-
-Boundaries:
-    Maxima are caps, not quotas; zero publication is valid. Synthetic demo mode
-    uses fixed assessment and prohibits real Feed writes. Interests and Human
-    Feedback are not modified. Interested follow-up implementations are bound
-    here for DBOS registration but live in reviews.py and run with reviews.
+    Qualified real recommendations go directly to Research Feed and a local report.
+    Interested feedback later enters process-signals through the Feed processor.
+Responsibility:
+    Apply evidence gates, deduplication and per-day category caps. Zero publication
+    is valid. Demo fixtures skip live interest reads, model assessment and Feed writes.
+    Provider internals may use multiple evidence steps without exposing that detail
+    in the business diagram.
 """
 
 from pathlib import Path
@@ -49,7 +21,6 @@ from dbos import DBOS, DBOSConfiguredInstance
 from assistant.components.recommendations.models import CATEGORIES, PaperCandidate, PaperEvidence, Recommendation, RecommendationAssessment, RecommendationRun, ResearchInterest
 from assistant.runtime.index import WorkIndex
 from assistant.runtime.services import Services
-from assistant.workflows.tasks.process_workbench import list_interested, create_follow_up, process_followups
 from logger import get_logger, trace_call
 
 
@@ -71,7 +42,7 @@ def candidate_identity(candidate: PaperCandidate) -> str:
 
 @DBOS.dbos_class("ResearchWorkflows")
 class RecommendationWorkflows(DBOSConfiguredInstance):
-    """Own daily evidence gates, publications, and Interested follow-ups.
+    """Own autonomous daily evidence gates and recommendation publications.
 
     Attributes:
         services: Replaceable discovery, reading, assessment, and storage services.
@@ -240,6 +211,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         """
         self.logger.info("Reading active research interests without changing priorities.")
         interests = self.services.feed.read_active_interests()
+        interests.extend(self.services.feed.read_interested_papers())
         self.logger.info("Read %d active research interests.", len(interests))
         return interests
 
@@ -421,6 +393,3 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
 
     # Persisted feedback workflows retain their registration while their business
     # implementation lives beside the review process that invokes them.
-    list_interested = list_interested
-    create_follow_up = create_follow_up
-    process_followups = process_followups

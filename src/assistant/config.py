@@ -11,32 +11,37 @@ class ProviderSettings(BaseModel):
     """Select the providers implementing the application's external capabilities.
 
     Attributes:
-        inputs: Provider reading Inbox/TODO and confirming processed sources.
+        processors: Provider owning independent source extraction and writeback.
+        organizer: Shared source understanding and information organization.
+        reconciler: Deterministic human feedback interpretation.
         router: Provider package exposing the decision service.
         investigator: Provider package exposing read-only question investigation.
         proposer: Provider package managing proposals.
         workbench: Provider package storing reports and reading their sources.
         worker: Provider completing self-contained approved tasks.
         curator: Provider finalizing human-accepted results.
-        archive: Provider storing retained knowledge and ideas.
+        publisher: Provider storing accepted typed information products.
+        direction_proposer: Capability developing research direction proposals.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    inputs: str = "notion"
     router: str
     investigator: str
     proposer: str = "local"
     workbench: str = "notion"
     worker: str = "local"
     curator: str = "local"
-    archive: str = "notion"
-    captures: str = "notion"
     briefs: str = "local"
     feed: str = "notion"
     discovery: str = "demo"
     evidence: str = "demo"
     recommender: str = "local"
+    processors: str = "notion"
+    organizer: str = "local"
+    reconciler: str = "local"
+    publisher: str = "notion"
+    direction_proposer: str = "local"
 
 
 class RuntimeSettings(BaseModel):

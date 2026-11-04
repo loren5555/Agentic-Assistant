@@ -1,37 +1,12 @@
-"""Manually trigger one complete business task and await its result.
+"""Dispatch one named business workflow and display its actual result.
 
 Input origin:
-    The operator supplies run JOB and optional --page through cli.py/main.py.
-    Application passes parsed options and YAML settings to run(); dispatch then
-    invokes the selected task, whose own readers fetch its business material.
-
+    run JOB or a configured schedule selects an input, review, feedback or recommendation job.
 Output destination:
-    dispatch returns task output to run(), then display() prints JSON on stdout.
-    The selected task, not this display function, publishes Workbench proposals
-    or results, Papers/Knowledge briefs, or Research Feed recommendations and
-    stores its checkpoints in the configured local runtime.
-
-Inputs:
-    Application and CLI options selecting propose-tasks, process-workbench,
-    organize-papers, organize-articles, or recommend-papers. An optional page ID
-    narrows raw-capture processing. The current Asia/Shanghai date identifies
-    a daily recommendation run.
-
-Outputs:
-    JSON destination links or a RecommendationRun summary on stdout, with
-    workflow identity, progress, usage, and failures in the shared log.
-
-Workflow relationship:
-    dispatch is the durable entry shared with scheduled execution. Its mapping is
-    propose-tasks -> tasks/propose_tasks, process-workbench -> tasks/process_workbench,
-    organize-papers -> tasks/organize_papers, organize-articles -> tasks/organize_articles,
-    recommend-papers -> tasks/recommend_papers. Each task owns its business order.
-
-Participants and effects:
-    Human operator, DBOS dispatcher, selected task, and its capability plugins.
-    Depending on the task, execution may call models and write Notion records.
-    Running propose-tasks does not execute the proposals it creates; human review is a
-    separate boundary. This command runs once, not as a scheduler.
+    The selected task owns Notion effects; run displays its links/report as JSON.
+Responsibility:
+    Use the same task entry points for manual and scheduled work. Proposal intake
+    never executes implicitly. Daily recommendation is independent of Workbench.
 """
 
 from __future__ import annotations
@@ -83,6 +58,10 @@ async def dispatch(self: TaskWorkflows, job: str, day: str, page_id: str | None 
                 output = await self.propose_tasks()
             case "process-workbench":
                 output = await self.process_workbench()
+            case "reconcile-feedback":
+                output = await self.reconcile_feedback()
+            case "process-signals":
+                output = await self.process_signals()
             case "organize-papers":
                 output = await self.organize_papers(page_id)
             case "organize-articles":

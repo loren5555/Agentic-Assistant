@@ -1,6 +1,5 @@
 """Human review and visible execution state on the workbench."""
 
-from typing import Literal
 import hashlib
 import json
 
@@ -9,6 +8,7 @@ from pydantic import BaseModel
 from assistant.components.curator.models import CurationDecision
 from assistant.components.proposer.models import Proposal
 from assistant.components.task_worker.models import TaskResult
+from assistant.components.inputs.models import SourceKind
 
 
 def result_publication_key(version: int, content: str) -> str:
@@ -57,7 +57,7 @@ class WorkbenchItem(BaseModel):
     result_review: str
     result_feedback: str
     source_url: str
-    source_kind: Literal["inbox", "todo", "notero", "simpread"] | None = None
+    source_kind: SourceKind | None = None
     proposal: Proposal | None = None
     result: TaskResult | None = None
     curation: CurationDecision | None = None
@@ -65,3 +65,14 @@ class WorkbenchItem(BaseModel):
     publication_applied: bool = False
     proposal_version: int | None = None
     execution_error: str = ""
+
+    @property
+    def needs_input(self) -> bool:
+        """Identify a human-input turn from its waiting state or proposal kind.
+
+        Returns:
+            Whether an answer should return to the source before execution.
+        """
+        return self.status == "Needs Input" or (
+            self.proposal is not None and self.proposal.kind == "clarification"
+        )

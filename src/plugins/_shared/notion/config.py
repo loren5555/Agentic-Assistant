@@ -4,21 +4,15 @@ from pydantic import BaseModel
 
 
 class NotionSettings(BaseModel):
-    """Connection settings for the three proposal workflow data sources.
+    """Connection settings used by the Workbench storage component.
 
     Attributes:
         token: Notion integration token.
-        inbox_data_source_id: Inbox data source queried for unarchived inputs.
-        todo_data_source_id: TODO data source queried for elevated inputs.
         workbench_data_source_id: Data source containing proposals and reviews.
-        input_limit: Maximum number of Inbox and TODO items read per collection.
     """
 
     token: str
-    inbox_data_source_id: str
-    todo_data_source_id: str
     workbench_data_source_id: str
-    input_limit: int = 20
 
 
 class ArchiveSettings(BaseModel):
@@ -28,11 +22,13 @@ class ArchiveSettings(BaseModel):
         token: Notion integration token.
         knowledge_data_source_id: Destination for reusable knowledge.
         ideas_data_source_id: Destination for research ideas.
+        research_interests_data_source_id: Destination for accepted research interests.
     """
 
     token: str
     knowledge_data_source_id: str = ""
     ideas_data_source_id: str = ""
+    research_interests_data_source_id: str = "48f7a170-0249-4c12-aa37-0c33c54f06cc"
 
 
 class ResearchFeedSettings(BaseModel):
@@ -42,7 +38,7 @@ class ResearchFeedSettings(BaseModel):
         token: Integration token, never included in reports.
         research_interests_data_source_id: Read-only priorities.
         research_feed_data_source_id: Recommendation destination.
-        inbox_data_source_id: Interested-feedback follow-up destination.
+        papers_data_source_id: Human-marked paper recommendation preferences.
         interests_status_property: Existing interest select/status column.
         interests_active_value: Value identifying active interests.
         feed_category_property: Existing recommendation category column.
@@ -52,7 +48,7 @@ class ResearchFeedSettings(BaseModel):
     token: str
     research_interests_data_source_id: str = "48f7a170-0249-4c12-aa37-0c33c54f06cc"
     research_feed_data_source_id: str = "ba262e5f-d58d-4f63-a77a-1f27e72b087e"
-    inbox_data_source_id: str
+    papers_data_source_id: str = "3b8835de-f60d-835d-8c98-07c38b24fa6a"
     interests_status_property: str = "Status"
     interests_active_value: str = "Active"
     feed_category_property: str = "Type"
@@ -64,7 +60,7 @@ class CaptureSettings(BaseModel):
 
     Attributes:
         token: Notion integration token.
-        notero_data_source_id: Read-only Zotero-synced raw input.
+        notero_data_source_id: Zotero-synced input with assistant-owned flags.
         simpread_data_source_id: Independent article capture collection.
         papers_data_source_id: Organized paper briefs and human discussions.
         knowledge_data_source_id: Reusable explanations and methods.

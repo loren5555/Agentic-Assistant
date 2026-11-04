@@ -1,40 +1,14 @@
-"""Share proposal submission across intake, capture escalation, and revision.
+"""Checkpoint shared interpretation, planning and proposal publication.
 
 Input origin:
-    intake passes Inbox/TODO material from InputSource. organize_capture
-    can adapt a Notero/SimpRead record into SourceMaterial. reviews
-    supplies revised sources and Workbench feedback when a proposal needs revision.
-
+    Any source processor supplies an effective SourceMaterial version.
 Output destination:
-    The draft goes to a DBOS step checkpoint, then Workbench.submit/revise
-    publishes the report in Notion Workbench. Source/item state goes to DBOS and
-    WorkIndex; eligible source acknowledgements go to Inbox/TODO/SimpRead. The
-    Workbench URL returns to the parent workflow and awaits human approval.
-
-Inputs:
-    Stable source key, SourceMaterial snapshot, and optional prior WorkbenchItem
-    carrying the previous proposal and human feedback.
-
-Outputs:
-    Confirmed Workbench URL plus a DBOS state event and local index pointer for
-    the source/proposal version. Successful submission acknowledges the raw input.
-
-Workflow:
-    Draft and checkpoint the Proposal -> reread source and relevant human fields
-    -> submit or revise through Workbench -> save the resulting machine state ->
-    acknowledge the original source. Model drafting and publication have separate
-    checkpoints so a write failure does not require repeating a successful draft.
-
-Participants and effects:
-    Parent intake/capture/review workflows, proposal-drafting agent, input source,
-    Workbench publisher, and human approver. Publication confirmation uses the
-    Workbench property receipt; source acknowledgement follows the saved state.
-    Inbox/TODO/SimpRead may be acknowledged; raw Notero remains read-only.
-
-Boundaries:
-    This operation ends at human approval, not task execution. Functions are
-    bound to WorkbenchWorkflows by runtime/application.py; callers determine
-    operation identity and timing, while plugins own individual service calls.
+    Organizer interpretation goes to Proposer, its report goes to Workbench,
+    and source acknowledgement follows verified publication and state persistence.
+Responsibility:
+    Every changed source is a fresh proposal. Old reports remain historical;
+    revision feedback lives on the source rather than a special drafting path.
+    This workflow ends at approval and never publishes final knowledge directly.
 """
 
 from __future__ import annotations
@@ -47,7 +21,7 @@ from dbos import DBOS
 from assistant.components.inputs.models import SourceMaterial
 from assistant.components.proposer.models import Proposal
 from assistant.components.workbench.models import WorkbenchItem
-from assistant.runtime.records import digest, capture_material
+from assistant.runtime.records import digest
 from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
@@ -58,13 +32,12 @@ logger = get_logger("assistant.workflows.steps.submit_proposal")
 
 @DBOS.workflow(name="ProposalWorkflows.intake_item")
 @trace_call("workflow", "submit_proposal")
-async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMaterial, previous: WorkbenchItem | None = None) -> str:
+async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMaterial) -> str:
     """Publish one source proposal and end at the human approval boundary.
 
     Args:
         key: Stable raw input key.
         source: Captured material for this intake version.
-        previous: Existing managed report if this input is being reorganized.
 
     Returns:
         Verified Workbench URL.
@@ -73,42 +46,60 @@ async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMate
         'Proposal intake started.',
         extra={"details": {'source_page': source.page_id, 'workflow': DBOS.workflow_id}},
     )
-    proposal = await self.draft(source, previous)
-    item = self.publish_proposal(source, proposal, previous)
+    source = await self.organize_source(source)
+    proposal = await self.draft(source)
+    item = self.publish_proposal(source, proposal)
     await self.save_checkpoint(key, source, item)
     self.acknowledge(source)
     logger.info(
-        'Proposal intake completed; waiting for human approval.',
+        'Proposal intake completed: title=%r status=%s; waiting for human %s.',
+        item.title, item.status, "input" if item.needs_input else "approval",
         extra={"details": {'source_page': source.page_id, 'workbench': item.url}},
     )
     return item.url
 
 
+@DBOS.step(name="ProposalWorkflows.organize_source")
+@trace_call("step", "organize_source")
+async def organize_source(self: WorkbenchWorkflows, source: SourceMaterial) -> SourceMaterial:
+    """Checkpoint shared interpretation before proposal drafting.
+
+    Args:
+        source: Complete effective input version.
+
+    Returns:
+        The same source with a derived interpretation for Proposer.
+    """
+    interpretation = await self.services.organizer.organize(source)
+    return source.model_copy(update={"organization": interpretation.model_dump_json()})
+
+
 @DBOS.step(name="ProposalWorkflows.draft")
 @trace_call("step", "draft")
-async def draft(self: WorkbenchWorkflows, source: SourceMaterial, previous: WorkbenchItem | None = None) -> Proposal:
+async def draft(self: WorkbenchWorkflows, source: SourceMaterial) -> Proposal:
     """Checkpoint one provider draft separately from external publication.
 
     Args:
         source: Grounded input material.
-        previous: Report and human feedback when revising.
 
     Returns:
         Provider-generated proposal.
     """
     logger.info(
-        'Drafting proposal: title=%r source=%s mode=%s.',
+        'Drafting proposal: title=%r source=%s version=%d.',
         source.title,
         source.kind,
-        'revision' if previous else 'new',
+        source.version,
         extra={"details": {'page': source.page_id}},
     )
-    proposal = await self.services.proposer.draft(source, previous)
+    proposal = await self.services.proposer.draft(source)
     logger.info(
-        'Proposal drafted: title=%r version=%d plan_steps=%d.',
+        'Proposal drafted: title=%r version=%d proposal_kind=%s plan_steps=%d questions=%d.',
         proposal.title,
         proposal.version,
+        proposal.kind,
         len(proposal.plan),
+        len(proposal.questions),
         extra={"details": {'source_page': source.page_id}},
     )
     return proposal
@@ -116,44 +107,26 @@ async def draft(self: WorkbenchWorkflows, source: SourceMaterial, previous: Work
 
 @DBOS.step(name="ProposalWorkflows.publish_proposal")
 @trace_call("step", "publish_proposal")
-def publish_proposal(self: WorkbenchWorkflows, source: SourceMaterial, proposal: Proposal, previous: WorkbenchItem | None = None) -> WorkbenchItem:
+def publish_proposal(self: WorkbenchWorkflows, source: SourceMaterial, proposal: Proposal) -> WorkbenchItem:
     """Publish and re-fetch one proposal with its confirmation property.
 
     Args:
         source: Original input.
         proposal: Checkpointed draft.
-        previous: Workbench item when updating rather than creating.
 
     Returns:
         Verified page retaining the runtime payload.
     """
     logger.info(
-        'Publishing proposal: title=%r version=%d updating=%s.',
+        'Publishing proposal: title=%r version=%d.',
         proposal.title,
         proposal.version,
-        previous is not None,
         extra={"details": {'source_page': source.page_id}},
     )
-    if self.read_current_source(source).text != source.text:
+    if self.read_current_source(source).fingerprint != source.fingerprint:
         raise RuntimeError("Source changed during proposal drafting")
-    if previous is None:
-        item = self.services.workbench.submit(source, proposal, DBOS.workflow_id)
-    else:
-        current = self.services.workbench.read_item(previous.page_id)
-        expected_key = "proposal:" + digest(proposal.model_dump_json(exclude={"process"}))
-        if current.publication_key == expected_key and current.publication_applied and current.status == "Open":
-            item = self.services.workbench.revise(previous, proposal)
-        else:
-            fields = ("human_review", "human_instruction", "result_review", "result_feedback")
-            partial = current.publication_key == expected_key
-            checked = ("human_instruction", "result_feedback") if partial else fields
-            if any(getattr(current, field) != getattr(previous, field) for field in checked):
-                raise RuntimeError("Human review changed during proposal drafting")
-            if current.publication_key != previous.publication_key and current.publication_key != expected_key:
-                raise RuntimeError("Report publication changed during proposal drafting")
-            if self.read_current_source(source).text != source.text:
-                raise RuntimeError("Source changed during proposal drafting")
-            item = self.services.workbench.revise(previous, proposal)
+    # Every changed input is a fresh proposal; previous work remains history.
+    item = self.services.workbench.submit(source, proposal, DBOS.workflow_id)
     item.proposal = proposal
     item.source_kind = source.kind
     logger.info(
@@ -185,7 +158,7 @@ async def save_checkpoint(self: WorkbenchWorkflows, key: str, source: SourceMate
         path = report_directory / f"{digest(DBOS.workflow_id)}.json"
         path.write_text(json.dumps(traces, ensure_ascii=False, indent=2), encoding="utf-8")
     await DBOS.set_event_async("state", state)
-    self.index.save(key, digest(source.text), DBOS.workflow_id, item.page_id, item.status)
+    self.index.save(key, source.fingerprint, DBOS.workflow_id, item.page_id, item.status)
     logger.debug(
         'Business state checkpoint saved: status=%s.',
         item.status,
@@ -201,15 +174,7 @@ def acknowledge(self: WorkbenchWorkflows, source: SourceMaterial) -> None:
     Args:
         source: Original source to acknowledge.
     """
-    if source.kind in {"inbox", "todo"}:
-        if self.read_current_source(source).text != source.text:
-            raise RuntimeError("Source changed before intake acknowledgement")
-        self.services.inputs.close_source(source)
-    elif source.kind == "simpread":
-        capture = self.services.captures.read_capture(source.page_id, source.kind)
-        if capture_material(capture).text != source.text:
-            raise RuntimeError("Capture changed before proposal acknowledgement")
-        self.services.captures.mark_handled(capture)
+    self.services.processor(source.kind).acknowledge(source)
 
 
 @DBOS.step(name="ProposalWorkflows.read_source")
@@ -236,9 +201,5 @@ def read_current_source(self: WorkbenchWorkflows, source: SourceMaterial) -> Sou
     Returns:
         Current material for an authorization comparison.
     """
-    if source.kind in {"notero", "simpread"}:
-        capture = self.services.captures.read_capture(source.page_id, source.kind)
-        current = capture_material(capture)
-    else:
-        current = self.services.inputs.read_source(source.url)
+    current = self.services.processor(source.kind).read(source)
     return current

@@ -27,7 +27,7 @@ def main() -> None:
             'Command selected: command=%s job=%s.',
             options.command,
             getattr(options, 'job', 'none'),
-            extra={"details": {'runtime_directory': directory}},
+            extra={"details": {'runtime_directory': directory / "v2"}},
         )
 
         with (directory / "runtime.lock").open("a") as lock:

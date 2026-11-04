@@ -1,50 +1,8 @@
 """Capability interfaces for captures."""
 
 from typing import Protocol
-from collections.abc import Mapping
 
-from assistant.components.captures.models import CaptureBatch, CaptureBrief, CaptureKind, CaptureReceipt, RawCapture
-
-
-class CaptureSourceProtocol(Protocol):
-    """Read raw paper/article inputs without coupling callers to Notion."""
-
-    def list_captures(
-        self, kind: CaptureKind, limit: int = 20, cursor: str | None = None,
-        handled_revisions: Mapping[str, str] | None = None,
-    ) -> CaptureBatch:
-        """Read unhandled or changed inputs, skipping unchanged bodies.
-
-        Args:
-            kind: Collection to scan.
-            limit: Maximum number of records in this query.
-            cursor: Previous query's continuation token.
-            handled_revisions: Successfully handled page versions to skip.
-
-        Returns:
-            Captures and optional continuation token.
-        """
-        ...
-
-    def read_capture(self, page_id: str, kind: CaptureKind) -> RawCapture:
-        """Read current material before publishing its organized output.
-
-        Args:
-            page_id: Original capture page.
-            kind: Expected input collection.
-
-        Returns:
-            Current capture including its content fingerprint.
-        """
-        ...
-
-    def mark_handled(self, capture: RawCapture) -> None:
-        """Close a verified SimpRead input; leave Notero read-only.
-
-        Args:
-            capture: Successfully published or proposed source.
-        """
-        ...
+from assistant.components.captures.models import CaptureBrief, CaptureReceipt, RawCapture
 
 
 class BriefWriterProtocol(Protocol):

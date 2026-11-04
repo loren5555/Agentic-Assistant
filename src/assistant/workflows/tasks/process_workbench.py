@@ -1,44 +1,14 @@
-"""Run process-workbench: advance managed work according to explicit human decisions.
+"""Execute approved work and curate accepted results.
 
 Input origin:
-    commands/run.dispatch selects process-workbench. WorkIndex identifies managed entries;
-    DBOS supplies structured proposal/result state, and Workbench supplies live
-    approval, acceptance, and feedback. InputSource/capture readers refresh the
-    original source; Research Feed supplies Interested recommendations.
-
+    Managed Workbench approvals and accepted results; feedback is collected by
+    reconcile-feedback before this workflow selects executable items.
 Output destination:
-    Approved work flows through Router to TaskWorker/Investigator and back into
-    Workbench. Revisions flow through Proposer to Workbench. Accepted useful
-    outcomes flow through Curator and ArchiveStore to Knowledge/Ideas, with final
-    status back in Workbench. Interested follow-ups go to Inbox for propose-tasks.
-    DBOS/index retain progress; destination links return to dispatch.
-
-Inputs:
-    Active local index entries, their DBOS state, current Workbench properties,
-    source content, and human approval, acceptance, instructions, and feedback.
-
-Outputs:
-    Updated Workbench URLs and state checkpoints. Qualified retained outcomes
-    produce archive links; Interested Research Feed entries produce Inbox links.
-
-Workflow:
-    Inspect managed Open/Executed items -> send a durable review signal -> read
-    current scope and human decisions. Revision Requested or source edits invoke
-    proposal revision; Rejected becomes Deprecated. Approved work is routed to
-    a worker/investigator, or asks the user, then awaits result acceptance.
-    Unqualified work is redone. Qualified work is curated and becomes Archived
-    after retained artifacts are published, or Finished if none are retained.
-    Interested follow-ups are processed after the Workbench pass.
-
-Participants and effects:
-    Human approver/reviewer, decision router, execution worker, investigator,
-    curator, Workbench, ArchiveStore, and ResearchFeed. run process-workbench and schedules
-    use this task. It calls models, publishes results, and records durable state.
-
-Boundaries:
-    Unmanaged historical rows are not automatically adopted. Source and human
-    authorization are reread at write boundaries; publication receipts identify
-    report versions. Follow-ups never write directly to Papers.
+    Execution returns to Workbench. Accepted outcomes pass through Curator and
+    Information Publisher to Papers, Knowledge, Ideas or Research Interests.
+Responsibility:
+    Workers execute one complete snapshot. Revision, rejection and unqualified
+    results never invoke a worker directly; source re-entry belongs to Reconciler.
 """
 
 from __future__ import annotations
@@ -46,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import json
 
-from dbos import DBOS, SetWorkflowID
+from dbos import DBOS
 
 from assistant.components.archive.models import ArchiveReceipt
 from assistant.components.curator.models import CurationDecision, RetainedArtifact
@@ -56,8 +26,9 @@ from assistant.components.router.actions import EXECUTION_ACTIONS
 from assistant.components.router.models import RouterDecision, RouterInput
 from assistant.components.task_worker.models import TaskRequest, TaskResult
 from assistant.components.workbench.models import WorkbenchItem, result_publication_key
+from assistant.components.captures.models import RawCapture
 from assistant.runtime.records import digest
-from assistant.runtime.recovery import check_version, recover
+from assistant.runtime.recovery import invoke
 from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
@@ -67,160 +38,74 @@ if TYPE_CHECKING:
 logger = get_logger("assistant.workflows.tasks.process_workbench")
 
 
-@DBOS.workflow(name="JobWorkflows.reviews")
+@DBOS.workflow(name="JobWorkflows.process_workbench.v2")
 @trace_call("workflow", "process_workbench")
 async def process_workbench(self: TaskWorkflows) -> list[str]:
-    """Dispatch observed human decisions as durable, deduplicated signals.
+    """Reconcile feedback, then execute approved work or curate accepted results.
 
     Returns:
-        Updated Workbench and Interested-follow-up URLs.
+        Workbench links advanced during this pass.
     """
-    urls = []
+    urls = await self.reconcile_feedback()
     records = self.list_active()
-    waiting = 0
-    for position, record in enumerate(records, start=1):
+    logger.info('Processing Workbench: active=%d.', len(records))
+    for position, record in enumerate(records, 1):
         state = await DBOS.get_event_async(record["workflow_id"], "state", timeout_seconds=0)
+        if state is None:
+            raise RuntimeError(f"Managed work has no state: {record['workflow_id']}")
         saved = WorkbenchItem.model_validate(state["item"])
-        logger.info(
-            'Review item %d/%d: title=%r.',
-            position,
-            len(records),
-            saved.title,
-            extra={"details": {'page': record['page_id'], 'owner': record['workflow_id']}},
-        )
         current = self.proposals.read_review(saved)
+        logger.info('Review item %d/%d: title=%r status=%s approval=%s acceptance=%s.',
+                    position, len(records), current.title, current.status,
+                    current.human_review, current.result_review)
+        if current.needs_input:
+            logger.info('Awaiting human input: title=%r; answer in Human Instruction, then submit Human Review.', current.title)
+            continue
         actionable = (
-            current.status == "Open" and current.human_review in {"Approved", "Revision Requested", "Rejected"}
-            or current.status == "Executed" and current.result_review in {"Qualified", "Unqualified"}
+            current.status == "Open" and current.human_review == "Approved"
+            or current.status == "Executed" and current.result_review == "Qualified"
         )
         if not actionable:
-            waiting += 1
-            logger.info(
-                'Waiting for human review: title=%r status=%s approval=%s acceptance=%s.',
-                current.title,
-                current.status,
-                current.human_review,
-                current.result_review,
-                extra={"details": {'page': current.page_id}},
-            )
+            logger.info('Waiting for human review: title=%r.', current.title)
             continue
-        logger.info(
-            'Dispatching human decision: title=%r status=%s approval=%s acceptance=%s.',
-            current.title,
-            current.status,
-            current.human_review,
-            current.result_review,
-            extra={"details": {'page': current.page_id}},
-        )
-
-        # Include the prior owner so repeated human feedback on a redo is a new round.
-        signal = {
-            "owner": record["workflow_id"], "status": current.status,
-            "review": current.human_review, "instruction": current.human_instruction,
-            "acceptance": current.result_review, "feedback": current.result_feedback,
-            "publication": current.publication_key,
-        }
-        operation = "review:" + digest(json.dumps(signal, sort_keys=True) + current.page_id)
-        status = await DBOS.get_workflow_status_async(operation)
-        if status is not None:
-            check_version(status)
-        if status is not None and status.status == "ERROR":
-            handle = await recover(operation)
-        elif status is not None:
-            logger.info(
-                'kind=checkpoint Reusing existing review workflow: title=%r status=%s.',
-                current.title,
-                status.status,
-                extra={"details": {'workflow': operation}},
-            )
-            handle = await DBOS.retrieve_workflow_async(operation, existing_workflow=False)
-        else:
-            with SetWorkflowID(operation):
-                handle = await DBOS.start_workflow_async(self.proposals.review_item, record["source_key"], state)
-        await DBOS.send_async(operation, signal, topic="review", idempotency_key=operation)
-        urls.append(await handle.get_result())
-
-    followups = await self.research.process_followups()
-    logger.info("Reviews completed: inspected=%d advanced_or_reused=%d waiting=%d interested_followups=%d.",
-                len(records), len(urls), waiting, len(followups))
-    urls.extend(followups)
+        signal = {"owner": record["workflow_id"], "item": current.model_dump(exclude={"proposal", "result", "curation"})}
+        operation = "review:v2:" + digest(json.dumps(signal, sort_keys=True))
+        urls.append(await invoke(operation, self.proposals.review_item, record["source_key"], state))
+    logger.info('Workbench pass completed: advanced=%d.', len(urls))
     return urls
 
 
-@DBOS.workflow(name="ProposalWorkflows.review_item")
+@DBOS.workflow(name="ProposalWorkflows.review_item.v2")
 @trace_call("workflow", "review_item")
 async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
-    """Consume one durable review signal and end at the next human boundary.
+    """Execute one approved snapshot or retain one accepted result.
 
     Args:
-        key: Source identity used by the local index.
-        state: Previous checkpoint containing source and report payloads.
+        key: Source identity in the local business index.
+        state: Saved source, proposal and any previous result.
 
     Returns:
-        Current Workbench URL.
+        Human-facing Workbench URL.
     """
-    logger.info(
-        'Review workflow awaiting durable decision signal: title=%r.',
-        state["item"]["title"],
-        extra={"details": {'workflow': DBOS.workflow_id}},
-    )
-    signal = await DBOS.recv_async(topic="review", timeout_seconds=60)
-    if signal is None:
-        raise TimeoutError("Review signal was not delivered")
     source = SourceMaterial.model_validate(state["source"])
     saved = WorkbenchItem.model_validate(state["item"])
     item = self.read_review(saved)
-    current_source = self.read_source(source)
-
-    # Source edits require a new proposal; approval never carries across scope.
-    changed = current_source.text != source.text
-    logger.info(
-        'Review scope checked: title=%r source_changed=%s.',
-        item.title,
-        changed,
-        extra={"details": {'page': item.page_id}},
-    )
-    if item.human_review != "Rejected" and (changed or (item.status == "Open" and item.human_review == "Revision Requested")):
-        logger.info(
-            'Revising proposal before further action: title=%r source_changed=%s.',
-            item.title,
-            changed,
-            extra={"details": {'page': item.page_id}},
-        )
-        proposal = await self.draft(current_source, item)
-        item = self.publish_proposal(current_source, proposal, item)
-        await self.save_checkpoint(key, current_source, item)
-        logger.info(
-            'Revision completed; waiting for fresh approval: title=%r.',
-            item.title,
-            extra={"details": {'page': item.page_id}},
-        )
+    if item.needs_input:
+        logger.info('Clarification proposal awaits feedback reconciliation: title=%r.', item.title)
         return item.url
+    current_source = self.read_source(source)
+    if current_source.fingerprint != source.fingerprint:
+        logger.info('Source changed; returning work to normal intake: title=%r.', item.title)
+        return await self.reconcile_item(key, source, item)
+    if item.publication_key != saved.publication_key:
+        raise RuntimeError("Report publication changed; reconcile the work before execution")
 
-    if item.status == "Open" and item.human_review == "Rejected":
-        logger.info(
-            'Applying human rejection: title=%r.',
-            item.title,
-            extra={"details": {'page': item.page_id}},
-        )
-        self.close_item(current_source, item, "Deprecated")
-        item.status = "Deprecated"
-    elif item.status == "Open" and item.human_review == "Approved" or item.status == "Executed" and item.result_review == "Unqualified":
-        if item.publication_key != saved.publication_key:
-            raise RuntimeError("Report publication changed; request a proposal revision")
-        instructions = "\n\n".join([item.human_instruction, item.result_feedback])
-        if item.result is not None:
-            instructions += f"\n\nPrevious result:\n{item.result.content}"
-        task = TaskRequest(workbench_url=item.url, proposal=item.proposal, instruction=instructions, redo=item.status == "Executed")
-        request = self.route(task, source)
+    if item.status == "Open" and item.human_review == "Approved":
+        task = TaskRequest(workbench_url=item.url, proposal=item.proposal,
+                           instruction=item.human_instruction, source=source)
         try:
-            decision = await self.decide(request)
+            decision = await self.decide(self.route(task, source))
             if decision.selected_action_id == "ask_user":
-                logger.info(
-                    'Execution requires user input; returning to Pending: title=%r.',
-                    item.title,
-                    extra={"details": {'page': item.page_id}},
-                )
                 question = decision.clarification_question or decision.suggested_next_step
                 self.request_input(source, item, question)
                 item = self.read_review(item)
@@ -228,21 +113,16 @@ async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
                 result = await self.execute(task, source, decision)
                 item = self.save_result(source, item, result)
         except Exception as error:
-            # Notion is the human-facing failure surface. A notification failure
-            # must not replace the execution exception needed for DBOS recovery.
             try:
                 self.save_error(item, f"{type(error).__name__}: {error}")
             except Exception:
-                logger.exception("Failed to publish execution error to Workbench: title=%r.", item.title)
+                logger.exception("Could not report execution error: title=%r.", item.title)
             raise
     elif item.status == "Executed" and item.result_review == "Qualified":
-        if item.publication_key != saved.publication_key:
-            raise RuntimeError("Result publication changed; rerun execution before curation")
         decision = await self.extract(item)
         for position, artifact in enumerate(decision.artifacts):
-            identity = f"{item.page_id}:{item.proposal.version}:{digest(item.result.content)}:{position}:{artifact.model_dump_json()}"
-            archive_key = digest(identity)
-            receipt = self.publish_artifact(source, item, artifact, archive_key)
+            identity = f"{item.page_id}:{item.proposal.version}:{position}:{artifact.model_dump_json()}"
+            receipt = self.publish_artifact(source, item, artifact, digest(identity))
             decision.receipts.append(receipt)
         item.curation = decision
         status = "Archived" if decision.artifacts else "Finished"
@@ -250,12 +130,7 @@ async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
         item.status = status
 
     await self.save_checkpoint(key, source, item)
-    logger.info(
-        'Review workflow completed: title=%r status=%s.',
-        item.title,
-        item.status,
-        extra={"details": {'page': item.page_id, 'workflow': DBOS.workflow_id}},
-    )
+    logger.info('Workbench work completed: title=%r status=%s.', item.title, item.status)
     return item.url
 
 
@@ -268,7 +143,7 @@ def list_active(self: TaskWorkflows) -> list[dict]:
         Local active pointers, excluding legacy Notion records.
     """
     records = self.index.list_active()
-    logger.info("Loaded %d managed Open/Executed Workbench items from the local index.", len(records))
+    logger.info("Loaded %d managed Open/Needs Input/Executed Workbench items from the local index.", len(records))
     return records
 
 
@@ -318,7 +193,7 @@ def route(self: WorkbenchWorkflows, task: TaskRequest, source: SourceMaterial) -
     """
     request = RouterInput(
         text=task.model_dump_json(exclude={"proposal": {"process"}}),
-        context=[source.text], candidates=EXECUTION_ACTIONS,
+        context=[source.context_content], candidates=EXECUTION_ACTIONS,
     )
     return request
 
@@ -356,24 +231,37 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, source: SourceMat
     """
     action = decision.selected_action_id
     logger.info(
-        'Executing approved task: title=%r task=%r action=%s redo=%s.',
+        'Executing approved task: title=%r task=%r action=%s source_version=%d.',
         task.proposal.title,
         task.proposal.action[:180],
         action,
-        task.redo,
+        source.version,
         extra={"details": {'workbench': task.workbench_url}},
     )
     if action == "investigate_question":
         logger.info("Dispatching approved action: title=%r capability=investigator action=%s.", task.proposal.title, action)
-        request = InvestigationRequest(question=task.proposal.action, context=[source.text, task.instruction])
+        request = InvestigationRequest(question=task.proposal.action, context=[source.context_content, task.instruction])
         report = await self.services.investigator.investigate(request)
         sections = [report.answer]
         sections.extend(f"- [{e.title}]({e.url}): {e.finding}" for e in report.sources)
         sections.extend(report.limitations)
         result = TaskResult(content="\n\n".join(sections), process=report.process)
+    elif action == "organize_material" and source.kind in {"notero", "simpread"}:
+        capture = RawCapture(kind=source.kind, page_id=source.page_id, url=source.url,
+                             title=source.title, text=source.context_content,
+                             metadata=source.metadata, revision=source.revision,
+                             full_text_verified=source.full_text_verified)
+        brief = await self.services.briefs.brief(capture)
+        artifacts = []
+        if brief.destination in {"papers", "knowledge"}:
+            artifacts.append(RetainedArtifact(kind="paper" if brief.destination == "papers" else "knowledge",
+                                              title=brief.title, content=brief.content, reason=brief.reason,
+                                              reading=brief.reading))
+        result = TaskResult(content=brief.content, artifacts=artifacts)
+    elif action == "propose_direction":
+        result = await self.services.direction_proposer.execute(task)
     elif action in {"complete_task", "organize_material"}:
         logger.info("Dispatching approved action: title=%r capability=task_worker action=%s.", task.proposal.title, action)
-        task.instruction += f"\n\nOriginal material:\n{source.text}"
         result = await self.services.worker.execute(task)
     else:
         raise ValueError(f"Unsupported executable action: {action}")
@@ -414,7 +302,7 @@ def save_result(self: WorkbenchWorkflows, source: SourceMaterial, item: Workbenc
         Current page with the new result and pending acceptance.
     """
     current = self.services.workbench.read_item(item.page_id)
-    expected_key = result_publication_key(item.proposal.version, result.content)
+    expected_key = result_publication_key(item.proposal.version, result.model_dump_json(exclude={"process", "action_id"}))
     if current.publication_key == expected_key and current.status == "Executed" and current.result_review != "Unqualified":
         # Recover a completed write without resetting a subsequent human review.
         self.services.workbench.save_result(item, result)
@@ -465,9 +353,10 @@ def request_input(self: WorkbenchWorkflows, source: SourceMaterial, item: Workbe
     expected_key = "clarification:" + digest(question)
     if current.publication_key == expected_key and current.publication_applied:
         self.services.workbench.request_input(item, question)
-        return
-    self.check_authorization(source, item)
-    self.services.workbench.request_input(item, question)
+    else:
+        self.check_authorization(source, item)
+        self.services.workbench.request_input(item, question)
+    item.proposal = item.proposal.model_copy(update={"kind": "clarification", "questions": [question]})
 
 
 @DBOS.step(name="ProposalWorkflows.extract")
@@ -486,7 +375,12 @@ async def extract(self: WorkbenchWorkflows, item: WorkbenchItem) -> CurationDeci
         item.title,
         extra={"details": {'page': item.page_id}},
     )
-    decision = await self.services.curator.extract(item)
+    if item.result.artifacts:
+        # Structured products were part of the accepted result, not inferred later.
+        decision = CurationDecision(reason="Retain the structured outputs accepted by the user.",
+                                    artifacts=item.result.artifacts)
+    else:
+        decision = await self.services.curator.extract(item)
     logger.info(
         'Curation completed: title=%r retained_artifacts=%d.',
         item.title,
@@ -517,7 +411,7 @@ def publish_artifact(self: WorkbenchWorkflows, source: SourceMaterial, item: Wor
         artifact.title[:120],
         extra={"details": {'workbench_page': item.page_id}},
     )
-    receipt = self.services.archive.publish(item, artifact, key)
+    receipt = self.services.publisher.publish(source, item, artifact, key)
     logger.info(
         'Retained artifact verified.',
         extra={"details": {'workbench_page': item.page_id, 'url': receipt.url}},
@@ -564,79 +458,5 @@ def check_authorization(self: WorkbenchWorkflows, source: SourceMaterial, item: 
     current = self.services.workbench.read_item(item.page_id)
     current_source = self.read_current_source(source)
     fields = ("status", "human_review", "human_instruction", "result_review", "result_feedback", "publication_key")
-    if current_source.text != source.text or any(getattr(current, field) != getattr(item, field) for field in fields):
+    if current_source.fingerprint != source.fingerprint or any(getattr(current, field) != getattr(item, field) for field in fields):
         raise RuntimeError("Source, publication, or human authorization changed; publication stopped")
-
-
-@DBOS.workflow(name="ResearchWorkflows.followups")
-@trace_call("workflow", "process_followups")
-async def process_followups(self: RecommendationWorkflows) -> list[str]:
-    """Turn Interested reviews into Inbox entries with checkpointed writes.
-
-    Returns:
-        Verified newly handled Inbox links.
-    """
-    urls = []
-    records = self.list_interested()
-    for position, record in enumerate(records, start=1):
-        logger.info(
-            'Interested entry %d/%d.',
-            position,
-            len(records),
-            extra={"details": {'feed_page': record['id']}},
-        )
-        url = self.create_follow_up(record["id"])
-        if url:
-            urls.append(url)
-    await DBOS.set_event_async("followups", urls)
-    logger.info("Interested follow-ups completed: inspected=%d verified_or_reused=%d skipped=%d.",
-                len(records), len(urls), len(records) - len(urls))
-    return urls
-
-
-@DBOS.step(name="ResearchWorkflows.list_interested")
-@trace_call("step", "list_interested")
-def list_interested(self: RecommendationWorkflows) -> list[dict[str, str]]:
-    """Read human feedback without changing it.
-
-    Returns:
-        Feed identities approved for one Inbox follow-up.
-    """
-    logger.info("Reading Interested Research Feed entries for Inbox follow-up.")
-    records = self.services.feed.list_interested()
-    logger.info("Read %d Interested Feed entries.", len(records))
-    return records
-
-
-@DBOS.step(name="ResearchWorkflows.create_follow_up")
-@trace_call("step", "create_follow_up")
-def create_follow_up(self: RecommendationWorkflows, feed_page_id: str) -> str:
-    """Publish one verified Inbox follow-up, never a Papers record.
-
-    Args:
-        feed_page_id: Interested recommendation identity.
-
-    Returns:
-        Verified Inbox URL, or empty string for withdrawn or previously handled feedback.
-    """
-    key = f"research-follow-up:{feed_page_id}"
-    previous = self.index.get(key)
-    if previous is not None:
-        logger.info(
-            'Skipping already handled Interested entry.',
-            extra={"details": {'feed_page': feed_page_id}},
-        )
-        return ""
-    url = self.services.feed.create_follow_up(feed_page_id)
-    if url:
-        self.index.save(key, feed_page_id, DBOS.workflow_id, url, "Handled")
-        logger.info(
-            'Interested follow-up verified.',
-            extra={"details": {'feed_page': feed_page_id, 'inbox': url}},
-        )
-    else:
-        logger.info(
-            'Interested entry required no new follow-up; withdrawn or already submitted.',
-            extra={"details": {'feed_page': feed_page_id}},
-        )
-    return url

@@ -1,13 +1,15 @@
 providers:
-  inputs: notion  # Reads Inbox/TODO and acknowledges verified submissions.
+  processors: notion  # Source-specific extraction, acknowledgement and feedback storage.
+  organizer: local  # Shared interpretation of source material and human intent.
+  reconciler: local  # Deterministic feedback-to-source updates; no model invocation.
+  publisher: notion  # Publishes human-accepted typed outcomes.
+  direction_proposer: local  # Develops research directions as approved work.
   router: local  # Selects the workflow for each input.
   investigator: local  # Answers questions by investigating public sources.
   proposer: local  # Drafts proposals for individual items.
   workbench: notion  # Stores reports and proposals for human review.
   worker: local  # Completes approved tasks using supplied materials.
   curator: local  # Extracts reusable knowledge from accepted results.
-  archive: notion  # Stores verified knowledge and ideas.
-  captures: notion  # Reads captured material and publishes organized content.
   briefs: local  # Organizes captured material into grounded briefs.
   feed: notion  # Manages research interests, recommendations, and follow-ups.
   discovery: demo  # Finds research candidates for evaluation (demo implementation).
@@ -29,6 +31,9 @@ local:
   router_effort: low
   timeout_seconds: 120
   proposer_model: openai-codex:gpt-5.6-luna
+  organizer_model: openai-codex:gpt-5.6-luna
+  organizer_effort: low
+  organizer_timeout_seconds: 180
   proposer_effort: medium
   proposer_timeout_seconds: 180
   worker_model: openai-codex:gpt-5.6-luna

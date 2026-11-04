@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
 
 from assistant.components.archive.models import ArchiveReceipt
+from assistant.components.captures.models import PaperReadingMetadata
 
 
 class RetainedArtifact(BaseModel):
@@ -16,14 +17,16 @@ class RetainedArtifact(BaseModel):
         title: Concise title for retrieval.
         content: Standalone Markdown retaining evidence and uncertainty.
         reason: Value beyond this particular task.
+        reading: Paper reading properties supported by the accepted result.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["knowledge", "idea"]
+    kind: Literal["knowledge", "idea", "paper", "research_interest"]
     title: str
     content: str
     reason: str
+    reading: PaperReadingMetadata | None = None
 
 
 class CurationDecision(BaseModel):

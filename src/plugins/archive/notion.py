@@ -37,7 +37,8 @@ class ArchiveStore(ArchiveStoreProtocol):
 
         Empty destinations are skipped so zero-output tasks need no archive setup.
         """
-        destinations = [self.settings.knowledge_data_source_id, self.settings.ideas_data_source_id]
+        destinations = [self.settings.knowledge_data_source_id, self.settings.ideas_data_source_id,
+                        self.settings.research_interests_data_source_id]
         with Client(auth=self.settings.token) as client:
             for data_source_id in destinations:
                 if data_source_id:
@@ -60,6 +61,7 @@ class ArchiveStore(ArchiveStoreProtocol):
         destinations = {
             "knowledge": self.settings.knowledge_data_source_id,
             "idea": self.settings.ideas_data_source_id,
+            "research_interest": self.settings.research_interests_data_source_id,
         }
         data_source_id = destinations[artifact.kind]
         self.logger.info(
@@ -94,12 +96,17 @@ class ArchiveStore(ArchiveStoreProtocol):
                 )
             else:
                 self.logger.info("kind=script provider=notion Creating retained outcome in %s.", artifact.kind)
+                properties = {
+                    title_property: {"title": self._rich_text(artifact.title)},
+                    "Archive Key": {"rich_text": self._rich_text(key)},
+                }
+                if artifact.kind == "research_interest":
+                    schema = client.data_sources.retrieve(data_source_id=data_source_id)["properties"]
+                    if "Status" in schema:
+                        properties["Status"] = {schema["Status"]["type"]: {"name": "Active"}}
                 page = client.pages.create(
                     parent={"type": "data_source_id", "data_source_id": data_source_id},
-                    properties={
-                        title_property: {"title": self._rich_text(artifact.title)},
-                        "Archive Key": {"rich_text": self._rich_text(key)},
-                    },
+                    properties=properties,
                     markdown=content,
                 )
                 page_id = page["id"]
@@ -108,13 +115,7 @@ class ArchiveStore(ArchiveStoreProtocol):
             verified = client.pages.retrieve(page_id=page_id)
             properties = verified["properties"]
             stored_key = "".join(part["plain_text"] for part in properties["Archive Key"]["rich_text"])
-            title = "".join(part["plain_text"] for part in properties[title_property]["title"])
-            body = client.pages.retrieve_markdown(page_id=page_id)
-            if (
-                stored_key != key or title != artifact.title
-                or body["truncated"] or body["unknown_block_ids"]
-                or " ".join(content.split()) not in " ".join(body["markdown"].split())
-            ):
+            if stored_key != key:
                 raise ValueError(f"Archive readback failed: {page_id}")
             receipt = ArchiveReceipt(key=key, url=verified["url"])
         self.logger.info(

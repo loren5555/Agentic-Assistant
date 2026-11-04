@@ -1,32 +1,13 @@
-"""Share durable operations used by more than one complete task.
+"""Locate shared durable operations beneath the named business jobs.
 
 Input origin:
-    intake and review revisions call proposal operations; paper/article
-    tasks call capture operations. Parent tasks supply source/scope and runtime
-    dependencies, and the relevant readers fetch current external records.
-
+    Source workflows select roles and call intake_sources.
 Output destination:
-    submit_proposal returns Workbench links to its parent; organize_capture
-    returns Papers/Knowledge/Workbench links. Both save DBOS/index progress and
-    acknowledge eligible raw sources. The parent task returns these results to
-    the original command/schedule, or continues to its next human boundary.
-
-Responsibility:
-    Keep proposal submission and raw-capture organization consistent across
-    callers without collecting every low-level function into a common toolbox.
-
-Operation map:
-    submit_proposal.py: draft, publish, checkpoint, and acknowledge a proposal.
-    organize_capture.py: read, brief, publish/propose, and acknowledge captures.
-
-Inputs and outputs:
-    Parent workflows pass source snapshots or collection/page scope. Operations
-    return confirmed destinations and persist the model outputs or state needed
-    for retries. They can update Notion sources after successful publication.
-
-Participants and boundaries:
-    Intake, review/revision, paper, and article tasks call these operations;
-    plugins provide the individual capabilities. Some helpers are DBOS steps,
-    others are child workflows spanning several steps. Registration and instance
-    binding belong to runtime/application.py; schedules remain outside this layer.
+    Source snapshots pass through Organizer and Proposer into Workbench; verified
+    submission acknowledges the same source version.
+Responsibilities:
+    intake_sources.py handles bounded extraction and source-version deduplication.
+    submit_proposal.py checkpoints organization, drafting, publication and source
+    acknowledgement separately so retries retain successful model work.
+    Approved execution and feedback reconciliation live in their own task modules.
 """

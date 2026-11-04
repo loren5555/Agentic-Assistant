@@ -139,7 +139,7 @@ class CapturePublisher(CapturePublisherProtocol):
                     **reading_properties,
                 }
                 if brief.destination == "papers":
-                    properties["Source Type"] = {"select": {"name": "Zotero" if capture.kind == "notero" else "SimpRead"}}
+                    properties["Source Type"] = {"select": {"name": capture.metadata.get("Source Type") or ("Zotero" if capture.kind == "notero" else "SimpRead")}}
                 page = client.pages.create(
                     parent={"type": "data_source_id", "data_source_id": data_source_id},
                     properties=properties, markdown=section,

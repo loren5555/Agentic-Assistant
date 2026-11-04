@@ -106,21 +106,23 @@ class Workbench(WorkbenchProtocol):
             Created Workbench page with its report and review properties.
         """
         self.logger.info(
-            'kind=script provider=notion Submitting Workbench proposal: title=%r source=%s version=%d.',
+            'kind=script provider=notion Submitting Workbench proposal: title=%r source=%s version=%d proposal_kind=%s.',
             proposal.title,
             source.kind,
             proposal.version,
+            proposal.kind,
             extra={"details": {'page': source.page_id, 'workflow': workflow_id}},
         )
         properties = {
             "Name": {"title": self._rich_text(proposal.title)},
-            "Status": {"select": {"name": "Open"}},
+            "Status": {"select": {"name": "Needs Input" if proposal.kind == "clarification" else "Open"}},
             "Source": {"rich_text": self._rich_text(source.url)},
             "Source Kind": {"rich_text": self._rich_text(source.kind)},
             "Execution Error": {"rich_text": []},
             "Human Review": {"select": {"name": "Pending"}},
             "Result Review": {"select": {"name": "Pending"}},
             "Proposal Version": {"number": proposal.version},
+            "Source Version": {"number": source.version},
         }
         report = self._report_text(source, proposal)
         key = publication_key("proposal", proposal.model_dump_json(exclude={"process"}))
@@ -185,62 +187,6 @@ class Workbench(WorkbenchProtocol):
         )
         return item
 
-    @trace_call("component", "workbench.revise")
-    def revise(self, item: WorkbenchItem, proposal: Proposal) -> WorkbenchItem:
-        """Publish a revision, then confirm its review reset through properties.
-
-        Args:
-            item: Page containing the previous proposal.
-            proposal: Revised proposal based on source material and feedback.
-
-        Returns:
-            Confirmed proposal with current human review values.
-        """
-        self.logger.info(
-            'kind=script provider=notion Revising Workbench proposal: title=%r version=%d.',
-            proposal.title,
-            proposal.version,
-            extra={"details": {'page': item.page_id}},
-        )
-        key = publication_key("proposal", proposal.model_dump_json(exclude={"process"}))
-        current = self.read_item(item.page_id)
-        if current.publication_key == key:
-            current.proposal = proposal
-            current.source_kind = item.source_kind
-            self.logger.info(
-                'kind=checkpoint Proposal revision already confirmed; human review preserved.',
-                extra={"details": {'page': item.page_id}},
-            )
-            return current
-
-        source = self._report_source(item)
-        report = self._report_text(source, proposal)
-        with Client(auth=self.settings.token) as client:
-            client.pages.update_markdown(
-                page_id=item.page_id, type="replace_content",
-                replace_content={"new_str": report},
-            )
-            self._confirm_publication(client, item.page_id, key, {
-                "Name": {"title": self._rich_text(proposal.title)},
-                "Proposal Version": {"number": proposal.version},
-                "Source Kind": {"rich_text": self._rich_text(source.kind)},
-                "Execution Error": {"rich_text": []},
-                "Status": {"select": {"name": "Open"}},
-                "Human Review": {"select": {"name": "Pending"}},
-                "Result Review": {"select": {"name": "Pending"}},
-            })
-        revised = self.read_item(item.page_id)
-        revised.proposal = proposal
-        revised.source_kind = item.source_kind
-        self.logger.info(
-            'kind=script provider=notion Proposal revision confirmed: title=%r version=%d approval=%s.',
-            revised.title,
-            proposal.version,
-            revised.human_review,
-            extra={"details": {'page': item.page_id}},
-        )
-        return revised
-
     @trace_call("component", "workbench.set_status")
     def set_status(self, item: WorkbenchItem, status: str) -> None:
         """Update a proposal lifecycle status while retaining human feedback.
@@ -288,7 +234,7 @@ class Workbench(WorkbenchProtocol):
         )
         if item.proposal is None:
             raise ValueError("Cannot save execution results for an unmanaged proposal")
-        key = result_publication_key(item.proposal.version, result.content)
+        key = result_publication_key(item.proposal.version, result.model_dump_json(exclude={"process", "action_id"}))
         current = self.read_item(item.page_id)
         if current.publication_key == key:
             if current.status == "Open" or (current.status == "Executed" and current.result_review == "Unqualified" and item.result_review == "Unqualified"):
@@ -312,6 +258,10 @@ class Workbench(WorkbenchProtocol):
         source = self._report_source(item)
         report = self._report_text(source, item.proposal)
         content = report + "\n\n## Execution result\n\n" + result.content
+        for artifact in result.artifacts:
+            content += f"\n\n## Proposed {artifact.kind}: {artifact.title}\n\n{artifact.content}\n\nRetention reason: {artifact.reason}"
+            if artifact.reading:
+                content += "\n\nReading properties:\n\n" + artifact.reading.model_dump_json(indent=2)
         with Client(auth=self.settings.token) as client:
             client.pages.update_markdown(
                 page_id=item.page_id, type="replace_content",
@@ -332,15 +282,15 @@ class Workbench(WorkbenchProtocol):
 
     @trace_call("component", "workbench.request_input")
     def request_input(self, item: WorkbenchItem, question: str) -> None:
-        """Publish a question, then confirm its return to human review.
+        """Publish a clarification proposal waiting for a human answer.
 
         Args:
             item: Managed proposal requiring additional user input.
             question: Focused clarification requested by the router.
         """
         self.logger.info(
-            'kind=script provider=notion Publishing clarification: question_characters=%d.',
-            len(question),
+            'kind=script provider=notion Publishing clarification: title=%r question=%r.',
+            item.title, question,
             extra={"details": {'page': item.page_id}},
         )
         if item.proposal is None:
@@ -355,20 +305,21 @@ class Workbench(WorkbenchProtocol):
             return
 
         source = self._report_source(item)
-        report = self._report_text(source, item.proposal)
-        content = report + "\n\n## Input needed\n\n" + question
+        clarification = item.proposal.model_copy(update={"kind": "clarification", "questions": [question]})
+        content = self._report_text(source, clarification)
         with Client(auth=self.settings.token) as client:
             client.pages.update_markdown(
                 page_id=item.page_id, type="replace_content",
                 replace_content={"new_str": content},
             )
             self._confirm_publication(client, item.page_id, key, {
-                "Status": {"select": {"name": "Open"}},
+                "Status": {"select": {"name": "Needs Input"}},
                 "Human Review": {"select": {"name": "Pending"}},
                 "Execution Error": {"rich_text": []},
             })
         self.logger.info(
-            'kind=script provider=notion Clarification confirmed: status=Open approval=Pending.',
+            'kind=script provider=notion Clarification confirmed: title=%r status=Needs Input; awaiting an answer in Human Instruction.',
+            item.title,
             extra={"details": {'page': item.page_id}},
         )
 
@@ -511,13 +462,24 @@ class Workbench(WorkbenchProtocol):
             f"## {proposal.title}",
             f"Source ({source.kind}): {source.url}",
             f"Understanding: {proposal.understanding}",
-            f"Purpose: {proposal.purpose}",
             f"Reason: {proposal.reason}",
-            f"Action: {proposal.action}",
-            "Plan:",
-            *[f"{index}. {step}" for index, step in enumerate(proposal.plan, start=1)],
-            f"Expected result: {proposal.expected_result}",
         ]
+        if proposal.kind == "clarification":
+            lines.extend([
+                "## Input needed",
+                *[f"{index}. {question}" for index, question in enumerate(proposal.questions, start=1)],
+                "Reply in Human Instruction, then set Human Review to Revision Requested "
+                "to submit your answer. Approved with an answer also submits it. "
+                "The answer returns to the source for a fresh proposal before execution.",
+            ])
+        else:
+            lines.extend([
+                f"Purpose: {proposal.purpose}",
+                f"Action: {proposal.action}",
+                "Plan:",
+                *[f"{index}. {step}" for index, step in enumerate(proposal.plan, start=1)],
+                f"Expected result: {proposal.expected_result}",
+            ])
         report = "\n\n".join(lines)
         return report
 
@@ -526,8 +488,11 @@ class Workbench(WorkbenchProtocol):
         """Initialize lifecycle, visible proposal version, and publication receipt."""
         with Client(auth=self.settings.token) as client:
             ensure_select_option(client, self.settings.workbench_data_source_id, "Status", "Finished")
+            ensure_select_option(client, self.settings.workbench_data_source_id, "Status", "Superseded")
+            ensure_select_option(client, self.settings.workbench_data_source_id, "Status", "Needs Input")
             ensure_rich_text(client, self.settings.workbench_data_source_id, "Publication Key")
             ensure_number(client, self.settings.workbench_data_source_id, "Proposal Version")
+            ensure_number(client, self.settings.workbench_data_source_id, "Source Version")
             ensure_rich_text(client, self.settings.workbench_data_source_id, "Source Kind")
             ensure_rich_text(client, self.settings.workbench_data_source_id, "Execution Error")
 

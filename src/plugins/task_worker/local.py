@@ -36,6 +36,15 @@ class TaskWorker(TaskWorkerProtocol):
         logger: Progress and usage logger.
     """
 
+    instructions = WORKER_INSTRUCTIONS + """
+Return structured artifacts only when the approved work actually produces material
+for retention: knowledge, paper, idea, or research_interest. These are proposed outputs,
+not completed publications. Research interests must follow explicit approved scope;
+inferred interests require human confirmation. Preserve links and uncertainty. Never
+invent an original abstract, code URL, publication detail or full-text access.
+Use the source snapshot, latest supplements and prior results as task context.
+"""
+
     def __init__(self, options: Mapping[str, object]) -> None:
         """Configure a task worker without making a model request.
 
@@ -50,7 +59,7 @@ class TaskWorker(TaskWorkerProtocol):
             model_settings["openai_reasoning_effort"] = self.settings.worker_effort
         self.agent = Agent(
             model,
-            instructions=WORKER_INSTRUCTIONS,
+            instructions=self.instructions,
             output_type=NativeOutput(TaskResult),
             toolsets=load_toolsets(self.settings.worker_toolsets),
             model_settings=model_settings,
@@ -61,15 +70,15 @@ class TaskWorker(TaskWorkerProtocol):
         """Complete the approved scope and retain this invocation's telemetry.
 
         Args:
-            task: Approved proposal and human execution or redo instructions.
+            task: Approved proposal and its effective source snapshot.
 
         Returns:
             Completed deliverable with actual model messages and token usage.
         """
         prompt = task.model_dump_json(exclude={"proposal": {"process"}})
         started = monotonic()
-        self.logger.info("kind=agent provider=local action=complete_task Completing approved task: title=%r model=%s redo=%s timeout=%.0fs.",
-                         task.proposal.title[:120], self.settings.worker_model, task.redo, self.settings.worker_timeout_seconds)
+        self.logger.info("kind=agent provider=local action=complete_task Completing approved task: title=%r model=%s source_version=%d timeout=%.0fs.",
+                         task.proposal.title[:120], self.settings.worker_model, task.source.version, self.settings.worker_timeout_seconds)
         try:
             async with asyncio.timeout(self.settings.worker_timeout_seconds):
                 async with self.agent:
