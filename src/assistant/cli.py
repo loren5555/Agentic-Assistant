@@ -48,13 +48,13 @@ Example:
   python -m assistant run organize-articles""",
     },
     "process-signals": {
-        "help": "Propose work from Interested papers/feed and explicit interest requests.",
+        "help": "Propose work from explicit paper/feed follow-ups and pending interest requests.",
         "description": (
-            "Read Papers Interested, Research Feed Interested, and research interests marked\n"
+            "Read Papers/Research Feed with Follow Up checked, and research interests marked\n"
             "Agent Pending through source-specific processors and the shared proposal path."
         ),
-        "epilog": """No Inbox copies are created. Ordinary Active research interests are used by
-recommend-papers without automatically generating proposals.
+        "epilog": """No Inbox copies are created. Interested marks tune the newspaper without proposals.
+Follow Up is consumed after proposal publication; checking it again requests a new version.
 
 Example:
   python -m assistant run process-signals""",
@@ -94,18 +94,21 @@ Example:
 
 Outputs:
   Papers, Knowledge, Ideas and Research Interests share the acceptance boundary.
-  Interested recommendation input belongs to process-signals.
+  Explicit Follow Up requests belong to process-signals; Interested is preference feedback.
 
 Example:
   python -m assistant run process-workbench""",
     },
     "recommend-papers": {
-        "help": "Autonomously discover, assess and publish daily paper recommendations.",
+        "help": "Refresh Discovery Pool and publish a small research newspaper edition.",
         "description": (
-            "Read research interests, discover candidates, retrieve evidence and evaluate\n"
+            "Read newspaper topics, refresh discoveries, shortlist cached candidates and evaluate\n"
             "relevance. Recommendations publish directly to Research Feed, outside Workbench."
         ),
         "epilog": """Scope:
+  Discovery Pool targets 100 recent finds; Research Feed selects five by default.
+  Sources include papers, findings, methods, tools and datasets.
+  Exploration targets 40/30/20/10 across core/broader/neighboring/cross-disciplinary.
   Daily recommendation maxima are caps, not quotas. Mainline Deep Read requires
   complete primary text. Missing evidence is reported, not fabricated.
   With discovery/evidence: codex, search and read public primary sources using
@@ -113,8 +116,10 @@ Example:
   Configure codex.discovery_max_candidates and codex.discovery_recent_days to bound
   search. Selected excerpts do not qualify as Mainline Deep Read.
   With discovery/evidence: demo, use offline fixtures and never publish entries.
-  Same-day retries reuse their durable report. Interested feedback later enters
-  process-signals and the normal proposal path.
+  Discovery Pool retains broad recent finds; the selected Research Feed edition
+  defaults to five items. Optional likes personalize future editions automatically.
+  Only an explicit Follow Up request enters process-signals and the proposal path.
+  Same-day retries reuse their durable report; changing setup topics starts a new edition.
 
 Examples:
   python -m assistant run recommend-papers
@@ -294,7 +299,7 @@ Use run process-workbench for newly recorded human decisions, not resume.""",
         "workflow_id", metavar="WORKFLOW_ID",
         help="Exact existing workflow ID from status, in the configured DBOS database.",
     )
-    commands.add_parser(
+    setup = commands.add_parser(
         "setup", help="Explicitly add required Notion schema fields and status options.",
         formatter_class=formatter, parents=[verbose_options],
         description=(
@@ -316,14 +321,20 @@ Scope and prerequisites:
   Configure the Notion token and data source IDs in YAML, and grant the integration
   access to those databases. Existing business fields such as Status and review
   decisions must be present. Setup adds assistant fields to existing databases.
-  Existing properties and rows are preserved; no migration or new model job is requested.
+  Discovery Pool: create under notion.assistant_page_id when no pool is configured.
+  Papers / Research Feed: add Follow Up for explicit task requests.
+  Optional --recommendation-topic values initialize the automatic newspaper.
+  Existing properties and rows are preserved; no model job is requested.
   DBOS still starts and can recover previously unfinished workflows.
 
 Examples:
   python -m assistant setup
   python -m assistant --config config.local.yaml setup
+  python -m assistant setup --recommendation-topic "RL" --recommendation-topic "Control"
 
 Run once on a new workspace or after required schema changes, not before every job.""",
     )
+    setup.add_argument("--recommendation-topic", dest="recommendation_topics", action="append", metavar="TOPIC",
+                       help="Choose an initial newspaper topic; repeat for multiple topics. Saved locally, without a proposal.")
     options = parser.parse_args()
     return options

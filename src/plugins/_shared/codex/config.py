@@ -36,8 +36,8 @@ class CodexSettings(BaseModel):
 
     discovery_model: str | None = None
     discovery_effort: str | None = None
-    discovery_timeout_seconds: float = Field(default=300, gt=0)
-    discovery_max_candidates: int = Field(default=10, ge=1, le=30)
+    discovery_timeout_seconds: float = Field(default=600, gt=0)
+    discovery_max_candidates: int = Field(default=60, ge=1, le=100)
     discovery_recent_days: int = Field(default=7, ge=1)
     evidence_model: str | None = None
     evidence_effort: str | None = None

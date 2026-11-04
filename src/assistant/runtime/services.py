@@ -3,6 +3,7 @@
 from functools import cached_property
 
 from assistant.components.captures.protocol import BriefWriterProtocol
+from assistant.components.discovery_pool.protocol import DiscoveryPoolProtocol
 from assistant.components.curator.protocol import CuratorProtocol
 from assistant.components.investigator.protocol import InvestigatorProtocol
 from assistant.components.proposer.protocol import ProposerProtocol
@@ -149,6 +150,12 @@ class Services:
         plugin = get_plugin("recommendations", name)
         service = plugin.ResearchFeed(self.config.provider_options[name])
         return service
+
+    @cached_property
+    def discovery_pool(self) -> DiscoveryPoolProtocol:
+        """Provide the visible discovery cache independently from Feed storage."""
+        plugin = get_plugin("discovery_pool", self.config.providers.discovery_pool)
+        return plugin.DiscoveryPool(self.config.provider_options[self.config.providers.discovery_pool])
 
     @cached_property
     def discovery(self) -> DiscoveryProtocol:

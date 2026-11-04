@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.3 — 2026-11-05
+
+- Added the Assistant-owned Discovery Pool: broad recent public research, including
+  papers, findings, methods, tools and datasets, with canonical upserts, visible
+  metadata, optional feedback and bounded cache retention.
+- Daily recommendations now rank the accumulated pool before selective source
+  reading and publication of a smaller Research Feed edition (five by default).
+- Added setup topics and automatic preference context from explicit likes. Initial
+  preferences are independent of formal Research Interests and Workbench approval.
+- Actual publication history balances core/broader/neighboring/cross-disciplinary
+  exploration toward 40/30/20/10 over time. Silence remains neutral.
+- Interested marks no longer generate proposals. Papers and Research Feed expose
+  Follow Up for explicit task requests through process-signals. Publication consumes
+  the checkbox; a new check reopens the source with a new version. Preference and
+  queue changes remain outside the semantic task identity.
+- Updated Drawio, setup/help/configuration, README, report fields and edition IDs.
+
+### Updating
+
+- Configure the pool data source or Assistant parent page and run setup. Initial
+  topics can be configured or supplied with repeated --recommendation-topic options.
+- Legacy pre-pool recommendation reports are retained and use a different identity.
+  No unrelated workflow records are cleared or migrated.
+
 ## 0.2.2 — 2026-11-05
 
 - Added subscription-backed Codex live discovery and primary-source reading for

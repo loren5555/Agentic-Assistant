@@ -1,15 +1,13 @@
-"""Discover and assess papers for autonomous daily recommendations.
+"""Prepare an autonomous research newspaper with broad discoveries and a shortlist.
 
 Input origin:
-    Active Research Interests and Interested Papers guide public-source discovery.
+    Setup topics bootstrap discovery. Optional likes in Discovery Pool, Papers and
+    Research Feed refine preferences without requiring formal Research Interests.
 Output destination:
-    Qualified real recommendations publish directly to Research Feed.
-    Interested signals are independently read by FeedProcessor into shared intake.
+    Discovery Pool retains recent lightweight finds; Research Feed presents the
+    smaller selected edition. Explicit Follow Up requests enter normal task intake.
 Responsibility:
-    Codex Discovery and EvidenceReader search and read public sources; the local
-    Recommender assesses the supplied evidence. The workflow checkpoints each call,
-    and ResearchFeed publishes selected reports without exposing storage as a task.
-    Apply evidence gates and maxima without requiring Workbench approval for the
-    daily feed. Demo selections never become real publications. Interest feedback
-    does not itself authorize research tasks or modify source preferences.
+    Rank cached metadata before source reading, assess evidence, balance exploratory
+    coverage over time and publish without daily Workbench approval. Unmarked items
+    are neutral. Detailed provider events and usage remain in local reports.
 """

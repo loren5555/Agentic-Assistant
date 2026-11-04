@@ -1,12 +1,12 @@
-"""Implement the autonomous daily research recommendation capabilities.
+"""Implement public discovery, preference reads, selection and Feed publication.
 
 Input origin:
-    Human-maintained Research Interests and Interested Papers provide preferences.
-    Codex discovery produces public candidates; its reader supplies primary excerpts.
+    Setup topics and explicit likes provide newspaper preferences. Codex discovers
+    public papers, findings, methods, tools and datasets for the discovery cache.
 Output destination:
-    Local assessment returns grounded decisions; the Notion service publishes
-    qualified recommendations to Research Feed. Events and usage go to local reports.
+    Local ranking and assessment prepare selected recommendations; the Notion Feed
+    service publishes them. A separate DiscoveryPool component owns cache storage.
 Responsibility:
-    Keep public research, evidence assessment and Feed storage independently
-    configurable. The explicit demo provider exercises the path without live services.
+    Keep public source work, editorial judgment and storage independently selectable.
+    Preference feedback creates no proposal work; explicit Follow Up does.
 """

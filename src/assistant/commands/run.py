@@ -16,6 +16,7 @@ from time import monotonic
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 import argparse
+import hashlib
 import json
 
 from dbos import DBOS
@@ -68,7 +69,12 @@ async def dispatch(self: TaskWorkflows, job: str, day: str, page_id: str | None 
                 output = await self.organize_articles(page_id)
             case "recommend-papers":
                 mode = "demo" if self.services.config.providers.discovery == "demo" else "real"
-                output = await invoke(f"recommendations:{mode}:{day}", self.research.recommend_papers, day)
+                policy = self.services.config.runtime.recommendations.model_dump_json()
+                topic_file = self.research.directory / "recommendation-topics.json"
+                if topic_file.exists():
+                    policy += topic_file.read_text()
+                policy_key = hashlib.sha256(policy.encode()).hexdigest()[:12]
+                output = await invoke(f"recommendations:pool-v1:{mode}:{day}:{policy_key}", self.research.recommend_papers, day)
                 logger.info("Recommendation result: demo=%s selected=%d published=%d rejected=%d source_failures=%d pending_recovery=%d.",
                             output.demo, len(output.selected), len(output.published), len(output.rejected),
                             len(output.source_failures), len(output.pending_recovery))

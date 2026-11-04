@@ -14,6 +14,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import argparse
 import asyncio
+import json
+from pathlib import Path
 
 from assistant.runtime.services import Services
 from logger import get_logger, trace_call
@@ -33,6 +35,8 @@ def initialize_schema(services: Services) -> None:
     services.workbench.initialize_schema()
     logger.info("Initializing accepted output publication schema.")
     services.publisher.initialize_schema()
+    services.discovery_pool.initialize_schema()
+    services.feed.initialize_schema()
     for kind in ("inbox", "todo", "notero", "simpread", "paper", "feed", "interest"):
         logger.info("Initializing source context schema: source=%s.", kind)
         services.processor(kind).initialize_schema()
@@ -47,4 +51,11 @@ async def run(application: Application, options: argparse.Namespace) -> None:
         options: Parsed setup command arguments.
     """
     await asyncio.to_thread(initialize_schema, application.services)
+    topics = getattr(options, "recommendation_topics", None)
+    if topics:
+        topics = list(dict.fromkeys(topic.strip() for topic in topics if topic.strip()))
+        path = Path(application.settings.runtime.directory).resolve() / "v2" / "recommendation-topics.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding="utf-8")
+        get_logger("commands.setup").info("Initial recommendation topics saved: %s.", ", ".join(topics))
     get_logger("commands.setup").info("Required Notion schema additions initialized.")

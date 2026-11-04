@@ -3,7 +3,7 @@
 from importlib.resources import files
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from yaml import safe_load
 
 
@@ -21,6 +21,7 @@ class ProviderSettings(BaseModel):
         worker: Provider completing self-contained approved tasks.
         curator: Provider finalizing human-accepted results.
         publisher: Provider storing accepted typed information products.
+        discovery_pool: Provider storing broad recent research discoveries.
         direction_proposer: Capability developing research direction proposals.
     """
 
@@ -34,6 +35,7 @@ class ProviderSettings(BaseModel):
     curator: str = "local"
     briefs: str = "local"
     feed: str = "notion"
+    discovery_pool: str = "notion"
     discovery: str = "demo"
     evidence: str = "demo"
     recommender: str = "local"
@@ -45,6 +47,26 @@ class ProviderSettings(BaseModel):
     planner: str = "local"
 
 
+class RecommendationSettings(BaseModel):
+    """Configure newspaper topics, cache size and exploratory editorial coverage.
+
+    Attributes:
+        topics: Initial user-selected topics, independent of approved proposals.
+        pool_size: Recent visible cache capacity; explicit likes are preserved.
+        selected_count: Maximum selected entries in a daily edition.
+        reading_budget: Maximum shortlisted candidates to read per edition.
+        exploration: Long-term target weights across core and exploratory fields.
+    """
+
+    topics: list[str] = Field(default_factory=list)
+    pool_size: int = Field(default=100, ge=10, le=500)
+    selected_count: int = Field(default=5, ge=1, le=10)
+    reading_budget: int = Field(default=15, ge=1, le=50)
+    exploration: dict[str, float] = Field(default_factory=lambda: {
+        "Core": .4, "Broader": .3, "Neighboring": .2, "Cross-disciplinary": .1,
+    })
+
+
 class RuntimeSettings(BaseModel):
     """Configure local durability and explicitly opt into recurring jobs.
 
@@ -52,16 +74,15 @@ class RuntimeSettings(BaseModel):
         directory: Local directory for databases and reports.
         batch_size: Maximum raw capture records per manual pass.
         schedules: Enabled job names and cron expressions; empty means manual only.
-        recommendation_maxima: Daily upper bounds, never required output counts.
+        recommendations: Initial newspaper topics, pool size and exploratory mix.
+        recommendation_maxima: Optional per-category caps, never output quotas.
     """
 
     directory: str = "data/assistant"
     batch_size: int = 20
     schedules: dict[str, str] = {}
-    recommendation_maxima: dict[str, int] = {
-        "Understanding Daily": 1, "Mainline Deep Read": 1,
-        "Frontier Radar": 1, "Exceptional Event": 1,
-    }
+    recommendations: RecommendationSettings = Field(default_factory=RecommendationSettings)
+    recommendation_maxima: dict[str, int] = Field(default_factory=dict)
 
 
 class AssistantConfig(BaseModel):

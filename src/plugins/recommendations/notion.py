@@ -76,9 +76,31 @@ class ResearchFeed:
         with Client(auth=self.settings.token) as client:
             pages = self._query(client, self.settings.papers_data_source_id,
                                 {"property": "Interested", "checkbox": {"equals": True}})
-            preferences = [ResearchInterest(id=page["id"], title="Interested paper: " + self._title(page),
+            preferences = [ResearchInterest(id=page["id"], title="Interested paper: " + self._title(page), priority=2.0,
                                              description=self._body(client, page["id"])) for page in pages]
         self.logger.info("Paper preferences read: count=%d.", len(preferences))
+        return preferences
+
+    @trace_call("component", "recommendations.read_interested_feed")
+    def read_interested_feed(self) -> list[ResearchInterest]:
+        """Use likes as persistent preferences without creating proposal work."""
+        settings = self.settings
+        with Client(auth=settings.token) as client:
+            source = client.data_sources.retrieve(data_source_id=settings.research_feed_data_source_id)
+            name = settings.feed_feedback_property
+            kind = source["properties"][name]["type"]
+            pages = self._query(client, settings.research_feed_data_source_id,
+                                {"property": name, kind: {"is_not_empty": True}})
+            preferences = []
+            for page in pages[-100:]:
+                feedback = (page["properties"][name].get(kind) or {}).get("name", "").casefold()
+                if feedback == "interested":
+                    preferences.append(ResearchInterest(id=page["id"], title="Liked discovery: " + self._title(page),
+                                       priority=2.0, description="Explicit positive reading preference."))
+                elif feedback == "not interested":
+                    preferences.append(ResearchInterest(id="avoid:" + page["id"], title=self._title(page),
+                                       priority=0, description="Explicitly disliked item; do not infer dislike of its entire field."))
+        self.logger.info("Selected-feed preferences read: liked=%d.", len(preferences))
         return preferences
 
     @trace_call("component", "recommendations.publish")
@@ -109,7 +131,8 @@ class ResearchFeed:
             extra={"details": {'candidate': candidate.id}},
         )
 
-        sections = [f"Source: {candidate.url}", f"Evidence: {evidence.source_url}",
+        sections = [f"Source: {candidate.url}", f"Discovery type: {candidate.kind}",
+                    f"Exploration scope: {candidate.breadth}", f"Possible connection: {candidate.discovery_reason}", f"Evidence: {evidence.source_url}",
                     f"Reading scope: {'full text' if evidence.full_text else 'partial text'}",
                     f"Reason: {assessment.reason}"]
         for heading, points in (

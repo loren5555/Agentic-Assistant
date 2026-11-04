@@ -1,11 +1,12 @@
-"""Bring Interested papers/feed and explicit interest requests into normal intake.
+"""Bring explicit paper/feed follow-ups and interest requests into normal intake.
 
 Input origin:
     Registered Paper, Feed and Interest processors, each with its own queue rule.
 Output destination:
     Shared Organizer/Proposer submit Workbench proposals, without Inbox copies.
 Responsibility:
-    Distinguish a recommendation preference from approval to research or execute.
+    Interested marks personalize the newspaper. Only Follow Up checkboxes request
+    proposal work; ordinary reading feedback never creates Workbench load.
 """
 
 from dbos import DBOS

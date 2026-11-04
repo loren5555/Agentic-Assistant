@@ -1,17 +1,20 @@
 """Discover and publish daily recommendations independently of Workbench.
 
 Input origin:
-    Active research interests, discovery candidates and primary evidence readers.
+    Initial recommendation topics, optional preference feedback, fresh searches
+    and the accumulated Discovery Pool; no approved research direction is required.
 Output destination:
     Qualified real recommendations go directly to Research Feed and a local report.
-    Interested feedback later enters process-signals through the Feed processor.
+    Optional likes personalize discovery; explicit Follow Up requests enter task intake.
 Responsibility:
-    Apply evidence gates, deduplication and per-day category caps. Zero publication
+    Refresh a broad visible pool, rank its metadata, inspect promising sources
+    and publish a small edition with long-term cross-disciplinary exploration. Zero publication
     is valid. Demo fixtures skip live interest reads, model assessment and Feed writes.
     Provider internals may use multiple evidence steps without exposing that detail
     in the business diagram.
 """
 
+from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 import hashlib
@@ -20,6 +23,8 @@ import json
 from dbos import DBOS, DBOSConfiguredInstance
 
 from assistant.components.recommendations.identity import candidate_identity
+from assistant.components.recommendations.policy import exploration_order
+from assistant.components.discovery_pool.models import DiscoveryEntry
 from assistant.components.recommendations.models import CATEGORIES, DiscoveryResult, PaperCandidate, PaperEvidence, Recommendation, RecommendationAssessment, RecommendationRun, ResearchInterest
 from assistant.runtime.index import WorkIndex
 from assistant.runtime.services import Services
@@ -53,7 +58,8 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         self.services = services
         self.index = index
         self.directory = directory
-        self.maxima = {category: 1 for category in CATEGORIES}
+        self.settings = services.config.runtime.recommendations
+        self.maxima = {category: self.settings.selected_count for category in CATEGORIES}
         self.maxima.update(maxima)
         self.demo = services.config.providers.discovery == "demo"
         options = services.config.provider_options.get(services.config.providers.discovery, {})
@@ -81,21 +87,37 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         )
         if self.demo:
             self.logger.info("Offline demo: real interest reads, model assessment, and Feed publication are disabled.")
-        interests = [] if self.demo else self.read_interests()
+        interests = [] if self.demo else self.read_preferences()
+        discovery_error = None
         try:
             discovery = await self.discover(interests, day)
         except Exception as error:
             report.source_failures["discovery"] = f"{type(error).__name__}: {error}"
             if getattr(error, "process", None) is not None:
                 report.failed_processes["discovery"] = error.process
-            await self._record_report(day, report, record_event=False)
-            raise
+            if self.demo:
+                raise
+            discovery_error = error
+            discovery = DiscoveryResult(candidates=[], notes=["Search failed; selecting from the existing discovery cache"])
+            self.logger.warning("Search unavailable; trying the accumulated Discovery Pool.")
         report.discovery = discovery
-        candidates = discovery.candidates
+        entries = [] if self.demo else self.refresh_pool(discovery.candidates, day)
+        report.pool_count = len(entries)
+        if discovery_error is not None and not entries:
+            await self._record_report(day, report, record_event=False)
+            raise discovery_error
+        candidates = discovery.candidates if self.demo else [
+            entry.candidate for entry in entries
+            if not entry.selected and entry.feedback != "Not Interested"
+        ]
+        if candidates and not self.demo:
+            candidates = await self.rank(candidates, interests, day)
         counts = {category: 0 for category in CATEGORIES}
         seen = set()
 
         for position, candidate in enumerate(candidates, start=1):
+            if len(report.selected) >= self.settings.selected_count:
+                break
             self.logger.info(
                 'Recommendation candidate %d/%d: title=%r.',
                 position,
@@ -154,7 +176,11 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
                 continue
 
             try:
-                assessment = await self.assess(candidate, evidence, interests)
+                assessment_context = [*interests, ResearchInterest(
+                    id="edition-policy", title="Edition date and evidence scope",
+                    description=f"Recommendation date: {day}. Frontier Radar needs a publication within the previous {self.recent_days} days. Older useful work can be Understanding Daily. Abstract-level evidence is sufficient for a qualified reading lead, but never for Mainline Deep Read.",
+                )]
+                assessment = await self.assess(candidate, evidence, assessment_context)
             except Exception as error:
                 report.pending_recovery[candidate.id] = f"Assessment failed: {type(error).__name__}: {error}"
                 await self._record_report(day, report, record_event=False)
@@ -217,25 +243,70 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
 
             url = await self.publish(recommendation, day, report)
             report.published.append(url)
+            if not self.demo:
+                entry = next(entry for entry in entries if candidate_identity(entry.candidate) == candidate_identity(candidate))
+                self.mark_selected(entry)
 
         await self.save_report(day, report)
         self.logger.info("Recommendation run completed: candidates=%d selected=%d published=%d rejected=%d source_failures=%d.",
                          len(candidates), len(report.selected), len(report.published), len(report.rejected), len(report.source_failures))
         return report
 
-    @DBOS.step(name="ResearchWorkflows.read_interests")
-    @trace_call("step", "read_interests")
-    def read_interests(self) -> list[ResearchInterest]:
-        """Read current human priorities without modifying them.
+    @DBOS.step(name="ResearchWorkflows.read_preferences")
+    @trace_call("step", "read_preferences")
+    def read_preferences(self) -> list[ResearchInterest]:
+        """Combine initial newspaper topics with automatically learned preferences.
 
         Returns:
-            Read-only active priorities from the configured feed capability.
+            Weighted recommendation context, independent of approved research work.
         """
-        self.logger.info("Reading active research interests without changing priorities.")
-        interests = self.services.feed.read_active_interests()
+        self.logger.info("Reading newspaper topics and optional preference feedback.")
+        topic_file = self.directory / "recommendation-topics.json"
+        topics = json.loads(topic_file.read_text()) if topic_file.exists() else self.settings.topics
+        interests = [ResearchInterest(id=f"initial:{topic}", title=topic,
+                     description="User-selected initial topic; retain broad exploration.") for topic in topics]
+        feedback = self.services.discovery_pool.read_feedback()
+        topics = Counter(topic for entry in feedback if entry.feedback == "Interested"
+                         for topic in entry.candidate.topics)
+        interests.extend(ResearchInterest(id=f"learned:{topic}", title=topic,
+                         description=f"Positive preference learned from {count} explicitly liked discoveries.", priority=min(5.0, 1.0 + count))
+                         for topic, count in topics.most_common(20))
+        interests.extend(ResearchInterest(id=f"avoid:{entry.candidate.id}", title=entry.candidate.title,
+                         description="Explicitly disliked item; do not infer dislike of the whole discipline.")
+                         for entry in feedback if entry.feedback == "Not Interested")
         interests.extend(self.services.feed.read_interested_papers())
-        self.logger.info("Read %d active research interests.", len(interests))
+        interests.extend(self.services.feed.read_interested_feed())
+        self.logger.info("Recommendation preference context ready: entries=%d.", len(interests))
         return interests
+
+    @DBOS.step(name="ResearchWorkflows.refresh_pool")
+    @trace_call("step", "refresh_pool")
+    def refresh_pool(self, candidates: list[PaperCandidate], day: str) -> list[DiscoveryEntry]:
+        """Merge lightweight search results into the visible discovery cache."""
+        return self.services.discovery_pool.refresh(candidates, day, self.settings.pool_size)
+
+    @DBOS.step(name="ResearchWorkflows.rank")
+    @trace_call("step", "select_from_pool")
+    async def rank(self, candidates: list[PaperCandidate], interests: list[ResearchInterest], day: str) -> list[PaperCandidate]:
+        """Rank metadata once, then balance actual long-term editorial coverage."""
+        ids = await self.services.recommender.rank(candidates, interests)
+        known = {candidate.id: candidate for candidate in candidates}
+        ordered = []
+        for identity in ids:
+            if identity in known:
+                ordered.append(known.pop(identity))
+        ordered.extend(known.values())
+        counts = self.index.recommendation_counts()
+        balanced = exploration_order(ordered, counts, self.settings.exploration, day)
+        self.logger.info("Pool shortlist prepared: available=%d reading_budget=%d selected_limit=%d.",
+                         len(candidates), self.settings.reading_budget, self.settings.selected_count)
+        return balanced[:self.settings.reading_budget]
+
+    @DBOS.step(name="ResearchWorkflows.mark_selected")
+    @trace_call("step", "mark_selected")
+    def mark_selected(self, entry: DiscoveryEntry) -> None:
+        """Mark a pool entry only after confirmed Feed publication."""
+        self.services.discovery_pool.mark_selected(entry)
 
     @DBOS.step(name="ResearchWorkflows.discover")
     @trace_call("step", "discover")
@@ -370,6 +441,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             await self._record_report(day, report)
             raise
         self.index.save(f"recommendation:{identity}", key, DBOS.workflow_id, url, "Published")
+        self.index.record_recommendation(identity, recommendation.candidate.breadth, day)
         self.logger.info(
             'Recommendation publication verified.',
             extra={"details": {'candidate': recommendation.candidate.id, 'url': url}},

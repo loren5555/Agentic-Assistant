@@ -5,7 +5,7 @@ knowledge outputs. The editable architecture is in [information-flow.drawio](inf
 
 ## Releases and runtime state
 
-The current release is **v0.2.2**, following the shared-intake diagram. See
+The current release is **v0.2.3**, following the shared-intake diagram. See
 [CHANGELOG.md](CHANGELOG.md) for changes, setup instructions and known limitations.
 The pre-refactor implementation is preserved at Git tag **v0.1** (commit `ce8669e`).
 
@@ -113,10 +113,10 @@ uv run python -m assistant run recommend-papers
 | propose-tasks | Pending Inbox; elevated TODO | Workbench proposals |
 | organize-papers | Pending Notero records | Paper-processing proposals |
 | organize-articles | Pending SimpRead clips | Organization/action proposals |
-| process-signals | Interested Papers/Feed; explicitly pending Interests | Workbench proposals on the original records |
+| process-signals | Papers/Feed with Follow Up checked; explicitly pending Interests | Workbench proposals on the original records |
 | reconcile-feedback | Revisions, unqualified results, rejections | Reopened source versions; closed old work |
 | process-workbench | Approvals and qualified results | Executed results; accepted outputs |
-| recommend-papers | Research interests and external candidates | Direct Research Feed recommendations |
+| recommend-papers | Initial topics, optional likes and Discovery Pool | Broad discovery cache and selected Research Feed edition |
 
 Every command and job has detailed `--help`. `--page PAGE_ID` on either organization
 job reads one source without forcing duplicate publication.
@@ -186,7 +186,8 @@ Processors preserve original page bodies and plugin-owned metadata. Shared field
 | Agent Processed | This source version has been submitted successfully |
 | Agent Archived | SimpRead's visible intake acknowledgement |
 | Agent In Papers | Notero has successfully produced a Papers output |
-| Interested | Papers preference signal, independent of reading progress |
+| Interested | Optional reading preference; creates no proposal work |
+| Follow Up | Explicit request for a Paper or Feed item to enter proposal intake |
 | Agent Pending | Explicit research-interest request for normal intake |
 
 | Source | Selection and acknowledgement |
@@ -195,8 +196,8 @@ Processors preserve original page bodies and plugin-owned metadata. Shared field
 | TODO | Status = elevated; acknowledge as handled |
 | SimpRead | Agent Archived unchecked; check after verified proposal submission |
 | Notero | Agent Processed unchecked; check after proposal submission |
-| Papers | Interested checked and Agent Processed unchecked |
-| Research Feed | Human Feedback = Interested and Agent Processed unchecked |
+| Papers | Follow Up checked |
+| Research Feed | Follow Up checked |
 | Research Interests | Agent Pending checked; clear after proposal submission |
 
 Reopening Inbox/TODO/SimpRead's native queue after it was consumed creates a new
@@ -261,63 +262,98 @@ columns were removed from the live Papers library in the earlier cleanup.
 The current system assumes published output databases are not independently deleted
 or moved. It does not automatically reconcile missing output pages.
 
-## Daily recommendations
+## Research newspaper: discoveries and selected recommendations
 
-Recommendations are autonomous. They do not need a Workbench approval for each daily
-publication. The pipeline discovers candidates, reads primary evidence, assesses them
-against active Research Interests, and publishes qualified entries directly to Research
-Feed. A report distinguishes actual publication from demo selections, source failures,
-rejections and pending recovery.
+Recommendations operate independently of Workbench. **Discovery Pool** is the broad,
+browsable cache of recent papers, findings, methods, tools and datasets. **Research
+Feed** is the smaller selected edition, normally five items and configurable up to ten.
+Search results are merged into the pool before ranking; selected candidates receive
+source reading and evidence assessment before Feed publication. A search may return
+fewer items than requested; the cache accumulates discoveries across runs.
 
-Interested Feed entries enter process-signals on their original source, without
-creating a duplicate Inbox item. Interested Papers are also available as information
-signals. Expressed interest is not itself approval to run a research experiment.
-
-Use the existing Codex subscription login for live search and source reading:
-
-```yaml
-providers:
-  discovery: codex
-  evidence: codex
-  recommender: local
-
-codex:
-  discovery_model: gpt-5.6-luna
-  discovery_effort: low
-  discovery_timeout_seconds: 300
-  discovery_max_candidates: 10
-  discovery_recent_days: 7
-  evidence_model: gpt-5.6-luna
-  evidence_effort: low
-  evidence_timeout_seconds: 180
-```
-
-The Codex CLI must be installed and logged in with your ChatGPT account. Search uses
-live web access in an isolated directory; no extra search API key or MCP server is
-needed. Search and reading settings fall back to `investigator_model` and
-`investigator_effort` when their own model/effort fields are omitted. Local assessment
-uses `local.recommendation_model`. Run `setup` to prepare Research Feed properties,
-maintain active Research Interests or mark Papers as Interested, then run:
+Choose initial newspaper topics during setup. These preferences require no proposal
+approval and are independent of formal Research Interests:
 
 ```bash
+uv run python -m assistant setup \
+  --recommendation-topic "Reinforcement learning" \
+  --recommendation-topic "Multi-agent systems" \
+  --recommendation-topic "Decision making"
 uv run python -m assistant run recommend-papers
 ```
 
-Each day searches at most ten candidates by default, prioritizing the last seven days
-while allowing relevant foundational work. No interests or liked papers means no search.
-The workflow checks historical Feed identities before reading and assessing each paper.
-Per-category maxima are caps rather than quotas; zero recommendations is valid.
-The final Feed report separates source excerpts, the reader's generated synopsis,
-assessment, reading scope and missing evidence. Codex reading currently preserves
-selected excerpts, so it cannot qualify a source for **Mainline Deep Read**, which
-requires independently retrieved complete primary text. Other categories remain available.
+Setup stores chosen topics in `data/assistant/v2/recommendation-topics.json`. Repeating
+the topic options replaces that selection; omitting them preserves it. Alternatively,
+configure initial topics in YAML; the setup selection takes precedence when present:
 
-The daily local report retains search notes, per-candidate evidence, CLI events and token
-usage, including rejected sources. The CLI prints business results without the raw event
-stream. Same-day runs reuse the durable result; publication retries retain successful
-search, reading and assessment checkpoints. Demo mode remains available by setting both
-`discovery: demo` and `evidence: demo`: it reads no live interests, invokes no real model
-and publishes nothing to Feed. Interested feedback continues through `process-signals`.
+```yaml
+runtime:
+  recommendations:
+    topics: [Reinforcement learning, Decision making, Multi-agent systems]
+    pool_size: 100
+    selected_count: 5
+    reading_budget: 15
+    exploration:
+      Core: 0.4
+      Broader: 0.3
+      Neighboring: 0.2
+      Cross-disciplinary: 0.1
+providers:
+  discovery_pool: notion
+  discovery: codex
+  evidence: codex
+  recommender: local
+codex:
+  discovery_max_candidates: 60
+  discovery_recent_days: 7
+  discovery_timeout_seconds: 600
+notion:
+  assistant_page_id: <<assistant-page-id>>
+  discovery_pool_data_source_id: <<pool-data-source-id>>
+```
+
+Setup can create a missing Discovery Pool under the configured Assistant page. The
+existing Codex CLI subscription login supplies live web search; no additional search
+API or MCP service is needed. Search/reading models and effort are independently
+configurable under `codex`; local assessment uses `local.recommendation_model`.
+
+**Discovery Pool:** `Kind`, `Breadth`, `Summary`, `Topics`, source URL and dates describe
+lightweight finds. `State = Selected` records Feed publication. `Feedback = Interested`
+strengthens future discovery around the item's topics; `Not Interested` excludes that
+item from selection. Unmarked entries are neutral. Preference signals are read afresh
+without creating Workbench tasks or modifying formal research directions. Interested
+Papers and liked Feed entries also contribute context. Initial topics preserve broad
+coverage while specific positive feedback gains higher preference weight and refines
+discovery automatically. There is no approval or mandatory feedback step.
+
+The visible cache targets 100 recent items. Refresh preserves feedback and selection,
+merges canonical source identities and archives excess old unmarked cache records.
+Explicitly marked records are retained, so the total can exceed the cache target.
+Selected reports remain available in Research Feed even after an old pool row retires.
+
+**Selected edition:** metadata ranking precedes expensive reading. Confirmed publication
+history balances core, broader-field, neighboring and cross-disciplinary coverage over
+time, rather than forcing integer quotas into every small issue. Random tie-breaking
+is stable for an edition. Exploratory recommendations explain a concrete possible
+connection and distinguish it from established source claims. Reading scope, original
+short excerpts, generated synopsis and inference are labeled separately. Partial
+reading cannot qualify as Mainline Deep Read. Unsupported candidates are omitted;
+fewer than five recommendations, including zero, is valid.
+
+**Reading preference versus task request:** marking Interested personalizes the feed.
+To request further work, check **Follow Up** on a Paper or Research Feed entry and run
+`process-signals`. The checkbox clears after proposal publication; checking it again starts a new source
+version. That explicit request enters the ordinary proposal/approval flow;
+ideas can also be saved directly through the normal user inputs. Daily reading itself
+requires no response or review.
+
+If live discovery fails, the existing pool can still supply the edition; an empty
+pool plus a failed search remains an error that can be retried. Search, pool refresh,
+ranking, reading, assessment and publication have separate DBOS
+checkpoints. Same-day retries reuse the edition; changing configured/setup topics uses
+a different edition identity. Existing pre-pool empty reports are not reused. Detailed
+search/reading events and usage remain in local recommendation reports. Explicit demo
+mode (`discovery: demo`, `evidence: demo`) uses no live preferences, cache or publication.
 
 ## Schedules, inspection and recovery
 
@@ -344,7 +380,7 @@ persist in DBOS. Serve pauses assistant-owned schedules removed from configurati
 Manual commands do not dispatch recurring schedules, but launch can recover unfinished
 work. Run one process per configured runtime; the lock prevents overlapping launches.
 
-Daily recommendation identities include the day. Repeated same-day runs reuse the
+Daily recommendation identities include the day and newspaper policy/topic selection. Repeated same-day runs reuse the
 saved result; use resume for failed work, not a new model run with another arbitrary ID.
 
 ## Logs and testing
@@ -384,7 +420,8 @@ src/assistant/
     publisher/                 typed destination publication
     workbench/                 human review and results
     captures/                  specialized reading briefs
-    recommendations/           independent daily recommendation capabilities
+    recommendations/           autonomous newspaper discovery and selection
+    discovery_pool/            broad cached discoveries and optional feedback
   runtime/                     DBOS composition, recovery and local business index
 src/plugins/                   implementations grouped by capability then provider
 src/logger/                    shared readable logging

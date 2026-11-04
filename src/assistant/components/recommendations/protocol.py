@@ -39,6 +39,10 @@ class EvidenceReaderProtocol(Protocol):
 class RecommenderProtocol(Protocol):
     """Assess evidence without publishing or modifying interests."""
 
+    async def rank(self, candidates: list[PaperCandidate], interests: list[ResearchInterest]) -> list[str]:
+        """Rank pool metadata before selective source reading."""
+        ...
+
     async def assess(
         self, candidate: PaperCandidate, evidence: PaperEvidence,
         interests: list[ResearchInterest],
@@ -57,7 +61,7 @@ class RecommenderProtocol(Protocol):
 
 
 class ResearchFeedProtocol(Protocol):
-    """Read research priorities and publish verified real recommendations."""
+    """Read optional newspaper preferences and publish verified recommendations."""
 
     def initialize_schema(self) -> None:
         """Explicitly prepare stable recommendation publication identities."""
@@ -73,6 +77,10 @@ class ResearchFeedProtocol(Protocol):
         Returns:
             Human-selected reading preferences, not candidate evaluation evidence.
         """
+        ...
+
+    def read_interested_feed(self) -> list[ResearchInterest]:
+        """Read optional likes as preferences, without proposal intake."""
         ...
 
     def find_existing(self, candidate: PaperCandidate) -> str | None:

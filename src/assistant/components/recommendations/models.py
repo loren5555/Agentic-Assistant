@@ -7,6 +7,9 @@ from pydantic.json_schema import SkipJsonSchema
 
 from assistant.runtime.records import ExecutionProcess
 
+Breadth = Literal["Core", "Broader", "Neighboring", "Cross-disciplinary"]
+BREADTHS = ("Core", "Broader", "Neighboring", "Cross-disciplinary")
+
 RecommendationCategory = Literal[
     "Understanding Daily", "Mainline Deep Read", "Frontier Radar", "Exceptional Event"
 ]
@@ -16,11 +19,12 @@ CATEGORIES: tuple[RecommendationCategory, ...] = (
 
 
 class ResearchInterest(BaseModel):
-    """Describe an existing human-maintained research interest."""
+    """Describe a newspaper topic or explicit reading preference with its weight."""
 
     id: str
     title: str
     description: str = ""
+    priority: float = 1.0
 
 
 class PaperCandidate(BaseModel):
@@ -45,6 +49,10 @@ class PaperCandidate(BaseModel):
     demo: bool = False
     published_date: str = ""
     discovery_reason: str = ""
+    kind: Literal["Paper", "Finding", "Method", "Tool", "Dataset", "Other"] = "Paper"
+    breadth: Breadth = "Core"
+    summary: str = ""
+    topics: list[str] = Field(default_factory=list)
 
 
 class DiscoveryResult(BaseModel):
@@ -136,6 +144,7 @@ class RecommendationRun(BaseModel):
     """
 
     demo: bool = False
+    pool_count: int = 0
     discovery: DiscoveryResult | None = None
     evidence: dict[str, PaperEvidence] = Field(default_factory=dict)
     failed_processes: dict[str, ExecutionProcess] = Field(default_factory=dict)
@@ -144,3 +153,9 @@ class RecommendationRun(BaseModel):
     source_failures: dict[str, str] = Field(default_factory=dict)
     published: list[str] = Field(default_factory=list)
     pending_recovery: dict[str, str] = Field(default_factory=dict)
+
+
+class RankedCandidates(BaseModel):
+    """Order pool source identities for selective reading; no publication yet."""
+
+    ids: list[str]

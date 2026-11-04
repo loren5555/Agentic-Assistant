@@ -84,6 +84,8 @@ class NotionProcessor(SourceProcessor):
             for name in ("Agent Feedback", "Agent History"):
                 ensure_rich_text(client, self.data_source_id, name)
             ensure_checkbox(client, self.data_source_id, "Agent Processed")
+            if self.kind in {"paper", "feed"}:
+                ensure_checkbox(client, self.data_source_id, "Follow Up")
             if self.kind == "paper":
                 ensure_checkbox(client, self.data_source_id, "Interested")
             elif self.kind == "interest":
@@ -104,7 +106,7 @@ class NotionProcessor(SourceProcessor):
         clauses = []
         # Native queues remain the human-facing authority. Reopening a consumed
         # Inbox/TODO/clip below advances its version instead of being ignored.
-        if self.kind in {"notero", "paper", "feed"}:
+        if self.kind == "notero":
             clauses.append({"property": "Agent Processed", "checkbox": {"equals": False}})
         if self.kind in {"inbox", "todo"}:
             kind = schema["Status"]["type"]
@@ -113,10 +115,9 @@ class NotionProcessor(SourceProcessor):
         elif self.kind == "simpread":
             clauses.append({"property": "Agent Archived", "checkbox": {"equals": False}})
         elif self.kind == "paper":
-            clauses.append({"property": "Interested", "checkbox": {"equals": True}})
+            clauses.append({"property": "Follow Up", "checkbox": {"equals": True}})
         elif self.kind == "feed":
-            name = str(self.options.get("feed_feedback_property", "Human Feedback"))
-            clauses.append({"property": name, schema[name]["type"]: {"equals": "Interested"}})
+            clauses.append({"property": "Follow Up", "checkbox": {"equals": True}})
         elif self.kind == "interest":
             clauses.append({"property": "Agent Pending", "checkbox": {"equals": True}})
         return clauses[0] if len(clauses) == 1 else {"and": clauses}
@@ -144,7 +145,7 @@ class NotionProcessor(SourceProcessor):
             sources = []
             for page in pages:
                 source = self._read(client, page)
-                if page_id is None and self.kind in {"inbox", "todo", "simpread", "interest"} and page["properties"].get("Agent Processed", {}).get("checkbox"):
+                if page_id is None and self.kind in {"inbox", "todo", "simpread", "interest", "paper", "feed"} and page["properties"].get("Agent Processed", {}).get("checkbox"):
                     source = self.apply_feedback(source, SourceHistory(
                         key=digest(f"reopened:{source.kind}:{source.page_id}:{source.version}:{source.revision}"),
                         workbench_url="", feedback="Reprocess requested by reopening the source queue.",
@@ -176,6 +177,7 @@ class NotionProcessor(SourceProcessor):
             elif name.startswith("Agent ") or name in {
                 "Status", "Date Added", "Date Modified", "Publication Key", "Brief Status",
                 "Citation Key", "In-Text Citation", "Full Citation", "File Path", "Extra",
+                "Follow Up", "Interested", "Human Feedback",
             }:
                 continue
             elif kind == "rich_text":
@@ -232,6 +234,8 @@ class NotionProcessor(SourceProcessor):
             props["Agent Archived"] = {"checkbox": not pending}
         elif self.kind == "interest":
             props["Agent Pending"] = {"checkbox": pending}
+        elif self.kind in {"paper", "feed"}:
+            props["Follow Up"] = {"checkbox": pending}
         return props
 
     @trace_call("component", "processor.acknowledge")
@@ -311,13 +315,13 @@ class SimpReadProcessor(NotionProcessor):
 
 
 class PaperProcessor(NotionProcessor):
-    """Read papers explicitly marked Interested as new information signals."""
+    """Read papers explicitly marked Follow Up as new information signals."""
 
     kind = "paper"
 
 
 class FeedProcessor(NotionProcessor):
-    """Read Interested recommendations directly, without creating an Inbox copy."""
+    """Read explicit recommendation follow-ups without creating an Inbox copy."""
 
     kind = "feed"
 

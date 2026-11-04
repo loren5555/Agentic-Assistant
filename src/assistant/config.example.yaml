@@ -12,6 +12,7 @@ providers:
   worker: local  # Completes approved tasks using supplied materials.
   curator: local  # Extracts reusable knowledge from accepted results.
   briefs: local  # Organizes captured material into grounded briefs.
+  discovery_pool: notion  # Broad discoveries and optional preference feedback.
   feed: notion  # Manages research interests, recommendations, and follow-ups.
   discovery: codex  # Searches live public primary sources using the Codex CLI.
   evidence: codex  # Reads source excerpts and reports access limitations.
@@ -20,12 +21,20 @@ providers:
 runtime:
   directory: data/assistant
   batch_size: 20
-  schedules: {}  # Manual jobs only; opt in after debugging.
-  recommendation_maxima:
-    Understanding Daily: 1
-    Mainline Deep Read: 1
-    Frontier Radar: 1
-    Exceptional Event: 1
+  schedules: {}
+  recommendations:
+    topics:
+    - Reinforcement learning
+    - Decision making
+    - Multi-agent systems
+    pool_size: 100
+    selected_count: 5
+    reading_budget: 15
+    exploration:
+      Core: 0.4
+      Broader: 0.3
+      Neighboring: 0.2
+      Cross-disciplinary: 0.1
 
 local:
   router_model: openai-codex:gpt-5.6-luna
@@ -64,14 +73,16 @@ codex:
   investigator_timeout_seconds: 300
   discovery_model: gpt-5.6-luna
   discovery_effort: low
-  discovery_timeout_seconds: 300
-  discovery_max_candidates: 10
+  discovery_timeout_seconds: 600
+  discovery_max_candidates: 60
   discovery_recent_days: 7
   evidence_model: gpt-5.6-luna
   evidence_effort: low
   evidence_timeout_seconds: 180
 
 notion:
+  assistant_page_id: <<notion-assistant-page-id>>
+  discovery_pool_data_source_id: <<notion-discovery-pool-data-source-id>>
   token: <<notion-token>>
   inbox_data_source_id: <<notion-inbox-data-source-id>>
   todo_data_source_id: <<notion-todo-data-source-id>>

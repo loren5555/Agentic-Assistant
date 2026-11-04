@@ -78,6 +78,10 @@ class DemoRecommender:
         )
         return assessment
 
+    async def rank(self, candidates: list[PaperCandidate], interests: list[ResearchInterest]) -> list[str]:
+        """Retain fixture order without real model usage."""
+        return [candidate.id for candidate in candidates]
+
 
 Discovery = DemoDiscovery
 EvidenceReader = DemoEvidenceReader

@@ -1,6 +1,6 @@
 [project]
 name = "agentic-assistant"
-version = "0.2.2"
+version = "0.2.3"
 description = "Source-driven personal research assistant with human review"
 readme = "README.md"
 authors = [

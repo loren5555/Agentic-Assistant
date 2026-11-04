@@ -27,6 +27,19 @@ class WorkIndex:
                 "workflow_id TEXT NOT NULL, page_id TEXT NOT NULL, status TEXT NOT NULL)"
             )
 
+    def recommendation_counts(self) -> dict[str, int]:
+        """Read actual editorial coverage used by long-term exploration targets."""
+        with closing(sqlite3.connect(self.path)) as connection, connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS editions (identity TEXT PRIMARY KEY, breadth TEXT, day TEXT)")
+            rows = connection.execute("SELECT breadth, COUNT(*) FROM editions GROUP BY breadth").fetchall()
+        return dict(rows)
+
+    def record_recommendation(self, identity: str, breadth: str, day: str) -> None:
+        """Count each confirmed source once, including publication retries."""
+        with closing(sqlite3.connect(self.path)) as connection, connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS editions (identity TEXT PRIMARY KEY, breadth TEXT, day TEXT)")
+            connection.execute("INSERT OR IGNORE INTO editions VALUES (?, ?, ?)", (identity, breadth, day))
+
     def get(self, source_key: str) -> dict | None:
         """Find a source's latest checkpoint owner.
 
