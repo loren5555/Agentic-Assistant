@@ -2,7 +2,10 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.json_schema import SkipJsonSchema
+
+from assistant.runtime.records import ExecutionProcess
 
 RecommendationCategory = Literal[
     "Understanding Daily", "Mainline Deep Read", "Frontier Radar", "Exceptional Event"
@@ -29,13 +32,35 @@ class PaperCandidate(BaseModel):
         url: Primary source link.
         doi: DOI when available.
         demo: Whether the source is synthetic and prohibited from publication.
+        published_date: Verified source publication date, or empty when unknown.
+        discovery_reason: Search relevance lead, requiring evidence assessment.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     id: str
     title: str
     url: str
     doi: str = ""
     demo: bool = False
+    published_date: str = ""
+    discovery_reason: str = ""
+
+
+class DiscoveryResult(BaseModel):
+    """Checkpoint searched candidates, search limitations and provider telemetry.
+
+    Attributes:
+        candidates: Bounded bibliographic candidates awaiting evidence review.
+        notes: Search coverage, inaccessible sources and other limitations.
+        process: Actual CLI events and usage, attached after model execution.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: list[PaperCandidate]
+    notes: list[str]
+    process: SkipJsonSchema[ExecutionProcess | None] = None
 
 
 class PaperEvidence(BaseModel):
@@ -47,13 +72,23 @@ class PaperEvidence(BaseModel):
         text: Readable source material, not a model-generated substitute.
         source_url: Location of that material.
         failure: Retrieval failure or incompleteness explanation.
+        reading_scope: Actual accessible material, such as abstract or excerpts.
+        summary: Reader-generated synopsis, kept separate from source excerpts.
+        limitations: Missing sections and unsupported claims the reader identified.
+        process: Provider events and usage, attached after execution.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     primary_source: bool
     full_text: bool
     text: str
     source_url: str
     failure: str = ""
+    reading_scope: str = "partial text"
+    summary: str = ""
+    limitations: list[str] = Field(default_factory=list)
+    process: SkipJsonSchema[ExecutionProcess | None] = None
 
 
 class RecommendationAssessment(BaseModel):
@@ -82,6 +117,7 @@ class Recommendation(BaseModel):
     candidate: PaperCandidate
     evidence: PaperEvidence
     assessment: RecommendationAssessment
+    day: str = ""
 
 
 class RecommendationRun(BaseModel):
@@ -89,6 +125,9 @@ class RecommendationRun(BaseModel):
 
     Attributes:
         demo: Whether discovery is a fixture rather than a real search.
+        discovery: Search candidates, coverage notes and invocation telemetry.
+        evidence: Reading results, including rejected or unavailable candidates.
+        failed_processes: CLI traces retained for failed provider invocations.
         selected: Candidates passing gates and daily maxima.
         rejected: Candidate identities and exclusion reasons.
         source_failures: Retrieval failures.
@@ -97,6 +136,9 @@ class RecommendationRun(BaseModel):
     """
 
     demo: bool = False
+    discovery: DiscoveryResult | None = None
+    evidence: dict[str, PaperEvidence] = Field(default_factory=dict)
+    failed_processes: dict[str, ExecutionProcess] = Field(default_factory=dict)
     selected: list[Recommendation] = Field(default_factory=list)
     rejected: dict[str, str] = Field(default_factory=dict)
     source_failures: dict[str, str] = Field(default_factory=dict)

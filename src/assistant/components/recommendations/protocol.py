@@ -2,17 +2,18 @@
 
 from typing import Protocol
 
-from assistant.components.recommendations.models import PaperCandidate, PaperEvidence, Recommendation, RecommendationAssessment, ResearchInterest
+from assistant.components.recommendations.models import DiscoveryResult, PaperCandidate, PaperEvidence, Recommendation, RecommendationAssessment, ResearchInterest
 
 
 class DiscoveryProtocol(Protocol):
     """Discover candidates without making claims about their quality."""
 
-    def discover(self, interests: list[ResearchInterest]) -> list[PaperCandidate]:
+    async def discover(self, interests: list[ResearchInterest], day: str) -> DiscoveryResult:
         """Find candidates for the supplied interests.
 
         Args:
             interests: Read-only human-maintained research priorities.
+            day: Intended recommendation date in ISO format.
 
         Returns:
             Candidate metadata requiring evidence assessment.
@@ -23,7 +24,7 @@ class DiscoveryProtocol(Protocol):
 class EvidenceReaderProtocol(Protocol):
     """Retrieve primary material independently from recommendation decisions."""
 
-    def read(self, candidate: PaperCandidate) -> PaperEvidence:
+    async def read(self, candidate: PaperCandidate) -> PaperEvidence:
         """Read available primary text.
 
         Args:

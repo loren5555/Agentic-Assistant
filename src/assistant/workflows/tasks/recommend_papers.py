@@ -12,32 +12,18 @@ Responsibility:
     in the business diagram.
 """
 
+from datetime import date, timedelta
 from pathlib import Path
 import hashlib
 import json
 
 from dbos import DBOS, DBOSConfiguredInstance
 
-from assistant.components.recommendations.models import CATEGORIES, PaperCandidate, PaperEvidence, Recommendation, RecommendationAssessment, RecommendationRun, ResearchInterest
+from assistant.components.recommendations.identity import candidate_identity
+from assistant.components.recommendations.models import CATEGORIES, DiscoveryResult, PaperCandidate, PaperEvidence, Recommendation, RecommendationAssessment, RecommendationRun, ResearchInterest
 from assistant.runtime.index import WorkIndex
 from assistant.runtime.services import Services
 from logger import get_logger, trace_call
-
-
-def candidate_identity(candidate: PaperCandidate) -> str:
-    """Normalize bibliographic identity for cross-day duplicate prevention.
-
-    Args:
-        candidate: Discovery metadata and optional DOI.
-
-    Returns:
-        Normalized DOI, or the provider identity when no DOI is available.
-    """
-    doi = candidate.doi.strip().lower()
-    doi = doi.removeprefix("https://doi.org/").removeprefix("http://doi.org/")
-    doi = doi.removeprefix("doi:").strip()
-    identity = f"doi:{doi}" if doi else candidate.id
-    return identity
 
 
 @DBOS.dbos_class("ResearchWorkflows")
@@ -50,6 +36,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         directory: Local report directory.
         maxima: Upper bounds for each recommendation category.
         demo: Whether to prohibit production publication and use offline assessment.
+        recent_days: Publication window required for Frontier Radar selections.
     """
 
     def __init__(self, services: Services, index: WorkIndex, directory: Path,
@@ -69,6 +56,8 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         self.maxima = {category: 1 for category in CATEGORIES}
         self.maxima.update(maxima)
         self.demo = services.config.providers.discovery == "demo"
+        options = services.config.provider_options.get(services.config.providers.discovery, {})
+        self.recent_days = int(options.get("discovery_recent_days", 7))
         self.logger = get_logger("workflows.tasks.recommend_papers")
 
     @DBOS.workflow(name="ResearchWorkflows.recommendations")
@@ -93,7 +82,16 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         if self.demo:
             self.logger.info("Offline demo: real interest reads, model assessment, and Feed publication are disabled.")
         interests = [] if self.demo else self.read_interests()
-        candidates = self.discover(interests)
+        try:
+            discovery = await self.discover(interests, day)
+        except Exception as error:
+            report.source_failures["discovery"] = f"{type(error).__name__}: {error}"
+            if getattr(error, "process", None) is not None:
+                report.failed_processes["discovery"] = error.process
+            await self._record_report(day, report, record_event=False)
+            raise
+        report.discovery = discovery
+        candidates = discovery.candidates
         counts = {category: 0 for category in CATEGORIES}
         seen = set()
 
@@ -109,7 +107,8 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             if identity in seen:
                 report.rejected[candidate.id] = "Duplicate source identity in this run"
                 self.logger.info(
-                    'Candidate rejected: reason=duplicate within run.',
+                    'Candidate rejected: title=%r reason=duplicate within run.',
+                    candidate.title,
                     extra={"details": {'id': candidate.id}},
                 )
                 continue
@@ -117,70 +116,93 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             if not self.demo and not candidate.demo and self.find_duplicate(candidate):
                 report.rejected[candidate.id] = "Previously published recommendation"
                 self.logger.info(
-                    'Candidate rejected: reason=previously published.',
+                    'Candidate rejected: title=%r reason=previously published.',
+                    candidate.title,
                     extra={"details": {'id': candidate.id}},
                 )
                 continue
 
             try:
-                evidence = self.read(candidate)
+                evidence = await self.read(candidate)
             except Exception as error:
                 self.logger.warning(
-                    'Evidence retrieval failed: error_type=%s; continuing other candidates.',
-                    type(error).__name__,
+                    'Evidence retrieval failed: title=%r error_type=%s; continuing other candidates.',
+                    candidate.title, type(error).__name__,
                     extra={"details": {'candidate': candidate.id}},
                 )
                 # A failed individual source is recorded, not replaced by invented evidence.
                 report.source_failures[candidate.id] = f"{type(error).__name__}: {error}"
+                if getattr(error, "process", None) is not None:
+                    report.failed_processes[candidate.id] = error.process
                 report.rejected[candidate.id] = "Primary evidence retrieval failed"
                 continue
+            report.evidence[candidate.id] = evidence
             if evidence.failure:
                 self.logger.warning(
-                    'Evidence source reported a failure.',
+                    'Evidence source reported a failure: title=%r reason=%s.',
+                    candidate.title, evidence.failure[:180],
                     extra={"details": {'candidate': candidate.id, 'detail': evidence.failure[:240]}},
                 )
                 report.source_failures[candidate.id] = evidence.failure
             if not evidence.primary_source or not evidence.text.strip():
                 report.rejected[candidate.id] = "Accessible primary evidence required"
                 self.logger.info(
-                    'Candidate rejected: reason=accessible primary evidence required.',
+                    'Candidate rejected: title=%r reason=accessible primary evidence required.',
+                    candidate.title,
                     extra={"details": {'id': candidate.id}},
                 )
                 continue
 
-            assessment = await self.assess(candidate, evidence, interests)
+            try:
+                assessment = await self.assess(candidate, evidence, interests)
+            except Exception as error:
+                report.pending_recovery[candidate.id] = f"Assessment failed: {type(error).__name__}: {error}"
+                await self._record_report(day, report, record_event=False)
+                raise
             category = assessment.category
             if not assessment.qualified or category is None:
                 report.rejected[candidate.id] = assessment.reason
                 self.logger.info(
-                    'Candidate rejected by assessment: reason=%s.',
-                    assessment.reason[:240],
+                    'Candidate rejected by assessment: title=%r reason=%s.',
+                    candidate.title, assessment.reason[:240],
                     extra={"details": {'id': candidate.id}},
                 )
                 continue
+            if category == "Frontier Radar":
+                try:
+                    published = date.fromisoformat(candidate.published_date)
+                except ValueError:
+                    published = None
+                end = date.fromisoformat(day)
+                start = end - timedelta(days=self.recent_days - 1)
+                if published is None or not start <= published <= end:
+                    report.rejected[candidate.id] = "Frontier Radar requires a verified date within the recent search window"
+                    self.logger.info("Candidate rejected: title=%r reason=recent publication date required.", candidate.title)
+                    continue
             if category == "Mainline Deep Read" and not evidence.full_text:
                 report.rejected[candidate.id] = "Mainline Deep Read requires complete primary text"
                 self.logger.info(
-                    'Candidate rejected: reason=full text required for deep read.',
+                    'Candidate rejected: title=%r reason=full text required for deep read.',
+                    candidate.title,
                     extra={"details": {'id': candidate.id}},
                 )
                 continue
             if counts[category] >= self.maxima[category]:
                 report.rejected[candidate.id] = f"Daily maximum reached for {category}"
                 self.logger.info(
-                    'Candidate rejected: reason=daily maximum reached category=%s.',
-                    category,
+                    'Candidate rejected: title=%r reason=daily maximum reached category=%s.',
+                    candidate.title, category,
                     extra={"details": {'id': candidate.id}},
                 )
                 continue
 
             counts[category] += 1
             recommendation = Recommendation(candidate=candidate, evidence=evidence,
-                                             assessment=assessment)
+                                             assessment=assessment, day=day)
             report.selected.append(recommendation)
             self.logger.info(
-                'Candidate selected: category=%s count=%d maximum=%d.',
-                category,
+                'Candidate selected: title=%r category=%s count=%d maximum=%d.',
+                candidate.title, category,
                 counts[category],
                 self.maxima[category],
                 extra={"details": {'id': candidate.id}},
@@ -217,23 +239,24 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
 
     @DBOS.step(name="ResearchWorkflows.discover")
     @trace_call("step", "discover")
-    def discover(self, interests: list[ResearchInterest]) -> list[PaperCandidate]:
+    async def discover(self, interests: list[ResearchInterest], day: str) -> DiscoveryResult:
         """Checkpoint candidate search separately from subsequent evidence reads.
 
         Args:
             interests: Current human priorities.
+            day: Intended recommendation date, included in the search context.
 
         Returns:
             Provider-discovered candidates, without quality endorsement.
         """
         self.logger.info("Discovering research candidates: interests=%d demo=%s.", len(interests), self.demo)
-        candidates = self.services.discovery.discover(interests)
-        self.logger.info("Discovery completed: candidates=%d.", len(candidates))
-        return candidates
+        result = await self.services.discovery.discover(interests, day)
+        self.logger.info("Discovery completed: candidates=%d.", len(result.candidates))
+        return result
 
     @DBOS.step(name="ResearchWorkflows.read")
     @trace_call("step", "read")
-    def read(self, candidate: PaperCandidate) -> PaperEvidence:
+    async def read(self, candidate: PaperCandidate) -> PaperEvidence:
         """Checkpoint one primary-source retrieval.
 
         Args:
@@ -243,14 +266,14 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             Actual source content, completeness, and any known retrieval failure.
         """
         self.logger.info(
-            'Reading candidate evidence: demo=%s.',
-            candidate.demo,
+            'Reading candidate evidence: title=%r demo=%s.',
+            candidate.title, candidate.demo,
             extra={"details": {'candidate': candidate.id}},
         )
-        evidence = self.services.evidence.read(candidate)
+        evidence = await self.services.evidence.read(candidate)
         self.logger.info(
-            'Evidence read: primary=%s full_text=%s characters=%d retrieval_failure=%s.',
-            evidence.primary_source,
+            'Evidence read: title=%r primary=%s full_text=%s characters=%d retrieval_failure=%s.',
+            candidate.title, evidence.primary_source,
             evidence.full_text,
             len(evidence.text),
             bool(evidence.failure),
@@ -274,14 +297,14 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         """
         assessor = self.services.fixture_recommender if self.demo or candidate.demo else self.services.recommender
         self.logger.info(
-            'Assessing candidate: mode=%s.',
-            'fixed demo assessment' if self.demo or candidate.demo else 'configured model',
+            'Assessing candidate: title=%r mode=%s.',
+            candidate.title, 'fixed demo assessment' if self.demo or candidate.demo else 'configured model',
             extra={"details": {'candidate': candidate.id}},
         )
         assessment = await assessor.assess(candidate, evidence, interests)
         self.logger.info(
-            'Assessment completed: qualified=%s category=%s.',
-            assessment.qualified,
+            'Assessment completed: title=%r qualified=%s category=%s.',
+            candidate.title, assessment.qualified,
             assessment.category,
             extra={"details": {'candidate': candidate.id}},
         )
@@ -331,8 +354,8 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         identity = candidate_identity(recommendation.candidate)
         key = hashlib.sha256(f"research-feed:{identity}".encode()).hexdigest()
         self.logger.info(
-            'Publishing real recommendation: category=%s.',
-            recommendation.assessment.category,
+            'Publishing real recommendation: title=%r category=%s.',
+            recommendation.candidate.title, recommendation.assessment.category,
             extra={"details": {'candidate': recommendation.candidate.id}},
         )
         try:
@@ -364,15 +387,18 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         """
         await self._record_report(day, report)
 
-    async def _record_report(self, day: str, report: RecommendationRun) -> None:
+    async def _record_report(self, day: str, report: RecommendationRun, *, record_event: bool = True) -> None:
         """Write a report from a checkpoint or incomplete publication step.
 
         Args:
             day: Intended Shanghai date.
             report: Latest selection and publication state.
+            record_event: Record a DBOS event inside a step; workflow-level failure
+                reports write only the file so retry does not shift step numbers.
         """
         data = report.model_dump(mode="json")
-        await DBOS.set_event_async("report", data)
+        if record_event:
+            await DBOS.set_event_async("report", data)
         reports = self.directory / "recommendations"
         reports.mkdir(parents=True, exist_ok=True)
         # The digest avoids trusting date/job strings as arbitrary file paths.

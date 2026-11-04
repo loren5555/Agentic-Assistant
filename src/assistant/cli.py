@@ -108,7 +108,11 @@ Example:
         "epilog": """Scope:
   Daily recommendation maxima are caps, not quotas. Mainline Deep Read requires
   complete primary text. Missing evidence is reported, not fabricated.
-  With discovery: demo, use offline fixtures and never publish synthetic entries.
+  With discovery/evidence: codex, search and read public primary sources using
+  the logged-in Codex CLI; recommender: local assesses evidence before publication.
+  Configure codex.discovery_max_candidates and codex.discovery_recent_days to bound
+  search. Selected excerpts do not qualify as Mainline Deep Read.
+  With discovery/evidence: demo, use offline fixtures and never publish entries.
   Same-day retries reuse their durable report. Interested feedback later enters
   process-signals and the normal proposal path.
 

@@ -7,6 +7,7 @@ import hashlib
 
 from notion_client import Client
 
+from assistant.components.recommendations.identity import candidate_identity
 from assistant.components.recommendations.models import PaperCandidate, Recommendation, ResearchInterest
 from logger import get_logger, trace_call
 from plugins._shared.notion.config import ResearchFeedSettings
@@ -82,7 +83,7 @@ class ResearchFeed:
 
     @trace_call("component", "recommendations.publish")
     def publish(self, recommendation: Recommendation, key: str) -> str:
-        """Publish a real qualified recommendation and verify its readable body.
+        """Publish a real qualified recommendation and confirm its identity marker.
 
         Args:
             recommendation: Candidate, primary evidence, and grounded assessment.
@@ -103,8 +104,8 @@ class ResearchFeed:
         if assessment.category == "Mainline Deep Read" and not evidence.full_text:
             raise ValueError("Mainline Deep Read requires complete primary text")
         self.logger.info(
-            'kind=script provider=notion Publishing Research Feed entry: category=%s.',
-            assessment.category,
+            'kind=script provider=notion Publishing Research Feed entry: title=%r category=%s.',
+            candidate.title, assessment.category,
             extra={"details": {'candidate': candidate.id}},
         )
 
@@ -117,6 +118,15 @@ class ResearchFeed:
             ("Agent inference", assessment.agent_inference),
         ):
             sections.append(f"## {heading}\n\n" + "\n".join(f"- {point}" for point in points))
+        if candidate.published_date:
+            sections.append(f"Source publication date: {candidate.published_date}")
+        sections.append(f"## Reading scope\n\n{evidence.reading_scope}")
+        if evidence.summary:
+            sections.append(f"## Reader synopsis (model-generated)\n\n{evidence.summary}")
+        sections.append(f"## Source excerpts\n\n{evidence.text}")
+        if evidence.limitations or evidence.failure:
+            limitations = [*evidence.limitations, *([evidence.failure] if evidence.failure else [])]
+            sections.append("## Reading limitations\n\n" + "\n".join(f"- {point}" for point in limitations))
         sections.append(f"Publication key: {key}")
         body = "\n\n".join(sections)
         settings = self.settings
@@ -128,7 +138,7 @@ class ResearchFeed:
                 title_name: {"title": self._rich_text(candidate.title)},
                 "Stable ID": {"rich_text": self._rich_text(key)},
                 settings.feed_category_property: {category_kind: {"name": assessment.category}},
-                "Recommendation Date": {"date": {"start": datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()}},
+                "Recommendation Date": {"date": {"start": (recommendation.day or datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat())}},
             }
             if "Canonical URL" in source["properties"]:
                 properties["Canonical URL"] = {"url": candidate.url}
@@ -154,7 +164,7 @@ class ResearchFeed:
                     properties=properties, markdown=body,
                 )
                 page_id = page["id"]
-            url = self._verify(client, page_id, "Stable ID", key, candidate.title, body)
+            url = self._verify(client, page_id, "Stable ID", key, candidate.title)
         self.logger.info(
             'kind=script provider=notion Research Feed publication verified.',
             extra={"details": {'candidate': candidate.id, 'page': page_id, 'url': url}},
@@ -174,8 +184,7 @@ class ResearchFeed:
         settings = self.settings
         with Client(auth=settings.token) as client:
             source = client.data_sources.retrieve(data_source_id=settings.research_feed_data_source_id)
-            normalized = candidate.doi.strip().lower().removeprefix("https://doi.org/").removeprefix("http://doi.org/").removeprefix("doi:").strip()
-            identity = f"doi:{normalized}" if normalized else candidate.id
+            identity = candidate_identity(candidate)
             stable_key = hashlib.sha256(f"research-feed:{identity}".encode()).hexdigest()
             clauses = [
                 {"property": "Stable ID", "rich_text": {"equals": value}}
@@ -240,8 +249,8 @@ class ResearchFeed:
         return body
 
     def _verify(self, client: Client, page_id: str, property_name: str,
-                key: str, title: str, expected: str) -> str:
-        """Re-fetch written identity and content before acknowledging publication.
+                key: str, title: str) -> str:
+        """Confirm stable identity and the report marker after Notion normalization.
 
         Args:
             client: Operation-owned client.
@@ -249,7 +258,6 @@ class ResearchFeed:
             property_name: Stable-key column.
             key: Expected key.
             title: Expected readable title.
-            expected: Actual report written by this operation.
 
         Returns:
             Verified page URL.
@@ -257,7 +265,7 @@ class ResearchFeed:
         page = client.pages.retrieve(page_id=page_id)
         stored_key = "".join(part["plain_text"] for part in page["properties"][property_name]["rich_text"])
         body = self._body(client, page_id)
-        if stored_key != key or self._title(page) != title or " ".join(expected.split()) not in " ".join(body.split()):
+        if stored_key != key or self._title(page) != title or key not in body:
             raise ValueError(f"Research publication readback failed: {page_id}")
         url = page["url"]
         return url

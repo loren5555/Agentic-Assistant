@@ -5,7 +5,7 @@ knowledge outputs. The editable architecture is in [information-flow.drawio](inf
 
 ## Releases and runtime state
 
-The current release is **v0.2.1**, following the shared-intake diagram. See
+The current release is **v0.2.2**, following the shared-intake diagram. See
 [CHANGELOG.md](CHANGELOG.md) for changes, setup instructions and known limitations.
 The pre-refactor implementation is preserved at Git tag **v0.1** (commit `ce8669e`).
 
@@ -273,11 +273,51 @@ Interested Feed entries enter process-signals on their original source, without
 creating a duplicate Inbox item. Interested Papers are also available as information
 signals. Expressed interest is not itself approval to run a research experiment.
 
-With `discovery: demo`, synthetic fixtures are retained only in the local report:
-no live interest reads, external assessment or Feed publication occurs.
-Real discovery/evidence services can replace these plugins later. Per-category
-maxima are caps rather than quotas; zero recommendations is valid.
-Mainline Deep Read requires full primary text.
+Use the existing Codex subscription login for live search and source reading:
+
+```yaml
+providers:
+  discovery: codex
+  evidence: codex
+  recommender: local
+
+codex:
+  discovery_model: gpt-5.6-luna
+  discovery_effort: low
+  discovery_timeout_seconds: 300
+  discovery_max_candidates: 10
+  discovery_recent_days: 7
+  evidence_model: gpt-5.6-luna
+  evidence_effort: low
+  evidence_timeout_seconds: 180
+```
+
+The Codex CLI must be installed and logged in with your ChatGPT account. Search uses
+live web access in an isolated directory; no extra search API key or MCP server is
+needed. Search and reading settings fall back to `investigator_model` and
+`investigator_effort` when their own model/effort fields are omitted. Local assessment
+uses `local.recommendation_model`. Run `setup` to prepare Research Feed properties,
+maintain active Research Interests or mark Papers as Interested, then run:
+
+```bash
+uv run python -m assistant run recommend-papers
+```
+
+Each day searches at most ten candidates by default, prioritizing the last seven days
+while allowing relevant foundational work. No interests or liked papers means no search.
+The workflow checks historical Feed identities before reading and assessing each paper.
+Per-category maxima are caps rather than quotas; zero recommendations is valid.
+The final Feed report separates source excerpts, the reader's generated synopsis,
+assessment, reading scope and missing evidence. Codex reading currently preserves
+selected excerpts, so it cannot qualify a source for **Mainline Deep Read**, which
+requires independently retrieved complete primary text. Other categories remain available.
+
+The daily local report retains search notes, per-candidate evidence, CLI events and token
+usage, including rejected sources. The CLI prints business results without the raw event
+stream. Same-day runs reuse the durable result; publication retries retain successful
+search, reading and assessment checkpoints. Demo mode remains available by setting both
+`discovery: demo` and `evidence: demo`: it reads no live interests, invokes no real model
+and publishes nothing to Feed. Interested feedback continues through `process-signals`.
 
 ## Schedules, inspection and recovery
 

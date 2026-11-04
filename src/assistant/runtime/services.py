@@ -152,16 +152,18 @@ class Services:
 
     @cached_property
     def discovery(self) -> DiscoveryProtocol:
-        """Provide candidate discovery; the initial implementation is demo-only."""
-        plugin = get_plugin("recommendations", self.config.providers.discovery)
-        service = plugin.Discovery()
+        """Provide date-aware public candidate search or explicit offline fixtures."""
+        name = self.config.providers.discovery
+        plugin = get_plugin("recommendations", name)
+        service = plugin.Discovery() if name == "demo" else plugin.Discovery(self.config.provider_options[name])
         return service
 
     @cached_property
     def evidence(self) -> EvidenceReaderProtocol:
         """Provide the material actually read for a candidate."""
-        plugin = get_plugin("recommendations", self.config.providers.evidence)
-        service = plugin.EvidenceReader()
+        name = self.config.providers.evidence
+        plugin = get_plugin("recommendations", name)
+        service = plugin.EvidenceReader() if name == "demo" else plugin.EvidenceReader(self.config.provider_options[name])
         return service
 
     @cached_property

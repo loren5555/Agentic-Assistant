@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.2.2 — 2026-11-05
+
+- Added subscription-backed Codex live discovery and primary-source reading for
+  daily recommendations. Search uses active Research Interests and Interested
+  Papers, a configurable recent window and a bounded candidate list. Relevant
+  foundational papers remain eligible; no preferences means no search.
+- Search and reading are asynchronous DBOS checkpoints. Reports preserve search
+  notes, source excerpts, reader-generated synopses, access limitations, CLI events
+  and token usage, including rejected sources and failed invocations.
+- Local PydanticAI assessment evaluates the supplied evidence. Qualified, unseen
+  recommendations publish directly to Research Feed within category caps. DOI,
+  arXiv and canonical URL identities prevent repeat publication; Frontier Radar
+  requires a date inside the requested search window.
+- Selected excerpts remain partial evidence and cannot qualify as Mainline Deep
+  Read. Feed reports separate original excerpts, reader synopses and assessment;
+  publication readback checks its identity marker rather than exact Markdown.
+- Added a shared isolated Codex web invocation with strict structured schemas,
+  result-file validation, timeout/cancellation cleanup and failure telemetry.
+- Updated the editable information-flow diagram, configuration, command help and
+  usage documentation. The diagram shows Recommender publishing directly to Feed;
+  the existing storage component remains an implementation responsibility.
+
+### Updating
+
+- Set providers.discovery and providers.evidence to codex, and recommender to local.
+  The example configuration includes independent search/reading models, effort,
+  deadlines, discovery_max_candidates and discovery_recent_days. Demo providers
+  remain available for offline operation.
+- Run setup if Research Feed lacks its Stable ID property. No new Notion database
+  properties are required. Existing production records are not rewritten.
+- Runtime databases remain under v2. Existing incompatible unfinished workflows
+  require explicit handling; no automatic state deletion or migration is performed.
+
 ## 0.2.1 — 2026-11-05
 
 - Router selects an action before proposal publication and returns only the

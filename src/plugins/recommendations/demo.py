@@ -1,6 +1,6 @@
 """Small synthetic sources for validating discovery without external APIs."""
 
-from assistant.components.recommendations.models import PaperCandidate, PaperEvidence, RecommendationAssessment, ResearchInterest
+from assistant.components.recommendations.models import DiscoveryResult, PaperCandidate, PaperEvidence, RecommendationAssessment, ResearchInterest
 from logger import trace_call
 
 
@@ -8,11 +8,12 @@ class DemoDiscovery:
     """Return deterministic candidates clearly prohibited from real publication."""
 
     @trace_call("component", "recommendations.discover")
-    def discover(self, interests: list[ResearchInterest]) -> list[PaperCandidate]:
+    async def discover(self, interests: list[ResearchInterest], day: str) -> DiscoveryResult:
         """Provide one full-text fixture and one unavailable-text fixture.
 
         Args:
             interests: Accepted for the same interface as real discovery.
+            day: Intended recommendation date; fixtures are independent of date.
 
         Returns:
             Synthetic metadata with demo flags.
@@ -23,14 +24,14 @@ class DemoDiscovery:
             PaperCandidate(id="demo-unavailable", title="DEMO: Unavailable source",
                            url="demo://unavailable", demo=True),
         ]
-        return candidates
+        return DiscoveryResult(candidates=candidates, notes=["Synthetic offline fixture"])
 
 
 class DemoEvidenceReader:
     """Read tiny fixture text rather than pretending to retrieve a paper."""
 
     @trace_call("component", "recommendations.read")
-    def read(self, candidate: PaperCandidate) -> PaperEvidence:
+    async def read(self, candidate: PaperCandidate) -> PaperEvidence:
         """Retrieve the known fixture or an explicit source failure.
 
         Args:
@@ -41,7 +42,7 @@ class DemoEvidenceReader:
         """
         if candidate.id == "demo-method":
             evidence = PaperEvidence(
-                primary_source=True, full_text=True, source_url=candidate.url,
+                primary_source=True, full_text=True, reading_scope="full text", source_url=candidate.url,
                 text=("SYNTHETIC DEMO TEXT. Authors propose saving completed task results. "
                       "In one toy trial, restoring a saved result avoided one repeated operation. "
                       "No production experiment or broad effectiveness claim is supported."),

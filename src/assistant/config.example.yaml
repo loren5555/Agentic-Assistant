@@ -13,8 +13,8 @@ providers:
   curator: local  # Extracts reusable knowledge from accepted results.
   briefs: local  # Organizes captured material into grounded briefs.
   feed: notion  # Manages research interests, recommendations, and follow-ups.
-  discovery: demo  # Finds research candidates for evaluation (demo implementation).
-  evidence: demo  # Reads material related to candidates (demo implementation).
+  discovery: codex  # Searches live public primary sources using the Codex CLI.
+  evidence: codex  # Reads source excerpts and reports access limitations.
   recommender: local  # Evaluates evidence and produces recommendations.
 
 runtime:
@@ -62,6 +62,14 @@ codex:
   investigator_model: gpt-5.6-luna
   investigator_effort: low
   investigator_timeout_seconds: 300
+  discovery_model: gpt-5.6-luna
+  discovery_effort: low
+  discovery_timeout_seconds: 300
+  discovery_max_candidates: 10
+  discovery_recent_days: 7
+  evidence_model: gpt-5.6-luna
+  evidence_effort: low
+  evidence_timeout_seconds: 180
 
 notion:
   token: <<notion-token>>
