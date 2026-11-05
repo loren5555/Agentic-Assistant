@@ -268,7 +268,9 @@ Recommendations operate independently of Workbench. **Discovery Pool** is the br
 browsable cache of recent papers, findings, methods, tools and datasets. **Research
 Feed** is the smaller selected edition, normally five items and configurable up to ten.
 Search results are merged into the pool before ranking; selected candidates receive
-source reading and evidence assessment before Feed publication. A search may return
+source reading and evidence assessment before Feed publication. The underlying
+databases live under Assistant. Human-facing linked views, including Selected — Today
+and Discovery Pool — Recent, belong on Dash board, the display entry point. A search may return
 fewer items than requested; the cache accumulates discoveries across runs.
 
 Choose initial newspaper topics during setup. These preferences require no proposal
