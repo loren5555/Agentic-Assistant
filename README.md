@@ -270,7 +270,10 @@ Feed** is the smaller selected edition, normally five items and configurable up 
 Search results are merged into the pool before ranking; selected candidates receive
 source reading and evidence assessment before Feed publication. The underlying
 databases live under Assistant. Human-facing linked views, including Selected — Today
-and Discovery Pool — Recent, belong on Dash board, the display entry point. A search may return
+and Discovery Pool — Recent, belong on Dash board, the display entry point. The dashboard has one full-width research-newspaper section below the operational
+columns: a selected gallery followed by the discovery table. Formal Research Interests
+remain a navigation entry. Recommendation UI changes reuse this existing section and
+its linked views. A search may return
 fewer items than requested; the cache accumulates discoveries across runs.
 
 Choose initial newspaper topics during setup. These preferences require no proposal
