@@ -27,6 +27,31 @@ class ResearchInterest(BaseModel):
     priority: float = 1.0
 
 
+class SourceQuality(BaseModel):
+    """Record verified publication context and substantive quality signals.
+
+    Attributes:
+        venue: Exact publication venue, or empty when not established.
+        status: Verified publication stage, distinct from a claimed target venue.
+        rank: Verified system/year/category label; empty when unverified.
+        authors: Author names as found on the primary source.
+        author_context: Relevant prior contributions with a stated evidence basis.
+        novelty: Concrete contribution rather than a performance slogan.
+        limitations: Unresolved checks and methodological concerns.
+        sources: Pages supporting publication, ranking and author context.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    venue: str = ""
+    status: Literal["Published", "Accepted", "Preprint", "Unknown"] = "Unknown"
+    rank: str = ""
+    authors: list[str] = Field(default_factory=list)
+    author_context: str = ""
+    novelty: str = ""
+    limitations: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+
+
 class PaperCandidate(BaseModel):
     """Identify discovered material without implying it has been read.
 
@@ -52,6 +77,8 @@ class PaperCandidate(BaseModel):
     kind: Literal["Paper", "Finding", "Method", "Tool", "Dataset", "Other"] = "Paper"
     breadth: Breadth = "Core"
     summary: str = ""
+    display_title: str = ""
+    quality: SourceQuality = Field(default_factory=SourceQuality)
     topics: list[str] = Field(default_factory=list)
 
 
@@ -93,6 +120,7 @@ class PaperEvidence(BaseModel):
     text: str
     source_url: str
     failure: str = ""
+    quality: SourceQuality = Field(default_factory=SourceQuality)
     reading_scope: str = "partial text"
     summary: str = ""
     limitations: list[str] = Field(default_factory=list)
@@ -117,6 +145,9 @@ class RecommendationAssessment(BaseModel):
     author_claims: list[str]
     experimental_support: list[str]
     agent_inference: list[str]
+    credibility: str = ""
+    novelty: str = ""
+    concerns: list[str] = Field(default_factory=list)
 
 
 class Recommendation(BaseModel):
@@ -159,3 +190,19 @@ class RankedCandidates(BaseModel):
     """Order pool source identities for selective reading; no publication yet."""
 
     ids: list[str]
+
+
+class PoolTranslation(BaseModel):
+    """Translate only display text while preserving bibliographic identity."""
+
+    id: str
+    display_title: str
+    summary: str
+    topics: list[str]
+    discovery_reason: str
+
+
+class PoolTranslations(BaseModel):
+    """Return a batch of Chinese quick-skim presentations."""
+
+    items: list[PoolTranslation]

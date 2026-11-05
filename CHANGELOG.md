@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.4 — 2026-11-05
+
+- Discovery Pool presents Chinese quick-skim titles, summaries, topics and possible
+  connections while preserving original titles, canonical identity and source links.
+  Research Feed reading reports remain in English.
+- Added publication/author provenance, concrete novelty and methodological concerns
+  to discovery and reading results. Pool Venue and Quality Notes expose what is known
+  and what still needs verification; selected reports explain credibility and novelty.
+- Shared editorial policy favors verified top venues and relevant author track records,
+  retains novel preprints and foundational cross-disciplinary work, and de-emphasizes
+  incremental score-heavy claims with unclear evaluation support.
+- Ranking metadata, years, publication stages and uncertainty are explicitly separated;
+  author or venue prestige does not certify an individual paper's claims.
+- Existing pool presentations can be localized without changing feedback, selection,
+  original source identity or discovery dates. Updated the Dashboard pool view and diagram.
+
+### Updating
+
+- Setup adds Venue and Quality Notes to the pool. Existing records remain readable.
+  Already verified Feed records are not rewritten or reclassified automatically.
+- Incompatible unfinished DBOS work retains the existing explicit version checks;
+  this release does not clear workflow state.
+
 ## 0.2.3 — 2026-11-05
 
 - Added the Assistant-owned Discovery Pool: broad recent public research, including

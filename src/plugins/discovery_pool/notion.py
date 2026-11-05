@@ -33,6 +33,37 @@ def plain(prop: dict) -> str:
                    for p in prop.get(prop.get("type", "rich_text"), []))
 
 
+def quality_notes(candidate: PaperCandidate) -> str:
+    """Summarize verified context and unknowns for a Chinese quick skim."""
+    quality = candidate.quality
+    status = {"Published": "已发表", "Accepted": "已接收", "Preprint": "预印本", "Unknown": "发表状态待核实"}[quality.status]
+    parts = [status]
+    if quality.rank:
+        parts.append(quality.rank)
+    if quality.authors:
+        parts.append("作者：" + "、".join(quality.authors[:5]))
+    if quality.author_context:
+        parts.append(quality.author_context)
+    if quality.novelty:
+        parts.append("新意：" + quality.novelty)
+    parts.extend(quality.limitations)
+    if not quality.sources:
+        parts.append("发表渠道、分区与作者背景尚未核验")
+    return "；".join(parts)
+
+
+def presentation(candidate: PaperCandidate) -> dict:
+    """Build owned Chinese display fields without changing source identity."""
+    return {
+        "Name": {"title": text(candidate.display_title or candidate.title)},
+        "Summary": {"rich_text": text(candidate.summary or candidate.discovery_reason)},
+        "Venue": {"rich_text": text(candidate.quality.venue)},
+        "Quality Notes": {"rich_text": text(quality_notes(candidate))},
+        "Topics": {"multi_select": [{"name": topic.replace(",", " ")[:100]} for topic in candidate.topics[:10] if topic.strip()]},
+        "Candidate Data": {"rich_text": text(candidate.model_dump_json())},
+    }
+
+
 class DiscoveryPool:
     """Own bounded cache persistence without changing source research databases."""
 
@@ -72,7 +103,7 @@ class DiscoveryPool:
                 if not self.settings.assistant_page_id:
                     raise
                 properties = {"Name": {"title": {}}, "URL": {"url": {}}, "Topics": {"multi_select": {}}}
-                for name in ("Stable ID", "Summary", "Candidate Data"):
+                for name in ("Stable ID", "Summary", "Candidate Data", "Venue", "Quality Notes"):
                     properties[name] = {"rich_text": {}}
                 for name in ("Published", "First Seen", "Last Seen"):
                     properties[name] = {"date": {}}
@@ -90,6 +121,9 @@ class DiscoveryPool:
                 source_id = database["data_sources"][0]["id"]
                 self.source_id = source_id
             source = client.data_sources.retrieve(data_source_id=source_id)
+            additions = {name: {"rich_text": {}} for name in ("Venue", "Quality Notes") if name not in source["properties"]}
+            if additions:
+                client.data_sources.update(data_source_id=source_id, properties=additions)
             required = {"Name", "Stable ID", "URL", "Candidate Data", "State", "Feedback", "Topics", "First Seen", "Last Seen", "Published", "Kind", "Breadth", "Summary"}
             if not required <= source["properties"].keys():
                 raise ValueError("Discovery Pool lacks required properties")
@@ -145,12 +179,9 @@ class DiscoveryPool:
                 if key not in known and alias in aliases:
                     known[key] = aliases[alias]
                 properties = {
-                    "Name": {"title": text(candidate.title)}, "Stable ID": {"rich_text": text(key)},
+                    **presentation(candidate), "Stable ID": {"rich_text": text(key)},
                     "URL": {"url": candidate.url}, "Kind": {"select": {"name": candidate.kind}},
                     "Breadth": {"select": {"name": candidate.breadth}},
-                    "Summary": {"rich_text": text(candidate.summary or candidate.discovery_reason)},
-                    "Topics": {"multi_select": [{"name": topic.replace(",", " ")[:100]} for topic in candidate.topics[:10] if topic.strip()]},
-                    "Candidate Data": {"rich_text": text(candidate.model_dump_json())},
                     "Last Seen": {"date": {"start": day}},
                 }
                 try:
@@ -164,7 +195,7 @@ class DiscoveryPool:
                 else:
                     properties.update({"First Seen": {"date": {"start": day}}, "State": {"select": {"name": "Active"}}})
                     page = client.pages.create(parent={"type": "data_source_id", "data_source_id": self.source_id}, properties=properties,
-                                               markdown=f"Source: {candidate.url}\n\n{candidate.summary or candidate.discovery_reason}\n\nDiscovery metadata; not a complete reading.")
+                                               markdown=f"原标题：{candidate.title}\n\n原文来源：{candidate.url}\n\n{candidate.summary or candidate.discovery_reason}\n\n## 可能的启发\n\n{candidate.discovery_reason}\n\n## 速览判断\n\n{quality_notes(candidate)}\n\n发现线索，仅作速览；尚未完成精读。")
                     known[key] = page
                     aliases[alias] = page
                     created += 1
@@ -180,6 +211,42 @@ class DiscoveryPool:
                     retained.append(entry)
         self.logger.info("Discovery Pool refreshed: new=%d updated=%d retained=%d retired=%d.", created, updated, len(retained), retired)
         return retained
+
+    @trace_call("component", "discovery_pool.update_presentations")
+    def update_presentations(self, candidates: list[PaperCandidate]) -> None:
+        """Localize existing display text while preserving feedback and cache dates.
+
+        Args:
+            candidates: Existing identities with translated display fields. Original
+                titles, URLs, selection, preference marks and discovery dates remain.
+        """
+        self.logger.info("Updating Chinese discovery presentations: entries=%d.", len(candidates))
+        with Client(auth=self.settings.token) as client:
+            known = {entry.candidate.id: entry for entry in (self._entry(p) for p in self._query(client))}
+            for candidate in candidates:
+                entry = known[candidate.id]
+                if (candidate.title, candidate.url) != (entry.candidate.title, entry.candidate.url):
+                    raise ValueError("Presentation update changed the original source identity")
+                client.pages.update(page_id=entry.page_id, properties=presentation(candidate))
+                body = client.pages.retrieve_markdown(page_id=entry.page_id)
+                if body.get("truncated"):
+                    self.logger.warning("Pool body is partial; translated display properties were saved: title=%r.", candidate.title)
+                    continue
+                updates = []
+                for old, new in (
+                    (entry.candidate.summary, candidate.summary),
+                    ("Source:", "原文来源："),
+                    ("Discovery metadata; not a complete reading.", "发现线索，仅作速览；尚未完成精读。"),
+                ):
+                    if old and old != new and old in body["markdown"]:
+                        updates.append({"old_str": old, "new_str": new})
+                if updates:
+                    client.pages.update_markdown(page_id=entry.page_id, type="update_content",
+                                                 update_content={"content_updates": updates})
+                if candidate.title not in body["markdown"]:
+                    client.pages.update_markdown(page_id=entry.page_id, type="insert_content",
+                                                 insert_content={"content": f"原标题：{candidate.title}\n\n", "position": {"type": "start"}})
+        self.logger.info("Chinese discovery presentations saved: entries=%d.", len(candidates))
 
     @trace_call("component", "discovery_pool.mark_selected")
     def mark_selected(self, entry: DiscoveryEntry) -> None:

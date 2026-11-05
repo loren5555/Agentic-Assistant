@@ -132,9 +132,17 @@ class ResearchFeed:
         )
 
         sections = [f"Source: {candidate.url}", f"Discovery type: {candidate.kind}",
-                    f"Exploration scope: {candidate.breadth}", f"Possible connection: {candidate.discovery_reason}", f"Evidence: {evidence.source_url}",
+                    f"Exploration scope: {candidate.breadth}", f"Evidence: {evidence.source_url}",
                     f"Reading scope: {'full text' if evidence.full_text else 'partial text'}",
                     f"Reason: {assessment.reason}"]
+        if assessment.credibility:
+            sections.append(f"## Credibility assessment\n\n{assessment.credibility}")
+        if assessment.novelty:
+            sections.append(f"## Substantive contribution\n\n{assessment.novelty}")
+        if assessment.concerns:
+            sections.append("## Uncertainties and concerns\n\n" + "\n".join(f"- {point}" for point in assessment.concerns))
+        if evidence.quality.sources:
+            sections.append("## Publication and author verification\n\n" + "\n".join(evidence.quality.sources))
         for heading, points in (
             ("Author claims", assessment.author_claims),
             ("Experimental support", assessment.experimental_support),

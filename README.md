@@ -5,7 +5,7 @@ knowledge outputs. The editable architecture is in [information-flow.drawio](inf
 
 ## Releases and runtime state
 
-The current release is **v0.2.3**, following the shared-intake diagram. See
+The current release is **v0.2.4**, following the shared-intake diagram. See
 [CHANGELOG.md](CHANGELOG.md) for changes, setup instructions and known limitations.
 The pre-refactor implementation is preserved at Git tag **v0.1** (commit `ce8669e`).
 
@@ -335,6 +335,20 @@ The visible cache targets 100 recent items. Refresh preserves feedback and selec
 merges canonical source identities and archives excess old unmarked cache records.
 Explicitly marked records are retained, so the total can exceed the cache target.
 Selected reports remain available in Research Feed even after an old pool row retires.
+
+**Languages and screening:** Discovery Pool uses Chinese display titles, summaries,
+topics and possible connections for a quick skim. Original titles and source links
+remain intact. Research Feed reports stay in English. Venue and Quality Notes expose
+publication context, substantive novelty and unresolved credibility checks.
+
+Discovery, ranking and reading favor verified CCF A venues, explicitly sourced
+first-quartile journal rankings, and authors with a relevant, evidenced track record.
+Rankings retain their system, year and category; unknown information stays unverified.
+Venue and author reputation are useful priors, not proof of individual claims. Novel
+work from other venues or preprints remains eligible, as do foundational contributions
+from neighboring disciplines. Large benchmark gains without meaningful novelty or
+transparent evaluation do not earn selection by themselves. Reviews distinguish author
+claims, fair-baseline/compute/data checks, reproducibility, uncertainty and actual evidence.
 
 **Selected edition:** metadata ranking precedes expensive reading. Confirmed publication
 history balances core, broader-field, neighboring and cross-disciplinary coverage over
