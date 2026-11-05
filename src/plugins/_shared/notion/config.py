@@ -15,7 +15,7 @@ class NotionSettings(BaseModel):
     workbench_data_source_id: str
 
 
-class ArchiveSettings(BaseModel):
+class ArtifactStoreSettings(BaseModel):
     """Configure the long-term databases independently from Workbench.
 
     Attributes:
@@ -57,7 +57,7 @@ class ResearchFeedSettings(BaseModel):
     feed_feedback_property: str = "Human Feedback"
 
 
-class CaptureSettings(BaseModel):
+class SourceCollectionSettings(BaseModel):
     """Configure independent raw inputs and organized output collections.
 
     Attributes:

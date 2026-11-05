@@ -11,11 +11,11 @@ Responsibility:
 
 from dbos import DBOS
 
-from assistant.components.inputs.models import SourceMaterial
-from assistant.components.proposer.models import Proposal
-from assistant.components.router.actions import EXECUTION_ACTIONS
-from assistant.components.router.models import RouterInput
-from assistant.components.router.prompt import validate_decision
+from assistant.components.data.sources.models import SourceMaterial
+from assistant.components.coordination.proposer.models import Proposal
+from assistant.components.coordination.router.actions import EXECUTION_ACTIONS
+from assistant.components.coordination.router.models import RouterInput
+from assistant.components.coordination.router.prompt import validate_decision
 from logger import get_logger, trace_call
 
 

@@ -22,10 +22,12 @@ import json
 
 from dbos import DBOS, DBOSConfiguredInstance
 
-from assistant.components.recommendations.identity import candidate_identity
-from assistant.components.recommendations.policy import exploration_order
-from assistant.components.discovery_pool.models import DiscoveryEntry
-from assistant.components.recommendations.models import CATEGORIES, DiscoveryResult, PaperCandidate, PaperEvidence, Recommendation, RecommendationAssessment, RecommendationRun, ResearchInterest
+from assistant.components.recommendations.discovery.identity import candidate_identity
+from assistant.components.recommendations.recommender.policy import exploration_order
+from assistant.components.data.discovery_pool.models import DiscoveryEntry
+from assistant.components.recommendations.recommender.models import CATEGORIES, Recommendation, RecommendationAssessment, RecommendationRun
+from assistant.components.recommendations.discovery.models import DiscoveryResult, PaperCandidate, ResearchInterest
+from assistant.components.recommendations.evidence_reader.models import PaperEvidence
 from assistant.runtime.index import WorkIndex
 from assistant.runtime.services import Services
 from logger import get_logger, trace_call

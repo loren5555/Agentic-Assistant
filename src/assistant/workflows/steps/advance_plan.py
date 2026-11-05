@@ -14,8 +14,8 @@ Responsibility:
 
 from dbos import DBOS
 
-from assistant.components.inputs.models import SourceHistory, SourceMaterial
-from assistant.components.workbench.models import WorkbenchItem
+from assistant.components.data.sources.models import SourceHistory, SourceMaterial
+from assistant.components.data.workbench.models import WorkbenchItem
 from assistant.runtime.records import digest
 from logger import get_logger, trace_call
 

@@ -421,27 +421,67 @@ User acceptance follows the commands and observable Notion transitions above.
 
 ## Code map
 
+The directory tree follows role ownership. Coordination returns interpretations and
+judgments, execution completes delegated work, recommendations prepares the independent
+newspaper, and data interfaces own source access and verified writes. Existing workflows
+still own ordering, approvals and DBOS checkpoints.
+
 ```text
 src/assistant/
   commands/                    run, serve, setup, status, resume
   workflows/tasks/             named business jobs matching run JOB
-  workflows/steps/              shared intake and proposal checkpoints
+  workflows/steps/             shared intake and proposal checkpoints
   components/
-    processors/                source extraction and feedback storage contracts
-    organizer/                 grounded information interpretation
-    proposer/                  reviewable task planning
-    planner/                   concrete plans and limits for separate review
-    reconciler/                deterministic feedback-to-source transformation
-    router/                    pre-approval action selection
-    task_worker/               stateless execution inputs and typed outputs
-    investigator/              evidence-backed investigation
-    curator/                   accepted result retention
-    publisher/                 typed destination publication
-    workbench/                 human review and results
-    captures/                  specialized reading briefs
-    recommendations/           autonomous newspaper discovery and selection
-    discovery_pool/            broad cached discoveries and optional feedback
-  runtime/                     DBOS composition, recovery and local business index
-src/plugins/                   implementations grouped by capability then provider
+    coordination/
+      organizer/               interpret source material
+      proposer/                draft reviewable proposals
+      router/                  select pre-approval actions
+      reconciler/              transform feedback into source revisions
+      curator/                 select reusable accepted outcomes
+    execution/
+      planner/                 concrete plans and limits for review
+      investigator/            public-source investigation
+      task_worker/             approved execution and typed task results
+      briefer/                 evidence-aware reading material and briefs
+    recommendations/
+      discovery/               source candidates, quality provenance and identity
+      evidence_reader/         accessible primary material and reading scope
+      recommender/             rankings, assessments and edition reports
+    data/
+      sources/                 source snapshots, extraction and feedback queues
+      workbench/               proposals, human decisions and results
+      discovery_pool/          broad cached discoveries and optional feedback
+      research_feed/           selected editions and reading preferences
+      publisher/               verified destination writes and publication receipts
+  runtime/
+    services.py                lazy role-to-provider wiring
+    serialization.py           read historical model paths at the DBOS boundary
+    application.py             compose durable workflow instances
+    recovery.py                existing recovery/version rules
+    index.py                   local business mappings and editorial counts
+src/plugins/
+  coordination/                matching role, then provider (local, codex, ...)
+  execution/                   matching capability, then provider
+    direction_proposer/        TaskWorker specialization using its shared contract
+    tools/                     registered atomic tool implementations
+  recommendations/             discovery, evidence_reader and recommender providers
+    _shared/                   editorial policy shared within the newspaper
+  data/                        sources, workbench, pool, Feed and publication providers
+    publisher/notion/          accepted artifact and reading-brief writers
+  _shared/                     provider SDK/configuration and transport helpers
 src/logger/                    shared readable logging
 ```
+
+A component's `models.py` owns its exchanged data and `protocol.py` defines its callable
+contract. Other roles import that contract rather than defining a second version. Package
+docstrings identify the input origin, output destination and responsibility.
+
+Plugin paths mirror these role groups. For example, `coordination.router` with provider
+`local` resolves to `plugins.coordination.router.local`. Existing YAML provider selections,
+model options, action IDs and command names retain their meanings. The `calculator.local`
+toolset selection now resolves below `plugins.execution.tools`.
+
+Historical DBOS snapshots retain their original bytes. The serialization boundary maps
+old component model paths to current owners and writes new snapshots using current paths,
+with the same `py_pickle` format. Existing unfinished-work version checks still apply;
+the reorganization neither migrates database rows nor clears workflow state.

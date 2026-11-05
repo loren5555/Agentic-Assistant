@@ -20,13 +20,13 @@ import json
 
 from dbos import DBOS
 
-from assistant.components.archive.models import ArchiveReceipt
-from assistant.components.curator.models import CurationDecision, RetainedArtifact
-from assistant.components.inputs.models import SourceMaterial
-from assistant.components.investigator.models import InvestigationRequest
-from assistant.components.task_worker.models import TaskRequest, TaskResult
-from assistant.components.workbench.models import WorkbenchItem, result_publication_key
-from assistant.components.captures.models import RawCapture
+from assistant.components.data.publisher.models import PublicationReceipt
+from assistant.components.coordination.curator.models import CurationDecision, RetainedArtifact
+from assistant.components.data.sources.models import SourceMaterial
+from assistant.components.execution.investigator.models import InvestigationRequest
+from assistant.components.execution.task_worker.models import TaskRequest, TaskResult
+from assistant.components.data.workbench.models import WorkbenchItem, result_publication_key
+from assistant.components.execution.briefer.models import ReadingMaterial
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
 from logger import get_logger, trace_call
@@ -243,7 +243,7 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, item: WorkbenchIt
         sections.extend(report.limitations)
         result = TaskResult(content="\n\n".join(sections), process=report.process)
     elif action == "organize_material" and source.kind in {"notero", "simpread"}:
-        capture = RawCapture(kind=source.kind, page_id=source.page_id, url=source.url,
+        capture = ReadingMaterial(kind=source.kind, page_id=source.page_id, url=source.url,
                              title=source.title, text="\n\n".join([source.context_content, task.instruction,
                                  task.proposal.execution_plan.markdown() if task.proposal.execution_plan else ""]),
                              metadata=source.metadata, revision=source.revision,
@@ -391,7 +391,7 @@ async def extract(self: WorkbenchWorkflows, item: WorkbenchItem) -> CurationDeci
 
 @DBOS.step(name="ProposalWorkflows.publish_artifact")
 @trace_call("step", "publish_artifact")
-def publish_artifact(self: WorkbenchWorkflows, source: SourceMaterial, item: WorkbenchItem, artifact: RetainedArtifact, key: str) -> ArchiveReceipt:
+def publish_artifact(self: WorkbenchWorkflows, source: SourceMaterial, item: WorkbenchItem, artifact: RetainedArtifact, key: str) -> PublicationReceipt:
     """Verify acceptance immediately before one retry-safe archive write.
 
     Args:

@@ -8,7 +8,7 @@ def get_plugin(module: str, source: str) -> ModuleType:
     """Import one implementation without constructing its services.
 
     Args:
-        module: Capability directory matching assistant/components.
+        module: Role path matching assistant/components, for example coordination.router.
         source: Configured implementation source, such as local or notion.
 
     Returns:

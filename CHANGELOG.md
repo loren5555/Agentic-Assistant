@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Reorganized component contracts and plugin implementations into coordination,
+  execution, recommendations and data. Existing commands, configuration keys,
+  workflow/action identities and business behavior are retained.
+- Split discovery, primary reading, editorial decisions and Feed storage into their
+  owning roles. Source snapshots and processor operations now share data.sources.
+- Replaced the captures module boundary with execution.briefer; publication helpers
+  and receipts now belong to data.publisher. DirectionProposer continues to use the
+  TaskWorker contract as an execution specialization.
+- Historical DBOS model paths are resolved only at the pickle decoding boundary.
+  No runtime rows, Notion schema/records or workflow version checks are changed.
+- Updated the code map and role documentation. The business diagram is unchanged
+  by this code-only reorganization.
+
 ## 0.2.4 — 2026-11-05
 
 - Discovery Pool presents Chinese quick-skim titles, summaries, topics and possible

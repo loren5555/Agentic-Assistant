@@ -5,7 +5,7 @@ import re
 from notion_client import Client
 from logger import get_logger
 
-logger = get_logger("plugins.notion.markdown")
+logger = get_logger("plugins._shared.notion.markdown")
 
 UNKNOWN_BLOCK = re.compile(r'<unknown\b[^>]*\burl="([^"]*)"[^>]*\s*/>')
 

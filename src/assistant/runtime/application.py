@@ -11,6 +11,7 @@ from dbos import DBOS, DBOSConfig, DBOSConfiguredInstance
 from assistant.commands import run as run_command
 from assistant.config import AssistantConfig, RuntimeSettings
 from assistant.runtime.index import WorkIndex
+from assistant.runtime.serialization import ComponentSerializer
 from assistant.runtime.services import Services
 from assistant.workflows.steps import submit_proposal as proposal_steps, intake_sources as source_steps
 from assistant.workflows.steps import select_action as routing_steps, advance_plan as planning_steps
@@ -131,6 +132,7 @@ class Application:
         self.tasks = TaskWorkflows(self.services, proposals, research, index, settings.runtime)
         config: DBOSConfig = {
             "name": "assistant", "system_database_url": f"sqlite:///{directory / 'dbos.sqlite'}",
+            "serializer": ComponentSerializer(),
             "log_level": "WARNING",
             "console_log_level": "WARNING",
         }

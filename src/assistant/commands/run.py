@@ -22,7 +22,7 @@ import json
 from dbos import DBOS
 from pydantic import BaseModel
 
-from assistant.components.recommendations.models import CATEGORIES, RecommendationRun
+from assistant.components.recommendations.recommender.models import CATEGORIES, RecommendationRun
 from assistant.runtime.recovery import invoke
 from logger import get_logger, trace_call
 

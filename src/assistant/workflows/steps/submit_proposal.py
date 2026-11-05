@@ -18,9 +18,9 @@ import json
 
 from dbos import DBOS
 
-from assistant.components.inputs.models import SourceMaterial
-from assistant.components.proposer.models import Proposal
-from assistant.components.workbench.models import WorkbenchItem
+from assistant.components.data.sources.models import SourceMaterial
+from assistant.components.coordination.proposer.models import Proposal
+from assistant.components.data.workbench.models import WorkbenchItem
 from assistant.runtime.records import digest
 from logger import get_logger, trace_call
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from dbos import DBOS
-from assistant.components.inputs.models import SourceMaterial
+from assistant.components.data.sources.models import SourceMaterial
 from assistant.runtime.recovery import invoke
 from logger import get_logger, trace_call
 

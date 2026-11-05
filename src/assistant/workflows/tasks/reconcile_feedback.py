@@ -10,8 +10,8 @@ Responsibility:
 """
 
 from dbos import DBOS
-from assistant.components.inputs.models import SourceMaterial
-from assistant.components.workbench.models import WorkbenchItem
+from assistant.components.data.sources.models import SourceMaterial
+from assistant.components.data.workbench.models import WorkbenchItem
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
 from logger import get_logger, trace_call
