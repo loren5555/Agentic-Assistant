@@ -14,6 +14,17 @@ from pydantic.json_schema import SkipJsonSchema
 from assistant.runtime.records import ExecutionProcess
 
 
+class ReviewDiscussion(BaseModel):
+    """Preserve one public note's role, raw scale, thread and source link."""
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    role: str
+    reply_to: str = ""
+    url: str
+    modified: str = ""
+    content: dict[str, str] = Field(default_factory=dict)
+
+
 class PaperEvidence(BaseModel):
     """Preserve exactly what was accessible to the recommendation agent.
 
@@ -41,3 +52,5 @@ class PaperEvidence(BaseModel):
     summary: str = ""
     limitations: list[str] = Field(default_factory=list)
     process: SkipJsonSchema[ExecutionProcess | None] = None
+    discussions: SkipJsonSchema[list[ReviewDiscussion]] = Field(default_factory=list)
+    discussion_limitations: list[str] = Field(default_factory=list)

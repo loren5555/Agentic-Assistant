@@ -46,6 +46,9 @@ class RecommendationAssessment(BaseModel):
     credibility: str = ""
     novelty: str = ""
     concerns: list[str] = Field(default_factory=list)
+    review_consensus: str = ""
+    author_response: str = ""
+    unresolved_review_issues: list[str] = Field(default_factory=list)
 
 
 class Recommendation(BaseModel):

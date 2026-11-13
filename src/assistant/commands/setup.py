@@ -6,7 +6,8 @@ Output destination:
     Additive schema changes in source databases, Workbench and output collections.
 Responsibility:
     Prepare version/feedback/history flags, terminal work states and publication
-    keys. No task is proposed, approved or executed by this command itself.
+    keys under the exclusive runtime lock, with serve stopped. DBOS is not
+    launched; no task is recovered, proposed, approved or executed.
 """
 
 from __future__ import annotations

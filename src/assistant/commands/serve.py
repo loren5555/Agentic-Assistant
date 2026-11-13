@@ -3,7 +3,7 @@
 Input origin:
     YAML runtime.schedules is supplied by Application. DBOS persists the schedule
     definitions and later supplies scheduled_time/context to scheduled_job in
-    runtime/schedules.py; that trigger calls commands/run.dispatch.
+    runtime/schedules.py; that trigger enqueues workflows/tasks/dispatch.py.
 
 Output destination:
     Schedule definitions and entry jobs go to DBOS. Each triggered job enters the
@@ -15,13 +15,15 @@ Inputs:
     expressions. Schedules use Asia/Shanghai and the existing DBOS database.
 
 Outputs:
-    Persisted schedule definitions and progress logs; this command waits until
-    interrupted rather than returning one business result as JSON.
+    Persisted schedules, local HTTP submission/inspection endpoints and execution
+    logs. This command owns the executor until interrupted.
 
 Workflow relationship:
     runtime/schedules.scheduled_job receives the scheduled time and stored job
     context, then calls the same run.dispatch workflow used by manual execution.
-    The assistant-jobs queue serializes entry dispatch with worker_concurrency=1.
+    The assistant-triggers queue runs schedule callbacks. Both manual and scheduled
+    dispatch enter assistant-jobs with worker_concurrency=1; triggers wait outside
+    that queue so they never occupy the slot needed by their submitted job.
 
 Participants and effects:
     DBOS scheduler, job queue, dispatcher, and configured business tasks. This
@@ -43,6 +45,8 @@ import asyncio
 from dbos import DBOS
 
 from assistant.runtime import schedules
+from assistant.runtime.service.server import serve_http
+from assistant.runtime.service.submissions import JOB_QUEUE, TRIGGER_QUEUE, RECOVERY_QUEUE
 from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
@@ -58,7 +62,9 @@ async def run(application: Application, options: argparse.Namespace) -> None:
         options: Parsed command arguments.
     """
     logger = get_logger("commands.serve")
-    await DBOS.register_queue_async("assistant-jobs", worker_concurrency=1)
+    await DBOS.register_queue_async(JOB_QUEUE, worker_concurrency=1)
+    await DBOS.register_queue_async(TRIGGER_QUEUE, worker_concurrency=1)
+    await DBOS.register_queue_async(RECOVERY_QUEUE, worker_concurrency=1)
     enabled = application.settings.runtime.schedules
     for schedule in await DBOS.list_schedules_async():
         name = schedule["schedule_name"]
@@ -70,7 +76,7 @@ async def run(application: Application, options: argparse.Namespace) -> None:
             "schedule_name": "assistant-" + job, "workflow_fn": schedules.scheduled_job,
             "schedule": cron, "cron_timezone": "Asia/Shanghai",
             "context": {"job": job}, "automatic_backfill": False,
-            "queue_name": "assistant-jobs",
+            "queue_name": TRIGGER_QUEUE,
         }
         for job, cron in enabled.items()
     ]
@@ -78,4 +84,4 @@ async def run(application: Application, options: argparse.Namespace) -> None:
     logger.info("Scheduler ready: schedules=%d timezone=Asia/Shanghai backfill=False. Ctrl+C to stop.", len(enabled))
     for job, cron in enabled.items():
         logger.info("Schedule enabled: job=%s cron=%s.", job, cron)
-    await asyncio.Event().wait()
+    await serve_http(application)

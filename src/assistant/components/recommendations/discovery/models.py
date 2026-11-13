@@ -82,6 +82,8 @@ class PaperCandidate(BaseModel):
     display_title: str = ""
     quality: SourceQuality = Field(default_factory=SourceQuality)
     topics: list[str] = Field(default_factory=list)
+    discovery_sources: list[str] = Field(default_factory=list)
+    openreview_forum: str = ""
 
 
 class DiscoveryResult(BaseModel):
@@ -98,3 +100,4 @@ class DiscoveryResult(BaseModel):
     candidates: list[PaperCandidate]
     notes: list[str]
     process: SkipJsonSchema[ExecutionProcess | None] = None
+    source_failures: SkipJsonSchema[dict[str, str]] = Field(default_factory=dict)

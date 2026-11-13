@@ -35,6 +35,17 @@ selection briefly. Write all assessment prose in English for Research Feed. Synt
 
 
 INSTRUCTIONS += "\n" + QUALITY_POLICY
+INSTRUCTIONS += """
+When discussions are supplied, distinguish official reviews, meta reviews, author
+responses, public comments and final decisions. Preserve each original review scale;
+do not average scores across different conferences. Summarize reviewer agreements,
+author responses and unresolved issues in the dedicated output fields. Attribute
+statements to note URLs. Account for discussion_limitations; a partial thread cannot
+establish complete consensus. Acceptance is contextual evidence, not proof of validity.
+Descriptions of experiments in reviews are reviewer reports unless the supplied
+paper text independently supports them. Keep these attributions explicit rather
+than presenting discussion as independently inspected experimental results.
+"""
 
 
 class Recommender:

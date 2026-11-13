@@ -1,63 +1,31 @@
-"""Inspect persisted schedules and the most recent workflow executions.
+"""Inspect the running service without starting DBOS or business work.
 
-Input origin:
-    Application opens the configured DBOS system database. The handler reads its
-    saved schedules and recent workflow metadata through DBOS APIs; it does not
-    fetch Workbench or other Notion rows to construct this status output.
-
-Output destination:
-    display() prints schedule/workflow summaries as JSON on stdout for the human
-    operator. Workflow IDs can be used as resume input. The handler itself writes
-    no business destination; startup recovery effects are noted below.
-
-Inputs:
-    Application pointing to the selected local runtime database and parsed
-    command options. No source page or business task is selected.
-
-Outputs:
-    JSON containing all saved schedules and up to 20 recent workflows, including
-    their IDs, statuses, and registered names. Workflow inputs/outputs are omitted.
-
-Workflow relationship:
-    This handler queries DBOS administration APIs, not workflows/tasks. The IDs
-    it prints can be supplied to resume when recovery is appropriate.
-
-Participants and effects:
-    Human operator and DBOS inspection APIs. The handler does not intentionally
-    dispatch a job, read Notion, or call a model. However, Application launches
-    DBOS first, which may recover unfinished work independently of this handler;
-    status is therefore not an offline, side-effect-free database inspector.
+Input origin: service settings and optional workflow ID from run --detach.
+Output destination: saved workflow/schedule metadata or one report on stdout.
+Responsibility: query the local service; only serve owns recovery and providers.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
 import argparse
 
-from dbos import DBOS
-
 from assistant.commands.run import display
+from assistant.runtime.service.client import ServiceClient
 from logger import get_logger, trace_call
-
-if TYPE_CHECKING:
-    from assistant.runtime.application import Application
 
 
 @trace_call("command", "status")
-async def run(application: Application, options: argparse.Namespace) -> None:
-    """Display persisted schedules and recent workflow statuses.
-
-    Args:
-        application: Configured application runtime.
-        options: Parsed command arguments.
-    """
+async def run(settings, options: argparse.Namespace) -> None:
+    """Display service state or inspect one persisted workflow and its steps."""
     logger = get_logger("commands.status")
-    schedules = await DBOS.list_schedules_async()
-    workflows = await DBOS.list_workflows_async(
-        limit=20, sort_desc=True, load_input=False, load_output=False,
-    )
-    logger.info("Runtime status loaded: schedules=%d recent_workflows=%d.", len(schedules), len(workflows))
-    display({"schedules": schedules, "workflows": [
-        {"id": item.workflow_id, "status": item.status, "name": item.name}
-        for item in workflows
-    ]})
+    logger.debug("Reading local service status.")
+    async with ServiceClient(settings) as client:
+        if options.workflow_id:
+            path = f"/jobs/{options.workflow_id}"
+            if options.result:
+                output = await client.request("GET", path + "/result")
+            else:
+                output = await client.request("GET", path)
+                output["steps"] = (await client.request("GET", path + "/steps"))["steps"]
+        else:
+            output = await client.request("GET", "/status", params={"limit": options.limit})
+    logger.debug("Local service status read.")
+    display(output)

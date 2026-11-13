@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant CLI as CLI Client
+    participant API as Local Service API
+    participant Control as Recovery Queue
+    participant DBOS as DBOS Runtime
+    participant State as Local SQLite
+
+    User->>CLI: resume WORKFLOW_ID
+    CLI->>API: POST recovery with request ID
+    API->>State: Read original workflow and check code version
+    alt Already active or successful
+        API-->>CLI: Original workflow ID; observe without restarting
+    else Recovery needed and version compatible
+        API->>Control: Persist recovery request
+        Control->>State: Save recovery task
+        API-->>CLI: Recovery workflow ID
+        Control->>DBOS: Recover failed children, then parent
+        DBOS->>State: Retain successful checkpoints and rewind failed step
+        DBOS->>DBOS: Execute remaining work
+        DBOS->>State: Save result or error
+    else Version incompatible
+        API-->>CLI: Explicit version error; no migration or deletion
+    end
+    CLI->>API: Poll returned workflow ID
+    API->>State: Read saved status/result
+    State-->>API: Saved status and report
+    API-->>CLI: Status and report
+    CLI-->>User: Display report

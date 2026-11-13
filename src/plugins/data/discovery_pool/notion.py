@@ -161,6 +161,16 @@ class DiscoveryPool:
         self.logger.info("Discovery preferences read: marked=%d.", len(entries))
         return entries
 
+    @trace_call("component", "discovery_pool.read_candidates")
+    def read_candidates(self) -> list[DiscoveryEntry]:
+        """Read current acquisition stock without changing its freshness or state."""
+        self.logger.info("Reading available Discovery Pool stock.")
+        with Client(auth=self.settings.token) as client:
+            entries = [self._entry(page) for page in self._query(client)]
+        available = [entry for entry in entries if not entry.selected and entry.feedback != "Not Interested"]
+        self.logger.info("Discovery Pool stock read: available=%d.", len(available))
+        return available
+
     @trace_call("component", "discovery_pool.refresh")
     def refresh(self, candidates: list[PaperCandidate], day: str, limit: int) -> list[DiscoveryEntry]:
         """Merge new finds and retire excess cache rows while preserving likes."""
@@ -178,6 +188,11 @@ class DiscoveryPool:
                 alias = candidate_identity(candidate.model_copy(update={"doi": ""}))
                 if key not in known and alias in aliases:
                     known[key] = aliases[alias]
+                if key in known:
+                    previous = self._entry(known[key]).candidate
+                    candidate.discovery_sources = list(dict.fromkeys(previous.discovery_sources + candidate.discovery_sources))
+                    candidate.openreview_forum = candidate.openreview_forum or previous.openreview_forum
+                    candidate.published_date = candidate.published_date or previous.published_date
                 properties = {
                     **presentation(candidate), "Stable ID": {"rich_text": text(key)},
                     "URL": {"url": candidate.url}, "Kind": {"select": {"name": candidate.kind}},

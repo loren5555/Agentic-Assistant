@@ -8,7 +8,7 @@ import asyncio
 
 from dbos import DBOS, DBOSConfig, DBOSConfiguredInstance
 
-from assistant.commands import run as run_command
+from assistant.workflows.tasks import dispatch as dispatch_task
 from assistant.config import AssistantConfig, RuntimeSettings
 from assistant.runtime.index import WorkIndex
 from assistant.runtime.serialization import ComponentSerializer
@@ -57,7 +57,7 @@ class TaskWorkflows(DBOSConfiguredInstance):
     organize_articles = articles_task.organize_articles
     process_signals = signal_task.process_signals
     reconcile_feedback = reconciliation_task.reconcile_feedback
-    dispatch = run_command.dispatch
+    dispatch = dispatch_task.dispatch
 
 
 @DBOS.dbos_class("ProposalWorkflows")
@@ -118,9 +118,10 @@ class Application:
         """
         self.settings = settings
         get_logger("runtime.application").debug(
-            "Providers selected: proposer=%s router=%s worker=%s investigator=%s planner=%s processors=%s discovery=%s.",
+            "Providers selected: proposer=%s router=%s worker=%s investigator=%s planner=%s processors=%s discovery=%s collector_deep=%s collector_light=%s.",
             settings.providers.proposer, settings.providers.router, settings.providers.worker,
             settings.providers.investigator, settings.providers.planner, settings.providers.processors, settings.providers.discovery,
+            settings.runtime.recommendations.collector.deep_provider, settings.runtime.recommendations.collector.light_provider,
         )
         # New workflow semantics must never replay v0.1 checkpoints in place.
         # The old runtime remains available to the immutable v0.1 release.
@@ -139,32 +140,21 @@ class Application:
         DBOS(config=config)
 
     async def execute(self, options: argparse.Namespace) -> None:
-        """Start DBOS, dispatch one command, and allow orderly shutdown.
+        """Start the sole DBOS executor and HTTP service, then shut down orderly.
 
         Args:
             options: Selected command and its arguments.
         """
-        from assistant.commands import setup, serve, status, resume
+        from assistant.commands import serve
         from assistant.runtime import schedules
 
         logger = get_logger("runtime.application")
-        schedules.bind(self, serving=options.command == "serve")
-        logger.info("Starting DBOS: command=%s; unfinished workflows may recover.", options.command)
+        schedules.bind(self, serving=True)
+        logger.info("Starting DBOS service; unfinished compatible workflows may recover.")
         DBOS.launch()
         try:
-            if options.command == "setup":
-                await setup.run(self, options)
-            elif options.command == "run":
-                await run_command.run(self, options)
-            elif options.command == "serve":
-                await serve.run(self, options)
-            elif options.command == "status":
-                await status.run(self, options)
-            elif options.command == "resume":
-                await resume.run(self, options)
-            else:
-                raise ValueError(f"Unsupported command: {options.command}")
+            await serve.run(self, options)
         finally:
             logger.info("Stopping DBOS: allowing up to 10 seconds for active workflows.")
             await asyncio.to_thread(DBOS.destroy, workflow_completion_timeout_sec=10)
-            logger.info("DBOS stopped.")
+            logger.info("DBOS stopped; unfinished work remains persisted for recovery.")

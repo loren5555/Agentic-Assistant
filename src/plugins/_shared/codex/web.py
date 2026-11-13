@@ -67,6 +67,8 @@ def research_schema(output_type: type[BaseModel]) -> dict:
 async def run_web_research[T: BaseModel](
     prompt: str, output_type: type[T], *, executable: str, model: str | None,
     effort: str | None, timeout_seconds: float,
+    mcp_servers: dict[str, dict] | None = None,
+    extra_environment: dict[str, str] | None = None,
 ) -> tuple[T, ExecutionProcess]:
     """Run one isolated research turn and validate its result file.
 
@@ -84,6 +86,7 @@ async def run_web_research[T: BaseModel](
     environment = os.environ.copy()
     environment.pop("OPENAI_API_KEY", None)
     environment.pop("CODEX_API_KEY", None)
+    environment.update(extra_environment or {})
 
     with TemporaryDirectory(prefix="assistant-research-") as directory:
         workspace = Path(directory)
@@ -103,6 +106,10 @@ async def run_web_research[T: BaseModel](
             command.extend(["--model", model])
         if effort:
             command.extend(["-c", f"model_reasoning_effort={json.dumps(effort)}"])
+        for name, options in (mcp_servers or {}).items():
+            for key, value in options.items():
+                encoded = str(value).lower() if isinstance(value, bool) else json.dumps(value)
+                command.extend(["-c", f"mcp_servers.{name}.{key}={encoded}"])
         # Keep model-default code-mode transport for hosted search, but no local
         # execution, private integrations or unrelated agent capabilities.
         for feature in (

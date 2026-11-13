@@ -44,6 +44,8 @@ async def recover(workflow_id: str):
         extra={"details": {'workflow': workflow_id}},
     )
     status = await DBOS.get_workflow_status_async(workflow_id)
+    if status is None:
+        raise ValueError(f"Workflow not found: {workflow_id}")
     check_version(status)
     logger.debug(
         'kind=checkpoint Recovery status: status=%s.',
@@ -66,14 +68,14 @@ async def recover(workflow_id: str):
             start_step,
             extra={"details": {'workflow': workflow_id}},
         )
-        handle = await DBOS.rewind_workflow_async(workflow_id, start_step=start_step)
+        handle = await DBOS.rewind_workflow_async(workflow_id, start_step=start_step, queue_name=status.queue_name)
     else:
         logger.info(
             'kind=checkpoint Requesting DBOS resume: status=%s.',
             status.status,
             extra={"details": {'workflow': workflow_id}},
         )
-        handle = await DBOS.resume_workflow_async(workflow_id)
+        handle = await DBOS.resume_workflow_async(workflow_id, queue_name=status.queue_name)
     return handle
 
 

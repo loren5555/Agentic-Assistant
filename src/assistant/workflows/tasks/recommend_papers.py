@@ -23,7 +23,9 @@ import json
 from dbos import DBOS, DBOSConfiguredInstance
 
 from assistant.components.recommendations.discovery.identity import candidate_identity
-from assistant.components.recommendations.recommender.policy import exploration_order
+from assistant.components.recommendations.collector.policy import coverage_table, balanced_order
+from assistant.workflows.steps import collect_research as collection_steps
+from assistant.workflows.tasks import research_newspaper as newspaper_tasks
 from assistant.components.data.discovery_pool.models import DiscoveryEntry
 from assistant.components.recommendations.recommender.models import CATEGORIES, Recommendation, RecommendationAssessment, RecommendationRun
 from assistant.components.recommendations.discovery.models import DiscoveryResult, PaperCandidate, ResearchInterest
@@ -65,12 +67,19 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         self.maxima.update(maxima)
         self.demo = services.config.providers.discovery == "demo"
         options = services.config.provider_options.get(services.config.providers.discovery, {})
-        self.recent_days = int(options.get("discovery_recent_days", 7))
+        self.recent_days = self.settings.collector.frontier_days
         self.logger = get_logger("workflows.tasks.recommend_papers")
+
+    collection_brief = collection_steps.collection_brief
+    collect = collection_steps.collect
+    prepare_pool_display = collection_steps.prepare_pool_display
+    save_directions = collection_steps.save_directions
+    collect_research = newspaper_tasks.collect_research
+    daily_newspaper = newspaper_tasks.daily_newspaper
 
     @DBOS.workflow(name="ResearchWorkflows.recommendations")
     @trace_call("workflow", "recommend_papers")
-    async def recommend_papers(self, day: str) -> RecommendationRun:
+    async def recommend_papers(self, day: str, supplied_discovery: DiscoveryResult | None = None) -> RecommendationRun:
         """Run one day's bounded recommendations with resumable provider calls.
 
         Args:
@@ -92,7 +101,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         interests = [] if self.demo else self.read_preferences()
         discovery_error = None
         try:
-            discovery = await self.discover(interests, day)
+            discovery = supplied_discovery if supplied_discovery is not None else await self.discover(interests, day)
         except Exception as error:
             report.source_failures["discovery"] = f"{type(error).__name__}: {error}"
             if getattr(error, "process", None) is not None:
@@ -102,6 +111,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             discovery_error = error
             discovery = DiscoveryResult(candidates=[], notes=["Search failed; selecting from the existing discovery cache"])
             self.logger.warning("Search unavailable; trying the accumulated Discovery Pool.")
+        report.source_failures.update(discovery.source_failures)
         report.discovery = discovery
         entries = [] if self.demo else self.refresh_pool(discovery.candidates, day)
         report.pool_count = len(entries)
@@ -298,8 +308,9 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             if identity in known:
                 ordered.append(known.pop(identity))
         ordered.extend(known.values())
-        counts = self.index.recommendation_counts()
-        balanced = exploration_order(ordered, counts, self.settings.exploration, day)
+        counts = self.index.coverage_counts(day, self.settings.coverage_days)
+        cells = coverage_table(self.settings.exploration, self.settings.ages, counts, self.settings.selected_count)
+        balanced = balanced_order(ordered, cells, day)
         self.logger.info("Pool shortlist prepared: available=%d reading_budget=%d selected_limit=%d.",
                          len(candidates), self.settings.reading_budget, self.settings.selected_count)
         return balanced[:self.settings.reading_budget]
@@ -343,7 +354,14 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             candidate.title, candidate.demo,
             extra={"details": {'candidate': candidate.id}},
         )
-        evidence = await self.services.evidence.read(candidate)
+        forum = getattr(candidate, "openreview_forum", "")
+        if not forum and "openreview.net/forum?" in candidate.url:
+            from urllib.parse import urlsplit, parse_qs
+            forum = parse_qs(urlsplit(candidate.url).query).get("id", [""])[0]
+        if forum and not candidate.demo:
+            evidence = await self.services.openreview.read(forum)
+        else:
+            evidence = await self.services.evidence.read(candidate)
         self.logger.info(
             'Evidence read: title=%r primary=%s full_text=%s characters=%d retrieval_failure=%s.',
             candidate.title, evidence.primary_source,
@@ -444,6 +462,8 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             raise
         self.index.save(f"recommendation:{identity}", key, DBOS.workflow_id, url, "Published")
         self.index.record_recommendation(identity, recommendation.candidate.breadth, day)
+        self.index.record_coverage(identity, recommendation.candidate.breadth,
+                                   recommendation.candidate.published_date, day)
         self.logger.info(
             'Recommendation publication verified.',
             extra={"details": {'candidate': recommendation.candidate.id, 'url': url}},

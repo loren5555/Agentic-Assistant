@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import argparse
+from uuid import UUID
 
 JOB_HELP = {
     "propose-tasks": {
@@ -119,6 +120,9 @@ Example:
   Discovery Pool retains broad recent finds; the selected Research Feed edition
   defaults to five items. Optional likes personalize future editions automatically.
   Only an explicit Follow Up request enters process-signals and the proposal path.
+  Normal runs select deep mode on runtime.recommendations.collector.deep_weekday
+  (Monday=0, Sunday=6), otherwise light. Deep runs reuse a weekly Collector result.
+  The daily edition is shared by both modes. No seven-day global discovery cutoff.
   Same-day retries reuse their durable report; changing setup topics starts a new edition.
 
 Examples:
@@ -126,6 +130,29 @@ Examples:
   python -m assistant run process-signals""",
     },
 }
+
+
+for mode in ("deep", "light"):
+    JOB_HELP[f"recommend-papers-{mode}"] = {
+        "help": f"Collect research in {mode} mode, then publish today's edition.",
+        "description": (
+            "Deep: weekly Codex acquisition with web/OpenReview tools and reusable queries.\n"
+            "Light: local OpenReview queries using weekly directions and coverage gaps.\n"
+            "Both modes await acquisition before the same quality-gated daily edition."
+        ),
+        "epilog": """Cadence and durability:
+  Deep collection is checkpointed once per ISO week; light collection once per day.
+  Both modes share the daily edition identity. Repeated submissions reuse progress.
+  Distribution targets combine breadth and paper age over the last 90 days.
+  Source failures are reported; existing Pool candidates remain eligible.
+  Local collection calls no model; subsequent non-OpenReview reading may still use Codex.
+
+Examples:
+  python -m assistant run recommend-papers-deep
+  python -m assistant run recommend-papers-light
+
+Start serve with the same configuration before submitting a job.""",
+    }
 
 
 def arguments() -> argparse.Namespace:
@@ -154,9 +181,10 @@ def arguments() -> argparse.Namespace:
   (default: data/assistant/v2; v0.1 databases remain untouched).
 
 Runtime behaviour:
-  Commands using the same runtime directory require exclusive access: stop serve
-  before running another command. Launching DBOS can recover previously unfinished
-  work, including during status or setup. Help exits before launching the runtime.
+  Start serve in one terminal; run/status/resume contact its loopback HTTP service.
+  Only serve launches DBOS and recovers unfinished work. Accepted jobs continue
+  after a client disconnects. Stop serve before setup, which initializes schema
+  without launching DBOS. Help and client commands never start an executor.
 
 Logging:
   Log levels select which records are emitted; -v does not change those levels.
@@ -165,11 +193,11 @@ Logging:
   JSON business results on stdout are unchanged.
 
 Examples:
+  python -m assistant serve
   python -m assistant run propose-tasks
   python -m assistant run process-workbench -v
   python -m assistant run organize-papers --help
   python -m assistant --config config.local.yaml run process-workbench
-  python -m assistant serve
 
 The agentic-assistant console command accepts the same arguments.
 Use COMMAND --help or run JOB --help for detailed behaviour and examples.""",
@@ -186,17 +214,20 @@ Use COMMAND --help or run JOB --help for detailed behaviour and examples.""",
 
     # Job subcommands retain existing invocation syntax while exposing their own help.
     run = commands.add_parser(
-        "run", help="Run one named job once, print its result, and exit.",
+        "run", help="Submit one job to serve and wait for its result, or detach.",
         formatter_class=formatter, parents=[verbose_options],
         description=(
-            "Run one named workflow pass without enabling recurring schedules.\n"
+            "Submit one named workflow pass to the running local service.\n"
             "The job may call models and update Notion; human approval boundaries remain."
         ),
         epilog="""Options and configuration:
   Select a job below; run JOB --help describes its sources, writes, and examples.
   --page PAGE_ID is available only for organize-papers and organize-articles.
   Configure providers, model settings, and batch limits in YAML, not as CLI overrides.
-  Previously unfinished workflows can also recover when DBOS starts.
+  Start serve with the same --config first. --detach returns a durable workflow ID.
+  Ctrl+C stops client waiting; accepted work keeps running in serve.
+  Retry an uncertain submission using the printed --request-id; this reuses the
+  original request. A new request ID creates a new dispatch.
 
 Examples:
   python -m assistant run propose-tasks
@@ -206,10 +237,17 @@ Examples:
 
 Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run.""",
     )
+    submission_options = argparse.ArgumentParser(add_help=False)
+    submission_options.add_argument("--detach", action="store_true", default=argparse.SUPPRESS,
+                                    help="Return the workflow ID after durable submission; do not wait.")
+    submission_options.add_argument("--request-id", type=UUID, metavar="UUID", default=argparse.SUPPRESS,
+                                    help="Reuse the printed request UUID to retry submission without duplicating work.")
+    run.add_argument("--detach", action="store_true", help="Submit and return the workflow ID without waiting.")
+    run.add_argument("--request-id", type=UUID, metavar="UUID", help="Reuse a prior request UUID for safe resubmission.")
     run.set_defaults(page=None)
     jobs = run.add_subparsers(dest="job", required=True, title="jobs", metavar="JOB")
     for name, documentation in JOB_HELP.items():
-        job = jobs.add_parser(name, formatter_class=formatter, parents=[verbose_options], **documentation)
+        job = jobs.add_parser(name, formatter_class=formatter, parents=[verbose_options, submission_options], **documentation)
         if name in {"organize-papers", "organize-articles"}:
             job.add_argument(
                 "--page", metavar="PAGE_ID",
@@ -220,11 +258,11 @@ Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run
             )
 
     commands.add_parser(
-        "serve", help="Stay running and dispatch schedules explicitly enabled in YAML.",
+        "serve", help="Serve local task requests, execute queues, and trigger configured schedules.",
         formatter_class=formatter, parents=[verbose_options],
         description=(
-            "Start the persistent DBOS scheduler and keep this process running.\n"
-            "Dispatch only jobs listed in runtime.schedules; each execution uses the\n"
+            "Start the local HTTP service and the sole DBOS executor.\n"
+            "Accept manual jobs and trigger jobs listed in runtime.schedules using the\n"
             "same workflows and human-review boundaries as a manual run."
         ),
         epilog="""Schedule configuration:
@@ -232,56 +270,62 @@ Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run
     schedules:
       propose-tasks: "0 0 7 * * *"
       process-workbench: "0 */15 * * * *"
+      recommend-papers-deep: "0 0 7 * * 0"
+      recommend-papers-light: "0 0 7 * * 1-6"
 
   Use six cron fields: second minute hour day-of-month month day-of-week.
   Timezone: Asia/Shanghai. The example proposes tasks at 07:00 and processes reviews every
-  15 minutes. With schedules: {} (default), the process waits without new jobs.
+  15 minutes. With schedules: {} (default), the service still accepts manual jobs.
   Available jobs: propose-tasks, process-workbench, organize-papers,
-  organize-articles, process-signals, reconcile-feedback, recommend-papers.
+  organize-articles, process-signals, reconcile-feedback, recommend-papers,
+  recommend-papers-deep, recommend-papers-light.
 
 Persistence and shutdown:
   Schedules persist in DBOS. This command updates configured schedules and pauses
   assistant-* schedules removed from YAML. Missed offline runs are not backfilled.
   Already-started unfinished workflows may recover on launch.
   Press Ctrl+C to stop; shutdown allows active workflows up to 10 seconds to finish.
-  Do not run a second command against the same runtime directory while serving.
+  run/status/resume work concurrently as HTTP clients. Only one serve may own a
+  runtime directory. Stop it before setup. HTTP listens on 127.0.0.1:8765 by default;
+  change runtime.service.port in the YAML used by both service and clients.
 
 Examples:
   python -m assistant serve
   python -m assistant --config config.local.yaml serve
 
-Use run JOB to debug a single pass before enabling a schedule.""",
+Start serve under your IDE debugger, then submit run JOB from another terminal.""",
     )
-    commands.add_parser(
-        "status", help="Print saved schedules and the 20 most recent workflow statuses.",
+    status = commands.add_parser(
+        "status", help="Query the service, or inspect a workflow and its saved result.",
         formatter_class=formatter, parents=[verbose_options],
         description=(
-            "Print JSON containing persisted schedules and the 20 most recent workflows.\n"
-            "Workflow entries include id, status, and name; inputs and outputs are not loaded."
+            "Query the running local service without launching DBOS or recovering work.\n"
+            "Without an ID, print schedules and recent workflows. With an ID, print saved\n"
+            "execution metadata and steps; --result retrieves the saved business report."
         ),
-        epilog="""Runtime behaviour:
-  Read the database selected by runtime.directory in the active YAML configuration.
-  This is not an offline database viewer: DBOS starts first and may recover
-  previously unfinished work, including operations that write to Notion.
-  The same exclusive runtime lock applies; stop serve before using this command.
-
-Examples:
+        epilog="""Examples:
   python -m assistant status
-  python -m assistant --config config.local.yaml status
+  python -m assistant status --limit 50
+  python -m assistant status WORKFLOW_ID
+  python -m assistant status WORKFLOW_ID --result
 
-Use a workflow id from this output with resume WORKFLOW_ID after fixing its error.""",
+Use the same --config as serve. The service must be running.
+Inspecting status never submits or resumes a business task.""",
     )
+    status.add_argument("workflow_id", nargs="?", metavar="WORKFLOW_ID", help="Inspect one saved workflow.")
+    status.add_argument("--result", action="store_true", help="Return the saved result/error for WORKFLOW_ID.")
+    status.add_argument("--limit", type=int, default=20, metavar="N", help="Recent workflow count, 1-200 (default: 20).")
     resume = commands.add_parser(
         "resume", help="Recover an existing workflow using its saved checkpoints.",
         formatter_class=formatter, parents=[verbose_options],
         description=(
-            "Recover the selected workflow rather than starting a new business task.\n"
+            "Ask the running service to recover an existing workflow.\n"
             "For ERROR workflows, rewind from the failed step and retain earlier successful\n"
             "checkpoints; recover failed child workflows first when recorded. Other states\n"
-            "use DBOS resume. Completed workflows are not forced to run again."
+            "use DBOS resume. Active/completed workflows are watched without restarting."
         ),
         epilog="""Requirements and effects:
-  Use the original runtime.directory and compatible provider configuration.
+  Start serve with the original runtime.directory and compatible provider configuration.
   Find the workflow ID with status, inspect the error, and correct its cause first.
   Retried operations may call a model or write Notion. Cached successful steps
   are reused, but operations interrupted before checkpoint commit may repeat.
@@ -295,6 +339,8 @@ Examples:
 
 Use run process-workbench for newly recorded human decisions, not resume.""",
     )
+    resume.add_argument("--detach", action="store_true", help="Return a recovery receipt without waiting.")
+    resume.add_argument("--request-id", type=UUID, metavar="UUID", help="Retry the same recovery submission UUID.")
     resume.add_argument(
         "workflow_id", metavar="WORKFLOW_ID",
         help="Exact existing workflow ID from status, in the configured DBOS database.",
@@ -325,7 +371,7 @@ Scope and prerequisites:
   Papers / Research Feed: add Follow Up for explicit task requests.
   Optional --recommendation-topic values initialize the automatic newspaper.
   Existing properties and rows are preserved; no model job is requested.
-  DBOS still starts and can recover previously unfinished workflows.
+  Stop serve before setup. Setup does not start DBOS or recover workflow tasks.
 
 Examples:
   python -m assistant setup
@@ -337,4 +383,6 @@ Run once on a new workspace or after required schema changes, not before every j
     setup.add_argument("--recommendation-topic", dest="recommendation_topics", action="append", metavar="TOPIC",
                        help="Choose an initial newspaper topic; repeat for multiple topics. Saved locally, without a proposal.")
     options = parser.parse_args()
+    if options.command == "status" and options.result and not options.workflow_id:
+        parser.error("status --result requires WORKFLOW_ID")
     return options

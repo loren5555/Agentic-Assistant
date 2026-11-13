@@ -13,20 +13,26 @@ source = { editable = "." }
 dependencies = [
     { name = "dbos" },
     { name = "httpx", extra = ["socks"] },
+    { name = "mcp" },
     { name = "notion-client" },
     { name = "pydantic-ai" },
     { name = "pydantic-ai-harness" },
     { name = "pyyaml" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "dbos", specifier = ">=3.2.0" },
     { name = "httpx", extras = ["socks"], specifier = ">=0.28.1" },
+    { name = "mcp", specifier = ">=2.2.0,<3" },
     { name = "notion-client", specifier = ">=3.1.0" },
     { name = "pydantic-ai", specifier = ">=2.51.0" },
     { name = "pydantic-ai-harness", specifier = ">=0.36.0" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "starlette", specifier = ">=1.7.0" },
+    { name = "uvicorn", specifier = ">=0.54.0" },
 ]
 
 [[package]]

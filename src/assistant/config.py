@@ -3,7 +3,7 @@
 from importlib.resources import files
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from yaml import safe_load
 
 
@@ -47,6 +47,18 @@ class ProviderSettings(BaseModel):
     planner: str = "local"
 
 
+class CollectorSettings(BaseModel):
+    """Bound weekly exploration and daily source collection costs."""
+
+    deep_provider: str = "codex"
+    light_provider: str = "local"
+    deep_weekday: int = Field(default=6, ge=0, le=6)
+    max_queries: int = Field(default=6, ge=1, le=20)
+    max_candidates: int = Field(default=40, ge=1, le=100)
+    context_pool_size: int = Field(default=30, ge=1, le=100)
+    frontier_days: int = Field(default=90, ge=1)
+
+
 class RecommendationSettings(BaseModel):
     """Configure newspaper topics, cache size and exploratory editorial coverage.
 
@@ -65,6 +77,33 @@ class RecommendationSettings(BaseModel):
     exploration: dict[str, float] = Field(default_factory=lambda: {
         "Core": .4, "Broader": .3, "Neighboring": .2, "Cross-disciplinary": .1,
     })
+    ages: dict[str, float] = Field(default_factory=lambda: {
+        "week": .05, "month": .15, "quarter": .20, "half_year": .15,
+        "year": .15, "three_years": .15, "older": .15,
+    })
+    coverage_days: int = Field(default=90, ge=1)
+    collector: CollectorSettings = Field(default_factory=CollectorSettings)
+
+    @model_validator(mode="after")
+    def validate_distribution(self):
+        """Require recognizable, nonnegative weights with a positive total."""
+        from assistant.components.recommendations.discovery.models import BREADTHS
+        from assistant.components.recommendations.collector.policy import AGES
+        for weights, names in ((self.exploration, BREADTHS), (self.ages, AGES)):
+            if set(weights) != set(names) or any(v < 0 for v in weights.values()) or sum(weights.values()) <= 0:
+                raise ValueError(f"Distribution must contain nonnegative weights for {names}, with a positive total")
+        return self
+
+
+class ServiceSettings(BaseModel):
+    """Configure the single-host execution service and its CLI clients.
+
+    Attributes:
+        port: Loopback HTTP port shared by serve and CLI requests.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    port: int = Field(default=8765, ge=1024, le=65535)
 
 
 class RuntimeSettings(BaseModel):
@@ -76,6 +115,7 @@ class RuntimeSettings(BaseModel):
         schedules: Enabled job names and cron expressions; empty means manual only.
         recommendations: Initial newspaper topics, pool size and exploratory mix.
         recommendation_maxima: Optional per-category caps, never output quotas.
+        service: Local HTTP service endpoint used by serve and CLI clients.
     """
 
     directory: str = "data/assistant"
@@ -83,6 +123,7 @@ class RuntimeSettings(BaseModel):
     schedules: dict[str, str] = {}
     recommendations: RecommendationSettings = Field(default_factory=RecommendationSettings)
     recommendation_maxima: dict[str, int] = Field(default_factory=dict)
+    service: ServiceSettings = Field(default_factory=ServiceSettings)
 
 
 class AssistantConfig(BaseModel):

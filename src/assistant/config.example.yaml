@@ -21,7 +21,11 @@ providers:
 runtime:
   directory: data/assistant
   batch_size: 20
-  schedules: {}
+  service:
+    port: 8765  # Loopback only; use the same port for serve and CLI clients.
+  schedules:
+    recommend-papers-deep: "0 0 7 * * 0"  # Sunday 07:00, Asia/Shanghai.
+    recommend-papers-light: "0 0 7 * * 1-6"  # Other six days; same daily edition.
   recommendations:
     topics:
     - Reinforcement learning
@@ -30,6 +34,23 @@ runtime:
     pool_size: 100
     selected_count: 5
     reading_budget: 15
+    coverage_days: 90
+    ages:
+      week: 0.05
+      month: 0.15
+      quarter: 0.20
+      half_year: 0.15
+      year: 0.15
+      three_years: 0.15
+      older: 0.15
+    collector:
+      deep_provider: codex
+      light_provider: local
+      deep_weekday: 6
+      max_queries: 6
+      max_candidates: 40
+      context_pool_size: 30
+      frontier_days: 90
     exploration:
       Core: 0.4
       Broader: 0.3
@@ -94,3 +115,15 @@ notion:
   papers_data_source_id: <<notion-papers-data-source-id>>
   research_interests_data_source_id: <<notion-research-interests-data-source-id>>
   research_feed_data_source_id: <<notion-research-feed-data-source-id>>
+
+# API v2 public papers/discussions only. Configure credentials in the host environment
+# if public queries require login; API account access does not broaden collection scope.
+openreview:
+  venues: []  # Optional exact venue IDs; empty allows all public matching venues.
+  page_size: 50
+  max_pages: 3
+  max_discussions: 40
+  timeout_seconds: 30
+  interval_seconds: 1
+  username_env: OPENREVIEW_USERNAME
+  password_env: OPENREVIEW_PASSWORD

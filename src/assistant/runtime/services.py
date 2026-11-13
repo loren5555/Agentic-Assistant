@@ -172,6 +172,20 @@ class Services:
 
     # Autonomous newspaper capabilities.
 
+    def collector(self, mode: str):
+        """Select the weekly agent or lightweight daily source-tool implementation."""
+        policy = self.config.runtime.recommendations.collector
+        name = policy.deep_provider if mode == "deep" else policy.light_provider
+        plugin = get_plugin("recommendations.collector", name)
+        return plugin.Collector(self.config.provider_options.get(name, {}),
+                                self.config.provider_options.get("openreview", {}))
+
+    @cached_property
+    def openreview(self):
+        """Retrieve separately attributed public discussions without a model call."""
+        from plugins.recommendations.sources.openreview import OpenReviewSource
+        return OpenReviewSource(self.config.provider_options.get("openreview", {}))
+
     @cached_property
     def discovery(self) -> DiscoveryProtocol:
         """Provide date-aware public candidate search or explicit offline fixtures."""

@@ -24,6 +24,10 @@ def candidate_identity(candidate: PaperCandidate) -> str:
         return f"doi:{doi}"
     if candidate.demo or parts.scheme not in {"http", "https"}:
         return candidate.id
+    if parts.hostname in {"openreview.net", "www.openreview.net"}:
+        forum = dict(parse_qsl(parts.query)).get("id")
+        if forum:
+            return f"openreview:{forum}"
     if parts.hostname in {"arxiv.org", "www.arxiv.org", "export.arxiv.org"}:
         identifier = re.sub(r"^/(abs|pdf|html)/", "", parts.path).removesuffix(".pdf")
         identifier = re.sub(r"v\d+$", "", identifier)

@@ -12,8 +12,8 @@ The pre-refactor implementation is preserved at Git tag **v0.1** (commit `ce8669
 Current runtime files live under **`runtime.directory/v2/`**. With the default configuration,
 this is `data/assistant/v2/`. The v0.1 databases under `data/assistant/` are not migrated,
 deleted or replayed. This also means old Workbench rows are not silently adopted by the
-new workflow index. The runtime lock remains in the configured parent directory to
-prevent two processes from writing the same Notion workspace concurrently.
+new workflow index. The runtime lock remains in the configured parent directory. One serve process
+owns DBOS execution; CLI clients can submit and inspect tasks concurrently.
 
 Setup adds unchecked source-consumption flags. Existing Notero entries are not
 automatically imported from v0.1's local handled index: mark Agent Processed for old
@@ -83,8 +83,8 @@ to the relevant databases.
 
 The provider selections are capability-based. Assistant code uses protocols; plugins
 implement them. `local` reasoning uses PydanticAI. Codex router/investigator plugins
-remain optional alternatives. Discovery/evidence currently have an offline demo,
-not a connected AMiner integration.
+remain optional alternatives. Acquisition uses a weekly Codex Collector and a daily local OpenReview Collector.
+The offline demo remains available; AMiner is not connected.
 
 Prepare the assistant-owned schema explicitly:
 
@@ -93,10 +93,18 @@ uv run python -m assistant setup
 ```
 
 Setup adds required fields/options but does not delete databases, process inputs,
-approve proposals or execute jobs. Like other runtime commands, it launches the
-configured DBOS runtime; previously started v2 work can recover.
+approve proposals or execute jobs. Stop serve before setup. Setup does not launch
+DBOS or recover tasks; it holds the runtime lock only while initializing schema.
 
 ## Commands and daily use
+
+Start the executor in one terminal (or under your IDE debugger):
+
+```bash
+uv run python -m assistant serve
+```
+
+Keep it running. Submit jobs from another terminal using the same `--config`:
 
 ```bash
 uv run python -m assistant run propose-tasks
@@ -262,117 +270,32 @@ columns were removed from the live Papers library in the earlier cleanup.
 The current system assumes published output databases are not independently deleted
 or moved. It does not automatically reconcile missing output pages.
 
-## Research newspaper: discoveries and selected recommendations
+## Research newspaper: coverage-driven collection and selected recommendations
 
-Recommendations operate independently of Workbench. **Discovery Pool** is the broad,
-browsable cache of recent papers, findings, methods, tools and datasets. **Research
-Feed** is the smaller selected edition, normally five items and configurable up to ten.
-Search results are merged into the pool before ranking; selected candidates receive
-source reading and evidence assessment before Feed publication. The underlying
-databases live under Assistant. Human-facing linked views, including Selected — Today
-and Discovery Pool — Recent, belong on Dash board, the display entry point. The dashboard has one full-width research-newspaper section below the operational
-columns: a selected gallery followed by the discovery table. Formal Research Interests
-remain a navigation entry. Recommendation UI changes reuse this existing section and
-its linked views. A search may return
-fewer items than requested; the cache accumulates discoveries across runs.
-
-Choose initial newspaper topics during setup. These preferences require no proposal
-approval and are independent of formal Research Interests:
+Collector plans acquisition from interests, current Pool stock and a rolling 90-day
+breadth-by-publication-age table. Weekly Codex exploration uses public web search and
+read-only OpenReview tools, saving concrete directions for six daily local API scans.
+Recommender reads shortlisted primary evidence and public reviews, then publishes only
+qualified selections directly to Research Feed. Optional likes personalize the newspaper;
+only explicit Follow Up requests enter the proposal/Workbench path.
 
 ```bash
-uv run python -m assistant setup \
-  --recommendation-topic "Reinforcement learning" \
-  --recommendation-topic "Multi-agent systems" \
-  --recommendation-topic "Decision making"
-uv run python -m assistant run recommend-papers
+# Start serve first, then submit from another terminal.
+uv run python -m assistant run recommend-papers-deep --detach
+uv run python -m assistant run recommend-papers-light --detach
+uv run python -m assistant status WORKFLOW_ID --result
 ```
 
-Setup stores chosen topics in `data/assistant/v2/recommendation-topics.json`. Repeating
-the topic options replaces that selection; omitting them preserves it. Alternatively,
-configure initial topics in YAML; the setup selection takes precedence when present:
+Sunday 07:00 deep and Monday-Saturday 07:00 light schedules collect before selecting
+one shared daily edition. Successful collection is reused within its ISO week/day.
+Quality remains a gate; the default five-item edition is a maximum, not a quota.
+Discovery Pool remains a Chinese quick-skim cache; selected Feed reports stay English.
+Public reviews preserve reviewer/author roles, raw scales, reply links and limitations.
 
-```yaml
-runtime:
-  recommendations:
-    topics: [Reinforcement learning, Decision making, Multi-agent systems]
-    pool_size: 100
-    selected_count: 5
-    reading_budget: 15
-    exploration:
-      Core: 0.4
-      Broader: 0.3
-      Neighboring: 0.2
-      Cross-disciplinary: 0.1
-providers:
-  discovery_pool: notion
-  discovery: codex
-  evidence: codex
-  recommender: local
-codex:
-  discovery_max_candidates: 60
-  discovery_recent_days: 7
-  discovery_timeout_seconds: 600
-notion:
-  assistant_page_id: <<assistant-page-id>>
-  discovery_pool_data_source_id: <<pool-data-source-id>>
-```
-
-Setup can create a missing Discovery Pool under the configured Assistant page. The
-existing Codex CLI subscription login supplies live web search; no additional search
-API or MCP service is needed. Search/reading models and effort are independently
-configurable under `codex`; local assessment uses `local.recommendation_model`.
-
-**Discovery Pool:** `Kind`, `Breadth`, `Summary`, `Topics`, source URL and dates describe
-lightweight finds. `State = Selected` records Feed publication. `Feedback = Interested`
-strengthens future discovery around the item's topics; `Not Interested` excludes that
-item from selection. Unmarked entries are neutral. Preference signals are read afresh
-without creating Workbench tasks or modifying formal research directions. Interested
-Papers and liked Feed entries also contribute context. Initial topics preserve broad
-coverage while specific positive feedback gains higher preference weight and refines
-discovery automatically. There is no approval or mandatory feedback step.
-
-The visible cache targets 100 recent items. Refresh preserves feedback and selection,
-merges canonical source identities and archives excess old unmarked cache records.
-Explicitly marked records are retained, so the total can exceed the cache target.
-Selected reports remain available in Research Feed even after an old pool row retires.
-
-**Languages and screening:** Discovery Pool uses Chinese display titles, summaries,
-topics and possible connections for a quick skim. Original titles and source links
-remain intact. Research Feed reports stay in English. Venue and Quality Notes expose
-publication context, substantive novelty and unresolved credibility checks.
-
-Discovery, ranking and reading favor verified CCF A venues, explicitly sourced
-first-quartile journal rankings, and authors with a relevant, evidenced track record.
-Rankings retain their system, year and category; unknown information stays unverified.
-Venue and author reputation are useful priors, not proof of individual claims. Novel
-work from other venues or preprints remains eligible, as do foundational contributions
-from neighboring disciplines. Large benchmark gains without meaningful novelty or
-transparent evaluation do not earn selection by themselves. Reviews distinguish author
-claims, fair-baseline/compute/data checks, reproducibility, uncertainty and actual evidence.
-
-**Selected edition:** metadata ranking precedes expensive reading. Confirmed publication
-history balances core, broader-field, neighboring and cross-disciplinary coverage over
-time, rather than forcing integer quotas into every small issue. Random tie-breaking
-is stable for an edition. Exploratory recommendations explain a concrete possible
-connection and distinguish it from established source claims. Reading scope, original
-short excerpts, generated synopsis and inference are labeled separately. Partial
-reading cannot qualify as Mainline Deep Read. Unsupported candidates are omitted;
-fewer than five recommendations, including zero, is valid.
-
-**Reading preference versus task request:** marking Interested personalizes the feed.
-To request further work, check **Follow Up** on a Paper or Research Feed entry and run
-`process-signals`. The checkbox clears after proposal publication; checking it again starts a new source
-version. That explicit request enters the ordinary proposal/approval flow;
-ideas can also be saved directly through the normal user inputs. Daily reading itself
-requires no response or review.
-
-If live discovery fails, the existing pool can still supply the edition; an empty
-pool plus a failed search remains an error that can be retried. Search, pool refresh,
-ranking, reading, assessment and publication have separate DBOS
-checkpoints. Same-day retries reuse the edition; changing configured/setup topics uses
-a different edition identity. Existing pre-pool empty reports are not reused. Detailed
-search/reading events and usage remain in local recommendation reports. Explicit demo
-mode (`discovery: demo`, `evidence: demo`) uses no live preferences, cache or publication.
+See [collection policy, OpenReview account setup and costs](docs/research-collection.md),
+the [newspaper sequence diagram](docs/newspaper-sequence.md), and editable
+[information-flow.drawio](information-flow.drawio). Collector cadence does not cap the
+separate configured model costs of ranking, assessment or non-OpenReview evidence reading.
 
 ## Schedules, inspection and recovery
 
@@ -385,7 +308,8 @@ runtime:
     organize-articles: "0 15 7 * * *"
     process-signals: "0 30 7 * * *"
     process-workbench: "0 */15 * * * *"
-    recommend-papers: "0 0 8 * * *"
+    recommend-papers-deep: "0 0 7 * * 0"
+    recommend-papers-light: "0 0 7 * * 1-6"
 ```
 
 ```bash
@@ -396,11 +320,18 @@ uv run python -m assistant resume WORKFLOW_ID
 
 Cron has six fields (seconds through weekday), in Asia/Shanghai time. Enabled schedules
 persist in DBOS. Serve pauses assistant-owned schedules removed from configuration.
-Manual commands do not dispatch recurring schedules, but launch can recover unfinished
-work. Run one process per configured runtime; the lock prevents overlapping launches.
+Only serve launches DBOS and recovers compatible unfinished work. Manual jobs and
+scheduled dispatch use the same serial business queue; schedule callbacks have a
+separate trigger queue. run/status/resume are HTTP clients and work while serve is
+running. Setup remains exclusive and requires stopping serve first.
 
-Daily recommendation identities include the day and newspaper policy/topic selection. Repeated same-day runs reuse the
-saved result; use resume for failed work, not a new model run with another arbitrary ID.
+See [Local service operation](docs/local-service.md) and the
+[service sequence diagrams](docs/service-sequences.md). The business information-flow
+Drawio remains a separate view of source/component/output responsibilities.
+
+Collection identities use the ISO week or day. Daily edition identities include the
+day and editorial policy/topic selection, and are shared across deep/light triggers.
+Use resume for failed work after correcting its cause.
 
 ## Logs and testing
 
@@ -428,7 +359,7 @@ still own ordering, approvals and DBOS checkpoints.
 
 ```text
 src/assistant/
-  commands/                    run, serve, setup, status, resume
+  commands/                    serve/setup owners; run/status/resume HTTP clients
   workflows/tasks/             named business jobs matching run JOB
   workflows/steps/             shared intake and proposal checkpoints
   components/
@@ -444,6 +375,7 @@ src/assistant/
       task_worker/             approved execution and typed task results
       briefer/                 evidence-aware reading material and briefs
     recommendations/
+      collector/               acquisition briefs, saved directions and breadth-by-age policy
       discovery/               source candidates, quality provenance and identity
       evidence_reader/         accessible primary material and reading scope
       recommender/             rankings, assessments and edition reports
@@ -456,6 +388,12 @@ src/assistant/
   runtime/
     services.py                lazy role-to-provider wiring
     serialization.py           read historical model paths at the DBOS boundary
+    service/
+      server.py                loopback API and state/result/step queries
+      client.py                CLI submission and result polling
+      submissions.py           shared durable dispatch and recovery requests
+      models.py                request contract and runtime identity
+      presentation.py          saved business report formatting
     application.py             compose durable workflow instances
     recovery.py                existing recovery/version rules
     index.py                   local business mappings and editorial counts
@@ -464,7 +402,7 @@ src/plugins/
   execution/                   matching capability, then provider
     direction_proposer/        TaskWorker specialization using its shared contract
     tools/                     registered atomic tool implementations
-  recommendations/             discovery, evidence_reader and recommender providers
+  recommendations/             collector, public source tools, evidence_reader and recommender providers
     _shared/                   editorial policy shared within the newspaper
   data/                        sources, workbench, pool, Feed and publication providers
     publisher/notion/          accepted artifact and reading-brief writers

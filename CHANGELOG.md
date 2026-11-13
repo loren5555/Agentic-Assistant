@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Added a coverage-driven Collector ahead of newspaper editing: weekly Codex public
+  web/OpenReview exploration, six local API refresh days, and reusable search directions.
+- Added OpenReview API v2 search/public discussion tools and an isolated read-only MCP
+  server for the Codex Collector. Reviews, author responses, raw scores and decisions
+  retain attribution; API abstract access never claims full-paper reading.
+- Added rolling 90-day breadth-by-age targets, confirmed-publication age snapshots,
+  weekly/daily acquisition checkpoints and one shared daily edition across both modes.
+- Added deep/light job help, Shanghai cron schedules, source-failure reporting, Feed
+  discussion summaries and updated business/service/newspaper diagrams. No Notion
+  schema additions or existing-state deletion is required.
+
+- Serve now owns the local DBOS executor and loopback HTTP API. Run, status and
+  resume are clients; they can operate concurrently without starting another runtime.
+- Manual and scheduled jobs share a serial durable queue. Schedule callbacks and
+  recovery requests have separate queues to avoid waiting on their own execution slot.
+- Added detached submissions, idempotent request UUIDs, workflow/step/result queries,
+  and explicit wrong-runtime/service-offline errors. Client disconnects leave accepted
+  work running. Setup initializes schema without launching DBOS.
+- Added service/recovery sequence diagrams and local operation instructions. No
+  runtime records are deleted or migrated; application-version checks remain enabled.
+
 - Reorganized component contracts and plugin implementations into coordination,
   execution, recommendations and data. Existing commands, configuration keys,
   workflow/action identities and business behavior are retained.

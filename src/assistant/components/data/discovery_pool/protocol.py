@@ -20,6 +20,10 @@ class DiscoveryPoolProtocol(Protocol):
         """Return explicit positive/negative signals without consuming them."""
         ...
 
+    def read_candidates(self) -> list[DiscoveryEntry]:
+        """Read available cached candidates before planning source acquisition."""
+        ...
+
     def mark_selected(self, entry: DiscoveryEntry) -> None:
         """Record successful Feed selection without changing feedback."""
         ...

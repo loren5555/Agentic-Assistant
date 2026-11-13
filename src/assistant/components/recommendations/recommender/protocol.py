@@ -11,11 +11,15 @@ Responsibility:
 from typing import Protocol
 from assistant.components.recommendations.discovery.models import PaperCandidate, ResearchInterest
 from assistant.components.recommendations.evidence_reader.models import PaperEvidence
-from assistant.components.recommendations.recommender.models import RecommendationAssessment
+from assistant.components.recommendations.recommender.models import RecommendationAssessment, PoolTranslations
 
 
 class RecommenderProtocol(Protocol):
     """Assess evidence without publishing or modifying interests."""
+
+    async def translate_pool(self, candidates: list[PaperCandidate]) -> PoolTranslations:
+        """Prepare Chinese display text while preserving original bibliographic data."""
+        ...
 
     async def rank(self, candidates: list[PaperCandidate], interests: list[ResearchInterest]) -> list[str]:
         """Rank pool metadata before selective source reading."""

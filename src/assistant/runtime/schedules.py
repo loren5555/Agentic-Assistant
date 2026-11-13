@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from dbos import DBOS
 
 from logger import get_logger, trace_call
+from assistant.runtime.service.submissions import enqueue_job
 
 if TYPE_CHECKING:
     from assistant.runtime.application import Application
@@ -47,5 +48,6 @@ async def scheduled_job(scheduled_time: datetime, context: dict[str, str]):
     get_logger("main").info("Scheduled job triggered: job=%s scheduled_time=%s workflow=%s.",
                             context["job"], scheduled_time.isoformat(), DBOS.workflow_id)
     day = scheduled_time.astimezone(SHANGHAI).date().isoformat()
-    output = await _application.tasks.dispatch(context["job"], day)
+    handle = await enqueue_job(_application, context["job"], day)
+    output = await handle.get_result()
     return output

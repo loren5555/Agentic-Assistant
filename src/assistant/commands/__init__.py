@@ -1,42 +1,20 @@
-"""Translate user commands into task execution or runtime administration.
+"""Expose one user-facing module for each local service operation.
 
 Input origin:
-    The human CLI is parsed by assistant/cli.py; main.py loads YAML and creates
-    Application, whose execute() selects the matching command module. Application
-    supplies configured services and the selected local DBOS runtime.
-
+    assistant.cli parses options; main loads YAML and routes the selected command.
 Output destination:
-    run/serve hand work to the task dispatcher; resume targets existing DBOS work;
-    setup updates configured storage schemas; status reads DBOS administration
-    state. Result JSON goes to stdout and operational logs go to shared handlers.
-    Each business task owns its eventual Notion destinations.
-
-Responsibility:
-    Provide one module for each CLI command: setup, run, serve, status, and resume.
-    main.py parses arguments and Application prepares the runtime before calling
-    a command's run(application, options) entry point.
-
-Inputs:
-    Parsed CLI options, YAML settings, registered workflows, and lazy services
-    supplied by Application. Commands do not accept credentials through prompts.
-
-Outputs:
-    Run/resume print business results as JSON; status prints saved runtime state.
-    Setup reports schema initialization, while serve stays active until stopped.
-    Progress and failures use the shared logger rather than the JSON channel.
-
+    run/status/resume send loopback HTTP requests and print JSON. Serve owns the
+    DBOS queues, providers and execution logs. Setup adds configured Notion schema.
+Responsibilities:
+    serve starts the single executor and accepts clients. run submits one business
+    job and optionally waits. status reads saved state/steps/results. resume asks
+    for durable recovery. setup runs exclusively with serve stopped, without DBOS.
 Workflow relationship:
-    run.dispatch maps five user-facing job names to workflows/tasks. serve uses
-    runtime/schedules.py to call the same dispatcher. resume addresses an existing
-    workflow ID; setup/status administer storage and durability rather than
-    implementing a business task. Shared task operations live in workflows/steps.
-
-Participants:
-    Human operator, Application runtime, DBOS scheduler/recovery services, and
-    business tasks using their configured component implementations.
-
-Runtime effects:
-    Application launches DBOS before command dispatch, so unfinished work may be
-    recovered even during status/setup. CLI help exits before runtime launch.
-    Commands do not grant human approval or bypass workflow authorization checks.
+    Manual and scheduled requests enqueue workflows/tasks/dispatch.py under the
+    stable JobWorkflows.dispatch identity. Existing task/step modules continue to
+    own business ordering, human authorization and output destinations.
+Runtime boundary:
+    Only serve launches DBOS and automatic recovery. CLI observation never creates
+    an executor or opens the application database. All accepted work survives
+    caller disconnection through DBOS persistence.
 """

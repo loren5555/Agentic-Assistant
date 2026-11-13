@@ -142,6 +142,17 @@ class ResearchFeed:
             sections.append(f"## Substantive contribution\n\n{assessment.novelty}")
         if assessment.concerns:
             sections.append("## Uncertainties and concerns\n\n" + "\n".join(f"- {point}" for point in assessment.concerns))
+        if assessment.review_consensus:
+            sections.append("## Public review assessment\n\n" + assessment.review_consensus)
+        if assessment.author_response:
+            sections.append("## Author responses\n\n" + assessment.author_response)
+        if assessment.unresolved_review_issues:
+            sections.append("## Unresolved review issues\n\n" + "\n".join(f"- {point}" for point in assessment.unresolved_review_issues))
+        if evidence.discussions:
+            sections.append("## Public discussion sources\n\n" + "\n".join(
+                f"- {note.role}: {note.url}" for note in evidence.discussions))
+        if evidence.discussion_limitations:
+            sections.append("## Discussion access limits\n\n" + "\n".join(evidence.discussion_limitations))
         if evidence.quality.sources:
             sections.append("## Publication and author verification\n\n" + "\n".join(evidence.quality.sources))
         for heading, points in (

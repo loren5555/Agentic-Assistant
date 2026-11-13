@@ -1,0 +1,21 @@
+[Unit]
+Description=Agentic Assistant local DBOS execution service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust these two paths if the checkout lives elsewhere.
+WorkingDirectory=%h/workspace/Agentic-Assistant
+ExecStart=%h/workspace/Agentic-Assistant/.venv/bin/python -m assistant serve
+# Optional PATH/proxy settings for the same Codex CLI used in your terminal.
+EnvironmentFile=-%h/.config/agentic-assistant/service.env
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=40
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

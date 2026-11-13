@@ -3,6 +3,7 @@
 from pathlib import Path
 import sqlite3
 from contextlib import closing
+from datetime import date, timedelta
 
 
 class WorkIndex:
@@ -26,6 +27,25 @@ class WorkIndex:
                 "source_key TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, "
                 "workflow_id TEXT NOT NULL, page_id TEXT NOT NULL, status TEXT NOT NULL)"
             )
+            connection.execute("CREATE TABLE IF NOT EXISTS recommendation_coverage ("
+                               "identity TEXT PRIMARY KEY, breadth TEXT, age TEXT, day TEXT)")
+
+    def coverage_counts(self, day: str, days: int) -> dict[str, int]:
+        """Read rolling publication coverage using age at publication time."""
+        start = (date.fromisoformat(day) - timedelta(days=days-1)).isoformat()
+        with closing(sqlite3.connect(self.path)) as connection:
+            rows = connection.execute(
+                "SELECT breadth || ':' || age, COUNT(*) FROM recommendation_coverage "
+                "WHERE day BETWEEN ? AND ? AND age != 'unknown' GROUP BY breadth, age", (start, day),
+            ).fetchall()
+        return dict(rows)
+
+    def record_coverage(self, identity: str, breadth: str, published: str, day: str) -> None:
+        """Count confirmed publication once; keep its original age bucket stable."""
+        from assistant.components.recommendations.collector.policy import age_bucket
+        with closing(sqlite3.connect(self.path)) as connection, connection:
+            connection.execute("INSERT OR IGNORE INTO recommendation_coverage VALUES (?, ?, ?, ?)",
+                               (identity, breadth, age_bucket(published, day), day))
 
     def recommendation_counts(self) -> dict[str, int]:
         """Read actual editorial coverage used by long-term exploration targets."""

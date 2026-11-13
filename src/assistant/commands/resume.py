@@ -1,57 +1,28 @@
-"""Recover a named existing workflow instead of submitting a new business task.
+"""Request durable recovery from the service without becoming an executor.
 
-Input origin:
-    The operator supplies a workflow ID, usually copied from status. Application
-    selects the configured DBOS database, and recovery reads that workflow
-    history, inputs, and saved steps rather than drafting a new task request.
-
-Output destination:
-    The recovery handle supplies the original workflow result to display()/stdout.
-    Any unfinished business steps publish through their original plugins to the
-    same Notion destinations and save new DBOS progress, subject to authorization.
-
-Inputs:
-    An existing workflow ID from status and an Application with the corresponding
-    durable functions registered against the selected runtime database.
-
-Outputs:
-    The recovered workflow's actual result as JSON, or an exception explaining
-    why recovery or execution could not complete.
-
-Workflow relationship:
-    runtime/recovery.recover rewinds an ERROR workflow from its failed step,
-    retaining earlier successful checkpoints, or requests DBOS resumption for
-    interrupted work. Incomplete work from another application version is
-    rejected explicitly rather than migrated or silently left waiting.
-
-Participants and effects:
-    Human operator, recovery helper, DBOS, and the original task's plugins.
-    Unfinished steps may call models and write external records. This command
-    neither deletes old tasks nor replaces required human approval.
+Input origin: an existing workflow ID and the same configuration as serve.
+Output destination: a recovery receipt or the recovered business result on stdout.
+Responsibility: serve applies existing version checks and failed-step recovery;
+HTTP client lifetime does not control the accepted recovery operation.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
 import argparse
 
-from assistant.commands.run import display
-from assistant.runtime.recovery import recover
+from assistant.commands.run import display, display_completion
+from assistant.runtime.service.client import ServiceClient
+from assistant.runtime.service.models import RecoverySubmission
 from logger import get_logger, trace_call
-
-if TYPE_CHECKING:
-    from assistant.runtime.application import Application
 
 
 @trace_call("command", "resume")
-async def run(application: Application, options: argparse.Namespace) -> None:
-    """Recover the requested workflow and display its actual result.
-
-    Args:
-        application: Runtime with all durable functions registered.
-        options: Existing workflow ID and selected local configuration.
-    """
-    get_logger("commands.resume").info("Recovering workflow=%s.", options.workflow_id)
-    handle = await recover(options.workflow_id)
-    output = await handle.get_result()
-    display(output)
+async def run(settings, options: argparse.Namespace) -> None:
+    """Submit a recover request, or watch work that is already active/completed."""
+    submission = RecoverySubmission(request_id=options.request_id) if options.request_id else RecoverySubmission()
+    get_logger("commands.resume").info("Requesting recovery: workflow=%s request_id=%s.", options.workflow_id, submission.request_id)
+    async with ServiceClient(settings) as client:
+        receipt = await client.request("POST", f"/workflows/{options.workflow_id}/resume",
+                                       json=submission.model_dump(mode="json"))
+        if options.detach:
+            display(receipt)
+        else:
+            await display_completion(client, receipt["id"])
