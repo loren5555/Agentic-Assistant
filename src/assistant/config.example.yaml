@@ -127,3 +127,8 @@ openreview:
   interval_seconds: 1
   username_env: OPENREVIEW_USERNAME
   password_env: OPENREVIEW_PASSWORD
+
+# The local key enables rec5 and the reviewed literature route.
+aminer:
+  api_key: ""
+  timeout_seconds: 600  # Hosted deep research request timeout.

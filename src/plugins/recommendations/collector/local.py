@@ -14,6 +14,7 @@ from assistant.components.recommendations.collector.models import (
 from assistant.components.recommendations.collector.policy import age_bucket
 from assistant.components.recommendations.discovery.identity import candidate_identity
 from assistant.components.recommendations.discovery.models import DiscoveryResult
+from plugins.recommendations.sources.aminer import recommend
 from plugins.recommendations.sources.openreview import OpenReviewSource
 from logger import get_logger, trace_call
 
@@ -86,6 +87,8 @@ def merge_candidates(candidates):
             previous.discovery_sources = list(
                 dict.fromkeys(previous.discovery_sources + candidate.discovery_sources)
             )
+            previous.published_date = previous.published_date or candidate.published_date
+            previous.quality.sources = list(dict.fromkeys(previous.quality.sources + candidate.quality.sources))
             previous.openreview_forum = (
                 previous.openreview_forum or candidate.openreview_forum
             )
@@ -98,8 +101,9 @@ def merge_candidates(candidates):
 class Collector:
     """Execute bounded, coverage-aware source refreshes without Codex or local LLMs."""
 
-    def __init__(self, options, source_options) -> None:
+    def __init__(self, options, source_options, *, aminer_api_key="") -> None:
         """Bind public API tools independently of model settings."""
+        self.aminer_api_key = aminer_api_key
         self.source = OpenReviewSource(source_options)
         self.logger = get_logger("plugins.recommendations.collector.local")
 
@@ -113,7 +117,17 @@ class Collector:
             request.mode,
         )
         candidates, notes, failures = [], [], {}
-        for position, direction in enumerate(directions, 1):
+        if directions and self.aminer_api_key:
+            direction = directions[0]
+            try:
+                candidates.extend(await recommend(direction, request.max_candidates, api_key=self.aminer_api_key))
+            except Exception as error:
+                failures["aminer:rec5"] = f"{type(error).__name__}: {error}"
+                self.logger.warning("AMiner rec5 failed for topic %r: %s.", direction.query, error)
+            directions_to_search = directions[:request.max_queries - 1]
+        else:
+            directions_to_search = directions
+        for position, direction in enumerate(directions_to_search, 1):
             if len(candidates) >= request.max_candidates:
                 break
             try:

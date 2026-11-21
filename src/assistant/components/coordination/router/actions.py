@@ -6,6 +6,12 @@ This catalogue describes what each capability produces, not provider details.
 
 from assistant.components.coordination.router.models import ActionCandidate
 
+AMINER_RESEARCH = ActionCandidate(
+    id="investigate_literature",
+    name="学术文献调研 · AMiner 沉思",
+    description="Survey public academic literature across papers and return a research report with references.",
+)
+
 EXECUTION_ACTIONS = [
     ActionCandidate(id="plan", name="Develop an execution plan", description=(
         "Design a concrete plan for subsequent work: steps, materials, parameters, "

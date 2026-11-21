@@ -83,8 +83,8 @@ to the relevant databases.
 
 The provider selections are capability-based. Assistant code uses protocols; plugins
 implement them. `local` reasoning uses PydanticAI. Codex router/investigator plugins
-remain optional alternatives. Acquisition uses a weekly Codex Collector and a daily local OpenReview Collector.
-The offline demo remains available; AMiner is not connected.
+remain optional alternatives. Acquisition uses a weekly Codex Collector and a daily local Collector for OpenReview and optional AMiner Daily Paper (rec5).
+The offline demo remains available.
 
 Prepare the assistant-owned schema explicitly:
 
@@ -431,3 +431,15 @@ Historical DBOS snapshots retain their original bytes. The serialization boundar
 old component model paths to current owners and writes new snapshots using current paths,
 with the same `py_pickle` format. Existing unfinished-work version checks still apply;
 the reorganization neither migrates database rows nor clears workflow state.
+
+### AMiner Daily Paper and Deep Research
+
+Set `aminer.api_key` in your local `config.yaml` and restart `assistant serve`. The local light Collector requests up to ten rec5 papers
+for its highest-priority search direction during `run recommend-papers-light`.
+The existing candidate limit, Pool classification, Codex evidence reading and Feed
+selection still apply. A rec5 failure appears in the source failures for the run.
+
+With this credential the proposal router can also select **学术文献调研 · AMiner 沉思**.
+Review the proposed route in Workbench, approve it and run `process-workbench`
+to receive the hosted research report. The general public-source investigation
+action continues to use its configured provider.

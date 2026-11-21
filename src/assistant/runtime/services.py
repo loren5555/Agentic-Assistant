@@ -160,8 +160,18 @@ class Services:
         """Provide public-source investigation through a replaceable plugin."""
         name = self.config.providers.investigator
         plugin = get_plugin("execution.investigator", name)
-        service = plugin.Investigator(self.config.provider_options[name])
+        service = plugin.Investigator(self.config.provider_options.get(name, {}))
         return service
+
+    @property
+    def aminer_api_key(self) -> str:
+        from plugins._shared.aminer import configured_key
+        return configured_key(self.config.provider_options.get("aminer", {}))
+
+    @cached_property
+    def literature_investigator(self) -> InvestigatorProtocol:
+        plugin = get_plugin("execution.investigator", "aminer")
+        return plugin.Investigator(self.config.provider_options.get("aminer", {}))
 
     @cached_property
     def briefs(self) -> BriefWriterProtocol:
@@ -184,8 +194,11 @@ class Services:
         policy = self.config.runtime.recommendations.collector
         name = policy.deep_provider if mode == "deep" else policy.light_provider
         plugin = get_plugin("recommendations.collector", name)
-        return plugin.Collector(self.config.provider_options.get(name, {}),
-                                self.config.provider_options.get("openreview", {}))
+        options = self.config.provider_options.get(name, {})
+        openreview = self.config.provider_options.get("openreview", {})
+        if name == "local":
+            return plugin.Collector(options, openreview, aminer_api_key=self.aminer_api_key)
+        return plugin.Collector(options, openreview)
 
     @cached_property
     def openreview(self):

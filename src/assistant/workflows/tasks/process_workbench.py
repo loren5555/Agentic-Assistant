@@ -232,13 +232,14 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, item: WorkbenchIt
         result = await self.services.planner.execute(task)
         if result.plan is None and not result.questions:
             raise ValueError("Planner returned neither a concrete plan nor clarification questions")
-    elif action == "investigate_question":
+    elif action in {"investigate_question", "investigate_literature"}:
         logger.info("Dispatching approved action: title=%r capability=investigator action=%s.", task.proposal.title, action)
         context = [source.context_content, task.instruction]
         if task.proposal.execution_plan is not None:
             context.append(task.proposal.execution_plan.markdown())
         request = InvestigationRequest(question=task.proposal.action, context=context)
-        report = await self.services.investigator.investigate(request)
+        investigator = self.services.literature_investigator if action == "investigate_literature" else self.services.investigator
+        report = await investigator.investigate(request)
         sections = [report.answer]
         sections.extend(f"- [{e.title}]({e.url}): {e.finding}" for e in report.sources)
         sections.extend(report.limitations)
