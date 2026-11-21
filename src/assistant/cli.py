@@ -101,6 +101,7 @@ Example:
         "epilog": """Transitions:
   Needs Input: wait for an answer; submitted answers return to the source first.
   Open / Approved retention: Curator and Publisher store the reviewed Spark or Idea.
+  Open / Submit External Result: receive the External report for a report-capable action and await result review.
   Open / Approved execution: use the saved workflow; result becomes Executed / Pending.
   plan / Executed / Qualified: finish planning and propose execution for fresh approval.
   Executed / Qualified: retain useful outputs, then Archived; otherwise Finished.
@@ -263,6 +264,7 @@ Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run
     for name, documentation in JOB_HELP.items():
         job = jobs.add_parser(name, formatter_class=formatter, parents=[verbose_options, submission_options], **documentation)
         if name in {"brainstorm-material", "brainstorm-idea"}:
+            job.add_argument("--refresh", action="store_true", help="Explore the specified --page again with current evidence. Reuse --request-id when retrying the same round.")
             job.add_argument("--page", metavar="PAGE_ID", help="Explore this Notion page. "
                              "By default the research library selects an eligible starting point.")
         if name in {"organize-papers", "organize-articles"}:

@@ -38,6 +38,7 @@ PHASE_LABELS = {
     "recommendations": "筛选研究推荐",
     "submit_proposal": "提交提案",
     "review_item": "处理提案",
+    "receive_delivery": "接收外部交付成果",
     "intake_sources": "整理输入来源",
     "scheduled_job": "定时触发",
     "recover_requested_workflow": "恢复执行",

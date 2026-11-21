@@ -58,49 +58,53 @@ runtime:
       Cross-disciplinary: 0.1
 
 local:
-  router_model: openai-codex:gpt-5.6-luna
+  router_model: openai-codex:gpt-6-luna
   router_effort: low
   timeout_seconds: 120
-  proposer_model: openai-codex:gpt-5.6-luna
-  organizer_model: openai-codex:gpt-5.6-luna
-  organizer_effort: low
+  proposer_model: openai-codex:gpt-6.2-sol
+  organizer_model: openai-codex:gpt-6.2-sol
+  organizer_effort: medium
   organizer_timeout_seconds: 180
   proposer_effort: medium
   proposer_timeout_seconds: 180
-  planner_model: openai-codex:gpt-5.6-luna
-  planner_effort: medium
+  planner_model: openai-codex:gpt-6.2-astra
+  planner_effort: high
   planner_timeout_seconds: 180
-  worker_model: openai-codex:gpt-5.6-luna
-  worker_effort: low
+  worker_model: openai-codex:gpt-6.2-sol
+  worker_effort: medium
   worker_timeout_seconds: 180
   worker_toolsets:
     calculator.local: {}  # plugins/execution/tools/calculator/local.py:create_toolset
-  curator_model: openai-codex:gpt-5.6-luna
-  curator_effort: low
+  curator_model: openai-codex:gpt-6.2-sol
+  curator_effort: medium
   curator_timeout_seconds: 180
-  investigator_model: openai-codex:gpt-5.6-luna
-  investigator_effort: medium
+  investigator_model: openai-codex:gpt-6.2-sol
+  investigator_effort: high
   investigator_timeout_seconds: 300
-  brief_model: openai-codex:gpt-5.6-luna
-  recommendation_model: openai-codex:gpt-5.6-luna
+  brief_model: openai-codex:gpt-6.2-sol
+  recommendation_model: openai-codex:gpt-6.2-sol
+  brief_effort: low
 
 codex:
-  router_model: gpt-5.6-luna
+  router_model: gpt-6-luna
   router_effort: low
   timeout_seconds: 120
   executable: codex
-  investigator_model: gpt-5.6-luna
-  investigator_effort: low
+  investigator_model: gpt-6.2-sol
+  investigator_effort: high
   investigator_timeout_seconds: 300
-  brainstorm_model: null  # Use the signed-in Codex CLI default model.
+  brainstorm_model: gpt-6.2-astra
   brainstorm_effort: high
   brainstorm_timeout_seconds: 600
-  discovery_model: gpt-5.6-luna
-  discovery_effort: low
+  experiment_model: gpt-6.2-astra
+  experiment_effort: high
+  experiment_timeout_seconds: 3600
+  discovery_model: gpt-6.2-astra
+  discovery_effort: high
   discovery_timeout_seconds: 600
   discovery_max_candidates: 60
   discovery_recent_days: 7
-  evidence_model: gpt-5.6-luna
+  evidence_model: gpt-6.2-sol
   evidence_effort: low
   evidence_timeout_seconds: 180
 

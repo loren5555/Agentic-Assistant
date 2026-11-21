@@ -11,7 +11,7 @@ Responsibility:
 
 from dbos import DBOS
 from assistant.components.data.sources.models import SourceMaterial
-from assistant.components.data.workbench.models import WorkbenchItem
+from assistant.components.data.workbench.models import WorkbenchItem, SUBMIT_EXTERNAL_RESULT
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
 from logger import get_logger, trace_call
@@ -45,6 +45,9 @@ async def reconcile_feedback(self) -> list[str]:
         else:
             revised = current.status == "Open" and current.human_review == "Revision Requested"
         unqualified = current.status == "Executed" and current.result_review == "Unqualified"
+        if unqualified and current.human_review == SUBMIT_EXTERNAL_RESULT and saved.status == "Open":
+            # First recover the submitted report so it travels with the feedback.
+            continue
         # A lost close acknowledgement can leave the local pointer active even
         # though Notion already has the terminal state. Recover its checkpoint too.
         closed = current.status in {"Superseded", "Deprecated"}

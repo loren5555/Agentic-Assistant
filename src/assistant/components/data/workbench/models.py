@@ -11,6 +11,9 @@ from assistant.components.execution.task_worker.models import TaskResult
 from assistant.components.data.sources.models import SourceKind
 
 
+SUBMIT_EXTERNAL_RESULT = "Submit External Result"
+
+
 def result_publication_key(version: int, content: str) -> str:
     """Identify a result within a proposal version.
 

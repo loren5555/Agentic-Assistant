@@ -25,6 +25,13 @@ async def collect_research(self, day: str, mode: str):
     return result
 
 
+@DBOS.workflow(name="ResearchWorkflows.store_collection")
+@trace_call("workflow", "store_collection")
+async def store_collection(self, discovery, day: str):
+    """Merge one acquired batch even when today's edition is already published."""
+    self.refresh_pool(discovery.candidates, day)
+
+
 @DBOS.workflow(name="ResearchWorkflows.daily_newspaper")
 @trace_call("workflow", "daily_newspaper")
 async def daily_newspaper(self, day: str, mode: str = "auto"):
@@ -60,6 +67,8 @@ async def daily_newspaper(self, day: str, mode: str = "auto"):
             source_failures={"collector": f"{type(error).__name__}: {error}"},
         )
         discovery.process = getattr(error, "process", None)
+    if discovery.candidates:
+        await invoke(f"pool:collection-v1:{mode}:{period}", self.store_collection, discovery, day)
     policy = self.settings.model_dump_json()
     policy_key = hashlib.sha256(policy.encode()).hexdigest()[:12]
     result = await invoke(

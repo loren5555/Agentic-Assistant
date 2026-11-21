@@ -21,22 +21,24 @@ RECOVERY_QUEUE = "assistant-recovery"
 logger = get_logger("runtime.service.submissions")
 
 
-async def enqueue_job(application, job: str, day: str, page: str | None = None):
+async def enqueue_job(application, job: str, day: str, page: str | None = None, exploration_round: str | None = None):
     """Queue a dispatch from either trigger, preserving business arguments."""
+    extra = (exploration_round,) if exploration_round else ()
     with SetWorkflowAttributes({"job": job, "page": page or "batch"}):
         return await DBOS.enqueue_workflow_async(
-            JOB_QUEUE, application.tasks.dispatch, job, day, page
+            JOB_QUEUE, application.tasks.dispatch, job, day, page, *extra
         )
 
 
 async def submit_job(application, request: JobSubmission):
     """Reuse an acknowledged request or durably enqueue exactly one new dispatch."""
     workflow_id = f"manual:{request.request_id}"
+    exploration_round = str(request.request_id) if request.refresh else None
     existing = await DBOS.get_workflow_status_async(workflow_id)
     if existing:
         args = existing.input["args"]
-        if args[0] != request.job or args[2] != request.page:
-            raise ValueError("Request ID already belongs to a different job or page")
+        if args[0] != request.job or args[2] != request.page or bool(args[3:]) != request.refresh:
+            raise ValueError("Request ID already belongs to a different job, page or refresh mode")
         logger.info(
             "Task submission already recorded: job=%s.",
             request.job,
@@ -45,7 +47,7 @@ async def submit_job(application, request: JobSubmission):
         return workflow_id
     day = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
     with SetWorkflowID(workflow_id):
-        handle = await enqueue_job(application, request.job, day, request.page)
+        handle = await enqueue_job(application, request.job, day, request.page, exploration_round)
     logger.info(
         "Task queued: job=%s.",
         request.job,

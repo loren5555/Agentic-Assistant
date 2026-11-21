@@ -130,3 +130,10 @@ def save_directions(self, result: CollectionResult, day: str) -> None:
     self.logger.info(
         "Weekly search directions saved: directions=%d.", len(result.directions)
     )
+
+
+@DBOS.step(name="ResearchWorkflows.read_pool")
+@trace_call("step", "read_pool")
+def read_pool(self):
+    """Load current eligible entries for a new edition, including earlier batches."""
+    return self.services.discovery_pool.read_candidates()

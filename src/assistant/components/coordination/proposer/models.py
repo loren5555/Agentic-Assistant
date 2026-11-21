@@ -12,25 +12,12 @@ from assistant.components.execution.planner.models import ExecutionPlan
 
 
 class Proposal(BaseModel):
-    """Explain a proposed task in a report suitable for human review.
+    """A human-reviewable task, clarification, or retention proposal.
 
-    Attributes:
-        title: Short proposal title.
-        kind: Whether the human reviews an execution, clarification or direct retention.
-        retention: Spark or Idea material displayed for direct approval.
-        understanding: Interpretation of the supplied material.
-        purpose: Intended goal of the proposed work.
-        reason: Why this work is useful or necessary.
-        action: Concrete operation proposed for approval.
-        plan: Steps within the proposed scope.
-        expected_result: Deliverable and criteria for judging it.
-        questions: Essential user-owned information requested before planning.
-        selected_action: Capability snapshot selected before human approval.
-        execution_plan: Previously accepted plan governing this execution proposal.
-        routing_process: Actual pre-approval selection telemetry.
-        source_fingerprint: Content digest assigned by the provider.
-        version: Proposal revision assigned by the provider.
-        process: Actual drafting telemetry, excluded from model output schemas.
+    The proposal describes the user's goal, supporting material, planned action
+    and expected result. Clarifications ask focused questions. Retention proposals
+    identify material and its destination. The runtime attaches routing, accepted
+    plans, versions and execution telemetry before publishing to Workbench.
     """
 
     model_config = ConfigDict(extra="forbid")

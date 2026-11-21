@@ -24,7 +24,7 @@ logger = get_logger("workflows.tasks.dispatch")
 
 @DBOS.workflow(name="JobWorkflows.dispatch")
 @trace_call("workflow", "dispatch")
-async def dispatch(self: TaskWorkflows, job: str, day: str, page_id: str | None = None):
+async def dispatch(self: TaskWorkflows, job: str, day: str, page_id: str | None = None, exploration_round: str | None = None):
     """Run one named job and return its actual outputs.
 
     Args:
@@ -46,7 +46,7 @@ async def dispatch(self: TaskWorkflows, job: str, day: str, page_id: str | None 
         match job:
             case "brainstorm-material" | "brainstorm-idea":
                 mode = "idea" if job == "brainstorm-idea" else "material"
-                output = await self.brainstorm(mode, page_id)
+                output = await self.brainstorm(mode, page_id, exploration_round)
             case "propose-tasks":
                 output = await self.propose_tasks()
             case "process-workbench":

@@ -3,7 +3,8 @@
 Input origin:
     Proposal submission steps supply source/proposal data from InputSource or
     captures. reviews supplies execution results, questions, and lifecycle
-    changes. Human approval, acceptance, and feedback originate in Notion Workbench.
+    changes. Humans supply external deliverables, approval, acceptance, and feedback
+    in Notion Workbench.
 
 Output destination:
     Reports, publication receipts, and requested lifecycle changes are written to

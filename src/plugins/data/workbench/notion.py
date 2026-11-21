@@ -7,14 +7,22 @@ import re
 from notion_client import Client
 
 from assistant.components.coordination.curator.models import CurationDecision, RetainedArtifact
+from assistant.components.coordination.router.actions import supports_external_report
 from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.coordination.proposer.models import Proposal
 from assistant.components.execution.task_worker.models import TaskResult
-from assistant.components.data.workbench.models import WorkbenchItem, result_publication_key
-from assistant.components.data.workbench.protocol import WorkbenchProtocol
+from assistant.components.data.workbench.models import SUBMIT_EXTERNAL_RESULT, WorkbenchItem, result_publication_key
+from assistant.components.data.workbench.protocol import ExternalReportError, WorkbenchProtocol
 from logger import get_logger, trace_call
 from plugins._shared.notion.config import NotionSettings
 from plugins._shared.notion.schema import ensure_number, ensure_rich_text, ensure_select_option
+
+
+EXTERNAL_REPORT_HEADING = "## External report"
+
+
+class IncompleteWorkbenchMarkdown(ValueError):
+    """Notion could export only part of the requested page body."""
 
 
 def publication_key(kind: str, value: str) -> str:
@@ -93,6 +101,37 @@ class Workbench(WorkbenchProtocol):
         )
         return item
 
+    @trace_call("component", "workbench.read_external_report")
+    def read_external_report(self, page_id: str) -> str:
+        """Read the final user-authored section, preserving Markdown and source links."""
+        self.logger.debug("Reading submitted external report.", extra={"details": {"page": page_id}})
+        with Client(auth=self.settings.token) as client:
+            try:
+                body = self._markdown(client, page_id)
+            except IncompleteWorkbenchMarkdown as error:
+                raise ExternalReportError("Notion returned an incomplete report. Add the report text and "
+                                          "stable evidence links in Workbench, then submit it again.") from error
+        lines = body.splitlines(keepends=True)
+        start = None
+        fence = ""
+        for index, line in enumerate(lines):
+            code = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+            if fence:
+                if code and code[1].startswith(fence) and not code[2].strip():
+                    fence = ""
+            elif code:
+                fence = code[1]
+            elif line.rstrip() == EXTERNAL_REPORT_HEADING:
+                if start is not None:
+                    raise ExternalReportError("Keep one 'External report' heading and place the report beneath it.")
+                start = index + 1
+        report = "".join(lines[start:]).strip() if start is not None else ""
+        if not report.replace("<empty-block/>", "").strip():
+            report = ""
+        self.logger.debug("External report read: characters=%d.", len(report),
+                          extra={"details": {"page": page_id}})
+        return report
+
     @staticmethod
     def _destination(artifact: RetainedArtifact) -> str:
         if getattr(artifact, "target_idea_page_id", None):
@@ -147,6 +186,11 @@ class Workbench(WorkbenchProtocol):
         key = publication_key("proposal", proposal.model_dump_json(exclude={"process", "routing_process"}))
         if workflow_id:
             report += f"\n\nWorkflow: {workflow_id}"
+        if proposal.kind == "execution" and proposal.selected_action and supports_external_report(proposal.selected_action.id):
+            report += (f"\n\nTo submit completed work, paste its report and evidence links below, "
+                       f"then set Human Review to {SUBMIT_EXTERNAL_RESULT}. Once the status is Executed, "
+                       "review the saved report. For corrections, use Result Feedback and select Unqualified."
+                       f"\n\n{EXTERNAL_REPORT_HEADING}")
 
         with Client(auth=self.settings.token) as client:
             existing = []
@@ -256,14 +300,18 @@ class Workbench(WorkbenchProtocol):
             raise ValueError("Cannot save execution results for an unmanaged proposal")
         key = result_publication_key(item.proposal.version, result.model_dump_json(exclude={"process", "action_id"}))
         current = self.read_item(item.page_id)
+        executed = {
+            "Status": {"select": {"name": "Executed"}},
+            "Result Review": {"select": {"name": "Pending"}},
+            "Execution Error": {"rich_text": []},
+        }
+        external = getattr(result, "delivery_source", "executor") == "external"
         if current.publication_key == key:
+            if external and current.status == "Executed":
+                return
             if current.status == "Open" or (current.status == "Executed" and current.result_review == "Unqualified" and item.result_review == "Unqualified"):
                 with Client(auth=self.settings.token) as client:
-                    self._confirm_publication(client, item.page_id, key, {
-                        "Status": {"select": {"name": "Executed"}},
-                        "Result Review": {"select": {"name": "Pending"}},
-                        "Execution Error": {"rich_text": []},
-                    })
+                    self._confirm_publication(client, item.page_id, key, executed)
                 self.logger.info('Existing result advanced to Executed: title=%r.', item.title)
                 return
             if current.execution_error:
@@ -273,6 +321,19 @@ class Workbench(WorkbenchProtocol):
                 current.status,
                 extra={"details": {'page': item.page_id}},
             )
+            return
+
+        if external:
+            if (current.status != "Open" or current.human_review != SUBMIT_EXTERNAL_RESULT
+                    or current.publication_key != item.publication_key
+                    or current.proposal_version != item.proposal_version
+                    or current.selected_action_id != item.selected_action_id):
+                raise RuntimeError("The Workbench decision changed before the external report could be received.")
+            # The author already published the report and its attachments. Confirm
+            # the saved version in place while preserving the native Notion blocks.
+            with Client(auth=self.settings.token) as client:
+                self._confirm_publication(client, item.page_id, key, executed)
+            self.logger.info("External report received: title=%r status=Executed acceptance=Pending.", item.title)
             return
 
         source = self._report_source(item)
@@ -297,11 +358,7 @@ class Workbench(WorkbenchProtocol):
             )
             # The code and lifecycle state are one property update, after the
             # body call succeeds. A retry must not reset subsequent human review.
-            self._confirm_publication(client, item.page_id, key, {
-                "Status": {"select": {"name": "Executed"}},
-                "Result Review": {"select": {"name": "Pending"}},
-                "Execution Error": {"rich_text": []},
-            })
+            self._confirm_publication(client, item.page_id, key, executed)
         self.logger.info(
             'kind=script provider=notion Execution result confirmed: title=%r status=Executed acceptance=Pending.',
             item.title,
@@ -473,7 +530,7 @@ class Workbench(WorkbenchProtocol):
         """
         content = client.pages.retrieve_markdown(page_id=page_id)
         if content["truncated"] or content["unknown_block_ids"]:
-            raise ValueError(f"Notion page {page_id} has incomplete Markdown content")
+            raise IncompleteWorkbenchMarkdown(f"Notion page {page_id} has incomplete Markdown content")
         body = content["markdown"].strip()
         return body
 
@@ -527,6 +584,12 @@ class Workbench(WorkbenchProtocol):
             ])
             if proposal.execution_plan is not None:
                 lines.extend(["## Confirmed execution plan", proposal.execution_plan.markdown()])
+            lines.extend([
+                "## Your review",
+                "This page body previews the saved proposal version. Execution uses that version and the current Human Instruction field. "
+                "For a reminder, write it in Human Instruction and set Human Review to Approved. "
+                "For a change of scope, describe the change in Human Instruction and select Revision Requested.",
+            ])
         report = "\n\n".join(lines)
         return report
 
@@ -534,6 +597,7 @@ class Workbench(WorkbenchProtocol):
     def initialize_schema(self) -> None:
         """Initialize lifecycle, visible proposal version, and publication receipt."""
         with Client(auth=self.settings.token) as client:
+            ensure_select_option(client, self.settings.workbench_data_source_id, "Human Review", SUBMIT_EXTERNAL_RESULT)
             ensure_select_option(client, self.settings.workbench_data_source_id, "Status", "Finished")
             ensure_select_option(client, self.settings.workbench_data_source_id, "Status", "Superseded")
             ensure_select_option(client, self.settings.workbench_data_source_id, "Status", "Needs Input")

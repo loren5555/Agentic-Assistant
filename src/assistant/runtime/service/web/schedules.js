@@ -229,12 +229,16 @@ function openRun(job) {
   dispatch = null;
   $('run-job-select').value = job || Object.keys(state.jobs)[0];
   $('run-page').value = '';
+  $('run-refresh').checked = false;
   $('run-error').hidden = true;
   runFields();
   $('run-dialog').showModal();
 }
 
 function runFields() {
+  const canRefresh = $('run-job-select').value.startsWith('brainstorm-') && Boolean($('run-page').value.trim());
+  $('run-refresh-label').hidden = !canRefresh;
+  if (!canRefresh) $('run-refresh').checked = false;
   $('run-page-label').hidden = !['organize-papers', 'organize-articles', 'brainstorm-material', 'brainstorm-idea'].includes($('run-job-select').value);
 }
 
@@ -246,7 +250,7 @@ const descriptions = {
   "organize-articles": "读取简悦收藏的待处理文章，提炼要点并提交 Workbench，由你决定哪些剪辑值得进一步整理。",
   "process-signals": "把 Papers 和 Research Feed 中勾选 Follow Up 的条目，以及 Research Interests 中待处理的方向，转成 Workbench 提案。",
   "reconcile-feedback": "将补充说明、修改要求或验收意见写回原始条目，供下次重新提案；驳回的提案则结束处理。",
-  "process-workbench": "根据审批结果执行已批准的任务，把结果写回 Workbench；验收通过后，提取值得归档的成果。",
+  "process-workbench": "执行已批准的任务，或接收你提交的已有报告。验收通过后，提取值得归档的成果。",
   "recommend-papers": "按配置的星期自动选择深度或轻量采集，从 Discovery Pool 精选条目，生成当日 Research Feed。",
   "recommend-papers-deep": "用 Codex 搜索公开研究并探索新方向，补充候选池，保存后续检索线索，并生成当日推荐。",
   "recommend-papers-light": "优先沿用每周留下的检索线索，从 OpenReview 补充候选池，并生成当日推荐。"
@@ -267,6 +271,7 @@ function bindSchedules() {
   $('close-schedule').onclick = $('cancel-schedule').onclick = () => $('schedule-dialog').close();
   $('close-run').onclick = () => $('run-dialog').close();
   $('run-job-select').onchange = runFields;
+  $('run-page').oninput = runFields;
   $('schedule-frequency').onchange = () => {
     frequencyFields();
     preview();
@@ -313,10 +318,8 @@ function bindSchedules() {
     try {
       const job = $('run-job-select').value;
       const page = $('run-page-label').hidden ? null : $('run-page').value.trim() || null;
-      const signature = JSON.stringify({
-        job,
-        page
-      });
+      const refresh = $('run-refresh').checked;
+      const signature = JSON.stringify({ job, page, refresh });
       if (!dispatch || dispatch.signature !== signature) dispatch = {
         signature,
         request_id: crypto.randomUUID()
@@ -326,6 +329,7 @@ function bindSchedules() {
         body: JSON.stringify({
           job,
           page,
+          refresh,
           request_id: dispatch.request_id
         })
       });

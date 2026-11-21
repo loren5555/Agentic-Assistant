@@ -108,6 +108,8 @@ class PaperReadingMetadata(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     directions: list[DirectionTag] | None = None
     tags: list[str] = Field(default_factory=list)
+    paper_url: str = Field(default="", exclude_if=lambda value: not value,
+                           description="Primary URL for this specific paper (prefer its DOI or arXiv link), when supplied by the evidence.")
     code_url: str = ""
 
 

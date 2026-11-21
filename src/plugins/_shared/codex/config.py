@@ -37,6 +37,10 @@ class CodexSettings(BaseModel):
     investigator_effort: str | None = None
     investigator_timeout_seconds: float = 300
 
+    experiment_model: str | None = None
+    experiment_effort: str = "high"
+    experiment_timeout_seconds: float = Field(default=3600, gt=0)
+
     brainstorm_model: str | None = None
     brainstorm_effort: str = "high"
     brainstorm_timeout_seconds: float = Field(default=600, gt=0)

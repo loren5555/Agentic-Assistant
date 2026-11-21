@@ -45,19 +45,25 @@ class InformationPublisher:
         """
         self.logger.info('Publishing accepted output: title=%r destination=%s.', artifact.title, artifact.kind)
         if artifact.kind == "paper":
-            metadata = dict(source.metadata)
+            organized_source = (source.kind in {"notero", "simpread"} and item.result is not None
+                                and item.result.action_id == "organize_material"
+                                and len(item.result.artifacts) == 1)
+            metadata = dict(source.metadata) if organized_source else {}
+            paper_url = getattr(artifact.reading, "paper_url", "")
+            if paper_url.startswith(("https://", "http://")):
+                metadata["URL"] = paper_url
             metadata["Source Version"] = source.version
             metadata["Human Supplement"] = source.supplement
             metadata["Source Type"] = {"notero": "Zotero", "simpread": "SimpRead"}.get(source.kind, source.kind.title())
             capture = ReadingMaterial(kind="notero" if source.kind == "notero" else "simpread",
-                                 page_id=source.page_id, url=source.url, title=source.title,
+                                 page_id=source.page_id, url=source.url, title=source.title if organized_source else artifact.title,
                                  text=source.text, metadata=metadata, revision=source.revision,
-                                 full_text_verified=source.full_text_verified)
+                                 full_text_verified=organized_source and source.full_text_verified)
             content = artifact.content + f"\n\nWorkbench: {item.url}"
             brief = ReadingBrief(destination="papers", title=artifact.title, content=content,
-                                 reason=artifact.reason, evidence_level="full_text" if source.full_text_verified else "notes",
+                                 reason=artifact.reason, evidence_level="full_text" if capture.full_text_verified else "notes",
                                  reading=artifact.reading or PaperReadingMetadata())
-            receipt = self.papers.publish(capture, brief)
+            receipt = self.papers.publish(capture, brief, artifact_key=None if organized_source else key)
             result = PublicationReceipt(key=key, url=receipt.url)
         else:
             result = self.archive.publish(item, artifact, key)

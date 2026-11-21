@@ -51,11 +51,12 @@ sequenceDiagram
     end
 
     Note over Daily,Pool: On source failure, existing Pool stock remains eligible
+    Daily->>Pool: Merge each distinct acquired batch once, preserving feedback
     Daily->>State: Resolve shared daily edition identity
     alt Edition already complete
         State-->>Daily: Return saved report without new publication
     else New edition
-        Daily->>Pool: Merge, deduplicate and preserve feedback
+        Daily->>Pool: Read current eligible entries
         Pool-->>Editor: Available candidates
         Editor->>State: Read soft breadth-by-age coverage targets
         Editor->>Sources: Read shortlisted public abstracts and review threads

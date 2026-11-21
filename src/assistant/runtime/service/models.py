@@ -45,10 +45,13 @@ class JobSubmission(BaseModel):
     job: JobName
     page: str | None = None
     request_id: UUID = Field(default_factory=uuid4)
+    refresh: bool = False
 
     @model_validator(mode="after")
     def check_page_job(self):
         """Allow page selection only for jobs whose workflow accepts it."""
+        if self.refresh and (not self.page or self.job not in {"brainstorm-material", "brainstorm-idea"}):
+            raise ValueError("--refresh requires a BrainStorm job with --page")
         if self.page is not None and self.job not in {
             "brainstorm-material",
             "brainstorm-idea",

@@ -40,7 +40,7 @@
                 <mxCell id="router" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Router&#xa;Select action" vertex="1">
                     <mxGeometry height="64" width="150" x="1080" y="601" as="geometry"/>
                 </mxCell>
-                <mxCell id="worker" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Task Worker" vertex="1">
+                <mxCell id="worker" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Task Worker&#xa;Approved experiments → Codex" vertex="1">
                     <mxGeometry height="54" width="190" x="1477" y="929" as="geometry"/>
                 </mxCell>
                 <mxCell id="investigator" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Investigator" vertex="1">
@@ -352,7 +352,7 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="human-decision" edge="1" parent="1" source="human-review" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;entryX=0.75;entryY=0;whiteSpace=wrap;labelWidth=150;exitDx=0;exitDy=0;" target="workbench" value="Approve / redirect / reject / give feedback">
+                <mxCell id="human-decision" edge="1" parent="1" source="human-review" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;entryX=0.75;entryY=0;whiteSpace=wrap;labelWidth=150;exitDx=0;exitDy=0;" target="workbench" value="Approve / submit report / redirect / reject / give feedback">
                     <mxGeometry relative="1" x="0.6364" y="82" as="geometry">
                         <mxPoint as="offset"/>
                     </mxGeometry>

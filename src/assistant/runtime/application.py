@@ -14,6 +14,7 @@ from assistant.runtime.index import WorkIndex
 from assistant.runtime.serialization import ComponentSerializer
 from assistant.runtime.services import Services
 from assistant.workflows.steps import submit_proposal as proposal_steps, intake_sources as source_steps
+from assistant.workflows.steps import receive_delivery as delivery_steps
 from assistant.workflows.steps import select_action as routing_steps, advance_plan as planning_steps
 from assistant.workflows.tasks import organize_papers as papers_task, organize_articles as articles_task
 from assistant.workflows.tasks import propose_tasks as proposal_task, process_workbench as workbench_task
@@ -93,6 +94,8 @@ class WorkbenchWorkflows(DBOSConfiguredInstance):
     publish_proposal = proposal_steps.publish_proposal
     acknowledge = proposal_steps.acknowledge
     submit_proposal = proposal_steps.submit_proposal
+    receive_delivery = delivery_steps.receive_delivery
+    read_delivery = delivery_steps.read_delivery
     read_review = workbench_task.read_review
     select_action = routing_steps.select_action
     accept_plan = planning_steps.accept_plan

@@ -1,5 +1,7 @@
 """Approved work and the deliverable returned by an executor."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
 
@@ -32,6 +34,7 @@ class TaskResult(BaseModel):
     Attributes:
         content: Completed answer or report in Markdown.
         action_id: Capability selected by the execution router.
+        delivery_source: Origin of the reviewed deliverable, recorded at intake.
         process: Runtime telemetry, not model-generated content.
         artifacts: Structured outputs proposed for retention after acceptance.
         plan: Concrete plan produced by the Planner for separate review.
@@ -44,5 +47,8 @@ class TaskResult(BaseModel):
     artifacts: list[RetainedArtifact] = Field(default_factory=list)
     plan: ExecutionPlan | None = None
     questions: list[str] = Field(default_factory=list)
+    delivery_source: SkipJsonSchema[Literal["executor", "external"]] = Field(
+        default="executor", exclude_if=lambda value: value == "executor",
+    )
     action_id: SkipJsonSchema[str] = ""
     process: SkipJsonSchema[ExecutionProcess | None] = None

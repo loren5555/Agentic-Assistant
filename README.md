@@ -134,8 +134,10 @@ job reads one source without forcing duplicate publication.
 A normal manual cycle is:
 
 1. Submit sources with their input job.
-2. In Workbench, read the proposal and its Proposed workflow, then set Human Review
-   to Approved. Request Revision when the selected workflow does not match your intent.
+2. In Workbench, read the proposal and its Proposed workflow. The page body previews
+   the saved proposal version. Add execution reminders in Human Instruction, then
+   set Human Review to Approved. To change the scope or route, describe the change
+   in Human Instruction and select Revision Requested.
 3. Run process-workbench. Inspect the Executed result.
 4. Set Result Review to Qualified, then run process-workbench to retain outputs.
 5. For changes, provide Human Instruction or Result Feedback and choose Revision
@@ -160,6 +162,35 @@ source history. A new question should explain the new blocker it resolves. Execu
 can return focused questions through the same Needs Input and feedback path.
 Run setup after schema changes to add Needs Input and the Selected Action property.
 
+### Submitting work completed elsewhere
+
+You can deliver an existing report to an **Open** Workbench proposal for an experiment,
+public or literature investigation, material organization, research-direction analysis or
+general task. This also works for a report you prepared yourself.
+
+1. On the execution proposal, paste the report and its evidence links under the level-two
+   heading **External report** at the end of the page. For an older proposal, add this
+   heading yourself. Include the main findings and limitations so the report can be
+   reviewed without access to the other computer.
+2. Set **Human Review** to **Submit External Result** and run
+   `uv run python -m assistant run process-workbench`. Workbench records the supplied
+   report as **Executed**, with **Result Review** pending. Submission uses no executor.
+3. Review the saved result, set **Result Review** to **Qualified**, and run the same
+   command to curate reusable findings. For a correction, use **Unqualified** and
+   **Result Feedback** through the usual revision cycle.
+
+For planning, the Planner produces the structured plan required for later execution.
+Direct retention and daily recommendation keep their own publication workflows.
+
+### Running an approved experiment
+
+Request an experiment in Inbox or TODO. Review the Planner's protocol, mark the plan result
+Qualified, then approve the execution proposal showing `run_experiment`. The signed-in
+Codex CLI runs the approved protocol with its shell and file tools. Each approval has a
+persistent working directory under `<runtime.directory>/v2/experiments/`; its path and
+report are returned to Workbench for review. The Codex options `experiment_model`,
+`experiment_effort` and `experiment_timeout_seconds` control this executor.
+
 ## Explore research connections with BrainStorm
 
 Run setup with the service stopped to prepare the Sparks output collection. Start
@@ -172,6 +203,11 @@ For a paper, copy the link to the individual page in Papers and use the final
 uv run python -m assistant run brainstorm-material
 uv run python -m assistant run brainstorm-idea
 ```
+
+To revisit a specific Idea with the latest library and web evidence, copy its Notion page ID and run
+`uv run python -m assistant run brainstorm-idea --page "$IDEA_PAGE_ID" --refresh`.
+Each new submission starts a new round. Reusing the printed request ID retries that same round.
+Both BrainStorm commands support this option. Scheduled runs continue to skip explored revisions.
 
 BrainStorm gives Codex the selected research note and a bounded selection of
 library history, with web search available for public evidence. The report keeps

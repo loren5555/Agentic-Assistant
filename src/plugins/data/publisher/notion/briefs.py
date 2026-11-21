@@ -5,6 +5,8 @@ import hashlib
 
 from notion_client import Client
 
+from assistant.components.recommendations.discovery.identity import candidate_identity
+from assistant.components.recommendations.discovery.models import PaperCandidate
 from assistant.components.execution.briefer.models import ReadingBrief, ReadingMaterial
 from assistant.components.data.publisher.models import BriefPublicationReceipt
 from assistant.components.data.publisher.protocol import BriefPublisherProtocol
@@ -48,12 +50,13 @@ class BriefPublisher(BriefPublisherProtocol):
         self.logger = get_logger("plugins.data.publisher.notion.briefs")
 
     @trace_call("component", "captures.publish")
-    def publish(self, capture: ReadingMaterial, brief: ReadingBrief) -> BriefPublicationReceipt:
+    def publish(self, capture: ReadingMaterial, brief: ReadingBrief, *, artifact_key: str | None = None) -> BriefPublicationReceipt:
         """Create or replace only the assistant-owned brief section.
 
         Args:
             capture: Source identity, actual evidence, and current content version.
             brief: Organized paper or knowledge content.
+            artifact_key: Stable identity for an independently retained paper without a known URL.
 
         Returns:
             Verified output identity and represented source version.
@@ -64,6 +67,13 @@ class BriefPublisher(BriefPublisherProtocol):
             raise ValueError(f"Full-text acquisition was not verified: {capture.url}")
 
         key = "capture:" + hashlib.sha256(capture.identity.encode()).hexdigest()
+        paper_url = capture.metadata.get("URL") or capture.metadata.get("Link") or capture.metadata.get("Canonical URL")
+        if not isinstance(paper_url, str) or not paper_url.startswith(("https://", "http://")):
+            paper_url = ""
+        if artifact_key:
+            key = "artifact:" + artifact_key
+            if paper_url:
+                key = candidate_identity(PaperCandidate(id=key, title=brief.title, url=paper_url))
         data_source_id = self.settings.papers_data_source_id
         property_name = "Source Page"
         property_value = {"url": capture.url}
@@ -99,8 +109,21 @@ class BriefPublisher(BriefPublisherProtocol):
             if brief.destination == "papers":
                 # Matching URI/DOI links a re-imported source to its existing brief.
                 matches, bibliographic_properties = self._bibliographic_matches(capture, source["properties"])
-                page_filter["or"].extend(matches)
+                legacy = page_filter
+                if artifact_key:
+                    legacy = {"and": [
+                        {"property": "Source Page", "url": {"equals": capture.url}},
+                        {"property": title_name, "title": {"equals": brief.title}},
+                    ]}
+                page_filter = {"or": [{"property": "Paper Key", "rich_text": {"equals": key}}, *matches]}
+                if paper_url and source["properties"].get("Link", {}).get("type") == "url":
+                    page_filter["or"].append({"property": "Link", "url": {"equals": paper_url}})
+                bibliographic_properties["Paper Key"] = {"rich_text": rich_text(key)}
             response = client.data_sources.query(data_source_id=data_source_id, filter=page_filter, page_size=2)
+            if brief.destination == "papers" and not response["results"]:
+                # Adopt an existing unkeyed page only if its legacy identity matches.
+                legacy_filter = {"and": [{"property": "Paper Key", "rich_text": {"is_empty": True}}, legacy]}
+                response = client.data_sources.query(data_source_id=data_source_id, filter=legacy_filter, page_size=2)
             self.logger.debug(
                 'kind=script provider=notion Organized-output lookup: matches=%d.',
                 len(response['results']),
@@ -113,6 +136,8 @@ class BriefPublisher(BriefPublisherProtocol):
             if brief.destination == "papers":
                 existing_properties = response["results"][0]["properties"] if response["results"] else {}
                 reading_properties = self._reading_properties(capture, brief, source["properties"], existing_properties)
+                if existing_properties and not existing_properties.get("Paper Key", {}).get("rich_text"):
+                    reading_properties["Paper Key"] = bibliographic_properties["Paper Key"]
                 if not existing_properties.get(RELATION, {}).get("relation"):
                     ids = capture.metadata.get(RELATION) or self.catalog.resolve(brief.reading.directions)
                     if ids:
@@ -162,6 +187,8 @@ class BriefPublisher(BriefPublisherProtocol):
                     "Publication Key": {"rich_text": rich_text(publication_key)},
                 }
                 if brief.destination == "papers":
+                    if response["results"] and existing_properties.get("Source Page", {}).get("url"):
+                        properties.pop("Source Page")
                     properties["Brief Status"] = {"select": {"name": "Reviewed"}}
                 client.pages.update(page_id=page_id, properties=properties)
             # Fill missing reading fields even when the body was already confirmed.
@@ -184,7 +211,7 @@ class BriefPublisher(BriefPublisherProtocol):
                 )
                 raise ValueError(f"Brief publication key readback failed: {page_id}")
             receipt = BriefPublicationReceipt(page_id=page_id, url=verified["url"], key=key, fingerprint=capture.fingerprint)
-            if capture.kind == "notero" and brief.destination == "papers":
+            if capture.kind == "notero" and brief.destination == "papers" and not artifact_key:
                 # Confirm the destination first, including on publication retries.
                 self.logger.info('Marking Notero entry as published to Papers: title=%r.', capture.title)
                 client.pages.update(page_id=capture.page_id,
@@ -223,6 +250,7 @@ class BriefPublisher(BriefPublisherProtocol):
                 ensure_rich_text(client, data_source_id, "Publication Key")
             if self.settings.papers_data_source_id:
                 ensure_rich_text(client, self.settings.papers_data_source_id, "Reading Summary")
+                ensure_rich_text(client, self.settings.papers_data_source_id, "Paper Key")
             if self.settings.notero_data_source_id:
                 ensure_checkbox(client, self.settings.notero_data_source_id, "Agent In Papers")
 

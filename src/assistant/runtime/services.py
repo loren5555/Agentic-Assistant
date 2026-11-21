@@ -176,6 +176,13 @@ class Services:
         return service
 
     @cached_property
+    def experiment(self) -> TaskWorkerProtocol:
+        """Delegate qualified experiments to the native Codex CLI in a persistent workspace."""
+        from plugins.execution.task_worker.codex import ExperimentWorker
+        return ExperimentWorker(self.config.provider_options.get("codex", {}),
+                                Path(self.config.runtime.directory).resolve() / "v2" / "experiments")
+
+    @cached_property
     def investigator(self) -> InvestigatorProtocol:
         """Provide public-source investigation through a replaceable plugin."""
         name = self.config.providers.investigator

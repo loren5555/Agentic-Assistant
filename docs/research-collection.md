@@ -67,8 +67,8 @@ quota; an explicit retry of failed work may call Codex again. Change code/config
 with the normal version/recovery checks in mind.
 
 Both modes share the daily edition identity, including its editorial policy/topic
-fingerprint. Running light and deep on one day can collect both, but reuses an already
-completed edition rather than publishing twice. Collection failures are visible in the
+fingerprint. Running light and deep on one day saves both batches to the Pool. The second run reuses the completed edition,
+and its new candidates are available to the next edition. Collection failures are visible in the
 report and do not prevent selecting from existing usable Pool stock.
 
 Collector cost and reading cost are independent. OpenReview candidates use a direct API

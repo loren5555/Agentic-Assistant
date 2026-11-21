@@ -13,7 +13,7 @@ from dbos import DBOS
 
 from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.coordination.proposer.models import Proposal
-from assistant.components.coordination.router.actions import AMINER_RESEARCH, EXECUTION_ACTIONS
+from assistant.components.coordination.router.actions import AMINER_RESEARCH, CODEX_EXPERIMENT, EXECUTION_ACTIONS
 from assistant.components.coordination.router.models import ActionCandidate, RouterInput
 from assistant.components.coordination.router.prompt import validate_decision
 from logger import get_logger, trace_call
@@ -39,6 +39,8 @@ async def select_action(self, source: SourceMaterial, proposal: Proposal) -> Pro
         return proposal.model_copy(update={"selected_action": route})
     candidates = [candidate for candidate in EXECUTION_ACTIONS
                   if candidate.id != "plan" or proposal.execution_plan is None]
+    if proposal.execution_plan and source.history and source.history[-1].accepted_plan == proposal.execution_plan:
+        candidates.append(CODEX_EXPERIMENT)
     if self.services.aminer_api_key:
         candidates.append(AMINER_RESEARCH)
     request = RouterInput(text=proposal.model_dump_json(exclude={"process", "routing_process"}),

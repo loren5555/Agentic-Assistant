@@ -31,6 +31,8 @@ async def display_completion(client: ServiceClient, workflow_id: str) -> None:
 async def run(settings, options: argparse.Namespace) -> None:
     """Submit one idempotent request and optionally wait for the saved result."""
     values = {"job": options.job, "page": options.page}
+    if getattr(options, "refresh", False):
+        values["refresh"] = True
     if options.request_id:
         values["request_id"] = options.request_id
     submission = JobSubmission.model_validate(values)

@@ -9,6 +9,10 @@ from assistant.components.execution.task_worker.models import TaskResult
 from assistant.components.data.workbench.models import WorkbenchItem
 
 
+class ExternalReportError(ValueError):
+    """The submitted Workbench section requires an edit before it can be accepted."""
+
+
 class WorkbenchProtocol(Protocol):
     """Maintain proposal reports, results, and human review states."""
 
@@ -35,6 +39,13 @@ class WorkbenchProtocol(Protocol):
 
         Returns:
             Current proposal and human decisions.
+        """
+        ...
+
+    def read_external_report(self, page_id: str) -> str:
+        """Return the submitted Markdown including evidence links, or an empty draft.
+
+        Raise ExternalReportError when competing report sections need human resolution.
         """
         ...
 

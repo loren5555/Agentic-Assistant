@@ -89,6 +89,11 @@ def candidate_from_note(
         and "reject" not in str(item["venueid"]).lower()
         and "withdraw" not in str(item["venueid"]).lower()
     )
+    authors = []
+    for author in item.get("authors") or []:
+        name = author.get("fullname") if isinstance(author, dict) else author
+        if isinstance(name, str) and name.strip():
+            authors.append(name.strip())
     published = timestamp(note.get("odate") or note.get("cdate"))[:10]
     return PaperCandidate(
         id=f"openreview:{forum}",
@@ -105,7 +110,7 @@ def candidate_from_note(
         quality=SourceQuality(
             venue=venue,
             status="Accepted" if accepted else "Unknown",
-            authors=list(item.get("authors") or []),
+            authors=authors,
             sources=[url],
         ),
     )

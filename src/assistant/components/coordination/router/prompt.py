@@ -12,6 +12,8 @@ Match the requested outcome to the candidate descriptions. Researching public fa
 belongs to investigation; organizing supplied material belongs to organization.
 Select plan when the deliverable is a concrete execution design whose consequential
 steps, parameters, budget or stopping conditions should be reviewed before use.
+For a requested experiment, select plan to establish the protocol first. When the
+approved protocol is supplied, select run_experiment to run code and collect measurements.
 Direct calculations, translations and bounded explanations can be completed directly.
 A human-qualified execution plan is supplied when available: select a capability to
 carry out that plan rather than repeat its planning stage. Choose only supplied IDs.

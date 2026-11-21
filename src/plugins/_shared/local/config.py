@@ -15,6 +15,9 @@ class LocalSettings(BaseModel):
         proposer_model: Proposal model in provider:model format.
         proposer_effort: Proposal reasoning effort, or None for the model default.
         proposer_timeout_seconds: Maximum duration of one proposal draft.
+        organizer_model: Input organization model, defaulting to the proposer model.
+        organizer_effort: Override the proposer's effort when supplied.
+        organizer_timeout_seconds: Maximum duration of one input organization call.
         planner_model: Planning model; None uses the configured worker model.
         planner_effort: Reasoning effort for concrete execution designs.
         planner_timeout_seconds: Maximum duration of one planning invocation.
@@ -39,6 +42,11 @@ class LocalSettings(BaseModel):
         "none", "minimal", "low", "medium", "high", "xhigh", "max"
     ] | None = "medium"
     proposer_timeout_seconds: float = 180
+    organizer_model: str | None = None
+    organizer_effort: Literal[
+        "none", "minimal", "low", "medium", "high", "xhigh", "max"
+    ] | None = None
+    organizer_timeout_seconds: float = 180
     planner_model: str | None = None
     planner_effort: str | None = "medium"
     planner_timeout_seconds: float = 180

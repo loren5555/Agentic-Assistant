@@ -1,7 +1,7 @@
 """Execute approved work and curate accepted results.
 
 Input origin:
-    Managed Workbench approvals and accepted results; feedback is collected by
+    Managed Workbench approvals, externally delivered reports and accepted results; feedback is collected by
     reconcile-feedback before this workflow selects executable items.
 Output destination:
     Execution returns to Workbench. Accepted plans return to Proposer via source
@@ -9,6 +9,7 @@ Output destination:
     through Curator and Information Publisher to their knowledge destinations.
 Responsibility:
     Workers execute the saved, reviewed capability on one complete snapshot.
+    Report-capable actions can also receive a submitted report for the same result review.
     Revision, rejection and unqualified results never invoke a worker directly;
     source re-entry belongs to Reconciler.
 """
@@ -25,11 +26,12 @@ from assistant.components.coordination.curator.models import CurationDecision, R
 from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.execution.investigator.models import InvestigationRequest
 from assistant.components.execution.task_worker.models import TaskRequest, TaskResult
-from assistant.components.data.workbench.models import WorkbenchItem, result_publication_key
+from assistant.components.data.workbench.models import WorkbenchItem, SUBMIT_EXTERNAL_RESULT, result_publication_key
 from assistant.components.recommendations.discovery.models import PaperCandidate
 from assistant.components.execution.briefer.models import PaperReadingMetadata, ReadingMaterial
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
+from assistant.workflows.steps.receive_delivery import process_delivery
 from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
@@ -59,6 +61,12 @@ async def process_workbench(self: TaskWorkflows) -> list[str]:
         logger.info('Review item %d/%d: title=%r status=%s approval=%s acceptance=%s.',
                     position, len(records), current.title, current.status,
                     current.human_review, current.result_review)
+        if (current.human_review == SUBMIT_EXTERNAL_RESULT and saved.status == "Open"
+                and current.status in {"Open", "Executed"}):
+            url = await process_delivery(self, record, state, saved, current)
+            if url:
+                urls.append(url)
+            continue
         if current.needs_input:
             logger.info('Awaiting human input: title=%r; answer in Human Instruction, then submit Human Review.', current.title)
             continue
@@ -70,10 +78,17 @@ async def process_workbench(self: TaskWorkflows) -> list[str]:
         # so that its durable publication receipts reach the business index.
         retained = bool(current.proposal and current.proposal.kind == "retention"
                         and current.status == "Archived" and current.human_review == "Approved")
+        # Closing a result changes only its visible status. Recover the original
+        # Executed decision so DBOS retains its extraction and publication receipts.
+        closing_result = (
+            saved.status == "Executed" and saved.result is not None
+            and current.status in {"Archived", "Finished"}
+            and current.result_review == "Qualified" and not accepted_plan
+        )
         actionable = (
             current.status == "Open" and current.human_review == "Approved"
             or current.status == "Executed" and current.result_review == "Qualified"
-            or accepted_plan or retained
+            or accepted_plan or retained or closing_result
         )
         if not actionable:
             logger.info('Waiting for human review: title=%r.', current.title)
@@ -86,7 +101,15 @@ async def process_workbench(self: TaskWorkflows) -> list[str]:
         if current.proposal and current.proposal.kind == "retention":
             excluded.add("status")
         signal = {"owner": record["workflow_id"], "item": current.model_dump(exclude=excluded)}
+        if closing_result:
+            signal["item"]["status"] = "Executed"
         operation = "review:v2:" + digest(json.dumps(signal, sort_keys=True))
+        if closing_result:
+            if await DBOS.get_workflow_status_async(operation) is None:
+                logger.warning("No matching acceptance operation for terminal Workbench item: title=%r status=%s.",
+                               current.title, current.status)
+                continue
+            logger.info("Completing the saved acceptance decision: title=%r status=%s.", current.title, current.status)
         urls.append(await invoke(operation, self.proposals.review_item, record["source_key"], state))
     logger.info('Workbench pass completed: advanced=%d.', len(urls))
     return urls
@@ -245,6 +268,11 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, item: WorkbenchIt
         result = await self.services.planner.execute(task)
         if result.plan is None and not result.questions:
             raise ValueError("Planner returned neither a concrete plan nor clarification questions")
+    elif action == "run_experiment":
+        plan = task.proposal.execution_plan
+        if plan is None or not source.history or plan != source.history[-1].accepted_plan:
+            raise ValueError("Experiment execution requires the human-qualified plan for this source version")
+        result = await self.services.experiment.execute(task)
     elif action in {"investigate_question", "investigate_literature"}:
         logger.info("Dispatching approved action: title=%r capability=investigator action=%s.", task.proposal.title, action)
         context = [source.context_content, task.instruction]
@@ -280,6 +308,7 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, item: WorkbenchIt
     if action != "plan" and result.plan is not None:
         raise ValueError("Only the approved Planner capability can return an execution plan")
     result.action_id = action
+    result.delivery_source = "executor"
     logger.info(
         'Task execution completed: title=%r action=%s result_characters=%d.',
         task.proposal.title,
@@ -317,9 +346,11 @@ def save_result(self: WorkbenchWorkflows, source: SourceMaterial, item: Workbenc
     """
     current = self.services.workbench.read_item(item.page_id)
     expected_key = result_publication_key(item.proposal.version, result.model_dump_json(exclude={"process", "action_id"}))
-    if current.publication_key == expected_key and current.status == "Executed" and current.result_review != "Unqualified":
+    external = getattr(result, "delivery_source", None) == "external"
+    if current.publication_key == expected_key and current.status == "Executed" and (external or current.result_review != "Unqualified"):
         # Recover a completed write without resetting a subsequent human review.
-        self.services.workbench.save_result(item, result)
+        if not external:
+            self.services.workbench.save_result(item, result)
         current.proposal = item.proposal
         current.source_kind = item.source_kind
         current.result = result
@@ -330,7 +361,10 @@ def save_result(self: WorkbenchWorkflows, source: SourceMaterial, item: Workbenc
             extra={"details": {'page': item.page_id}},
         )
         return current
-    self.check_authorization(source, item)
+    if external:
+        self.check_authorization(source, item, submitted_report=result.content)
+    else:
+        self.check_authorization(source, item)
     self.services.workbench.save_result(item, result)
     current = self.services.workbench.read_item(item.page_id)
     if current.status != "Executed":
@@ -489,7 +523,8 @@ def close_item(self: WorkbenchWorkflows, source: SourceMaterial, item: Workbench
     )
 
 
-def check_authorization(self: WorkbenchWorkflows, source: SourceMaterial, item: WorkbenchItem) -> None:
+def check_authorization(self: WorkbenchWorkflows, source: SourceMaterial, item: WorkbenchItem,
+                        *, submitted_report: str | None = None) -> None:
     """Read authorization inside each write step, including retries.
 
     Args:
@@ -498,10 +533,15 @@ def check_authorization(self: WorkbenchWorkflows, source: SourceMaterial, item: 
     """
     current = self.services.workbench.read_item(item.page_id)
     current_source = self.read_current_source(source)
+    if submitted_report is not None:
+        if self.services.workbench.read_external_report(item.page_id) != submitted_report:
+            raise RuntimeError("External report changed during submission. Run process-workbench to receive the latest report.")
     if getattr(item, "retention_text", None) is not None:
         live_text = self.services.workbench.read_retention_text(item.page_id, item.proposal.retention)
         if live_text != item.retention_text:
             raise RuntimeError("Reviewed retention text changed; publication stopped")
-    fields = ("status", "human_review", "human_instruction", "result_review", "result_feedback", "publication_key", "selected_action_id", "proposal_version")
+    fields = ("status", "human_review", "publication_key", "selected_action_id", "proposal_version")
+    if submitted_report is None:
+        fields += ("human_instruction", "result_review", "result_feedback")
     if current_source.fingerprint != source.fingerprint or any(getattr(current, field) != getattr(item, field) for field in fields):
         raise RuntimeError("Source, publication, or human authorization changed; publication stopped")

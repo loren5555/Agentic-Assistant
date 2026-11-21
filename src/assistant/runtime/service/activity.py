@@ -40,7 +40,7 @@ TRACE_FIELDS = {
     "draft": "process", "execute": "process", "decide": "process", "select_action": "routing_process",
     "read": "process", "assess": "process", "discover": "process", "collect": "process",
 }
-EXECUTORS = {"investigate_literature": "AMiner 沉思", "investigate_question": "Investigator", "plan": "Planner", "complete_task": "Task Worker",
+EXECUTORS = {"run_experiment": "Codex 实验执行", "investigate_literature": "AMiner 沉思", "investigate_question": "Investigator", "plan": "Planner", "complete_task": "Task Worker",
              "propose_direction": "Direction Proposer", "organize_material": "材料整理执行器"}
 FIELDS = {
     "title": "条目", "text": "原始内容", "human_review": "审批", "human_instruction": "人工说明",
@@ -177,7 +177,11 @@ def business_step(row):
         module = EXECUTORS.get(obj.get("action_id"), module)
     lines = describe(value)
     if name == "save_result":
-        lines += describe(obj.get("result"))
+        result = obj.get("result")
+        if values(result).get("delivery_source") == "external":
+            title = "接收外部交付成果"
+            lines.append("交付来源：外部提交")
+        lines += describe(result)
     if name == "organize_source" and isinstance(obj.get("organization"), str):
         try:
             lines = describe(json.loads(obj["organization"])) or lines

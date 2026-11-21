@@ -28,7 +28,7 @@ logger = get_logger("workflows.tasks.brainstorm")
 
 @DBOS.workflow(name="JobWorkflows.brainstorm")
 @trace_call("workflow", "brainstorm")
-async def brainstorm(self, mode: BrainstormMode, page_id: str | None = None) -> dict:
+async def brainstorm(self, mode: BrainstormMode, page_id: str | None = None, exploration_round: str | None = None) -> dict:
     """Choose one starting point and reuse the durable result for that seed revision."""
     context = self.read_brainstorm_context(mode, page_id)
     if context is None:
@@ -39,7 +39,11 @@ async def brainstorm(self, mode: BrainstormMode, page_id: str | None = None) -> 
         )
         logger.info("BrainStorm completed: %s", reason)
         return {"mode": mode, "seed": None, "report": None, "proposals": [], "reason": reason}
-    identity = digest(json.dumps([mode, context.seed.page_id, context.seed.revision]))
+    seed_key = [mode, context.seed.page_id, context.seed.revision]
+    if exploration_round:
+        seed_key.append(exploration_round)
+        logger.info("Starting a fresh exploration of %r with current material.", context.seed.title)
+    identity = digest(json.dumps(seed_key))
     logger.info("Exploring %r: mode=%s related_records=%d.", context.seed.title, mode, len(context.history))
     return await invoke("brainstorm:" + identity, self.explore_brainstorm, context, identity)
 

@@ -70,10 +70,12 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
         self.logger = get_logger("workflows.tasks.recommend_papers")
 
     collection_brief = collection_steps.collection_brief
+    read_pool = collection_steps.read_pool
     collect = collection_steps.collect
     prepare_pool_display = collection_steps.prepare_pool_display
     save_directions = collection_steps.save_directions
     collect_research = newspaper_tasks.collect_research
+    store_collection = newspaper_tasks.store_collection
     daily_newspaper = newspaper_tasks.daily_newspaper
 
     @DBOS.workflow(name="ResearchWorkflows.recommendations")
@@ -112,7 +114,12 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             self.logger.warning("Search unavailable; trying the accumulated Discovery Pool.")
         report.source_failures.update(discovery.source_failures)
         report.discovery = discovery
-        entries = [] if self.demo else self.refresh_pool(discovery.candidates, day)
+        entries = []
+        if not self.demo:
+            if supplied_discovery is None:
+                entries = self.refresh_pool(discovery.candidates, day)
+            else:
+                entries = self.read_pool()
         report.pool_count = len(entries)
         if discovery_error is not None and not entries:
             await self._record_report(day, report, record_event=False)

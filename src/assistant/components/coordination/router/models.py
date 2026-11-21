@@ -2,7 +2,7 @@
 
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
 
 from assistant.components.data.sources.protocol import ContextContent
@@ -21,6 +21,7 @@ class ActionCandidate(BaseModel):
     id: str
     description: str
     name: str = ""
+    accepts_external_report: SkipJsonSchema[bool] = Field(default=False, exclude=True)
 
 
 class RouterInput(BaseModel):
