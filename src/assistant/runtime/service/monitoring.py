@@ -19,6 +19,7 @@ from starlette.routing import Route
 from logger import get_logger
 
 from .activity import activity, calls_page
+from .presentation import error_message
 from .metadata import RunFilters
 
 logger = get_logger("runtime.service.monitoring")
@@ -87,7 +88,7 @@ def routes(application, metadata, respond):
                 "run": summary,
                 "input": document(saved.input),
                 "output": document(saved.output),
-                "error": str(saved.error) if saved.error else None,
+                "error": error_message(saved.error, saved.status) if saved.error else None,
                 "steps": document(steps),
                 "references": references,
             }

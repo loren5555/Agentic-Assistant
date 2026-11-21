@@ -23,12 +23,16 @@ supported by the supplied result. Return an empty artifacts list for trivial ari
 one-off conversions, acknowledgments, task administration, or material without future
 value. Never manufacture a lesson or research idea just to produce an entry.
 
-Knowledge should explain a reusable method, finding, or useful understanding. An idea
+Knowledge should explain a reusable method, finding, or useful understanding. A spark
 should identify a substantive question, motivation, and possible test already present
 in the result. Preserve actual evidence links and clearly distinguish supported facts,
 inferences, hypotheses, and limitations. Human acceptance does not prove research claims.
 Do not research, add facts, invent citations, or infer an experiment was run. Supported
-destinations are knowledge, idea, paper and research_interest. Paper notes must preserve
+destinations for extracting additional outcomes are knowledge, spark, paper and research_interest.
+A speculative research lead is a spark. An Idea represents an already adopted project.
+For an explicitly approved retention proposal, return exactly its one artifact with
+the approved kind, title and target page. Edit its reviewed text as requested in Human
+Instruction. Preserve uncertainty and source links. Paper notes must preserve
 original evidence scope; research interests require accepted user intent, not inferred
 preferences from browsing alone. Never claim Zotero sync or invent reading metadata.
 Avoid fragmenting one coherent outcome into many entries or copying the entire report.
@@ -76,6 +80,12 @@ class Curator(CuratorProtocol):
             A grounded extraction with its result fingerprint.
         """
         started = monotonic()
+        if item.proposal and item.proposal.kind == "retention" and not item.human_instruction.strip():
+            approved = item.proposal.retention
+            self.logger.info("kind=script Curating approved %s: title=%r.", approved.kind, approved.title)
+            artifact = approved.model_copy(update={"content": item.retention_text or approved.content})
+            self.logger.info("kind=script Retention ready for publication: title=%r.", artifact.title)
+            return CurationDecision(reason=artifact.reason, artifacts=[artifact])
         self.logger.info(
             'kind=agent provider=local action=curate_result Extracting reusable outcomes from accepted result: model=%s timeout=%.0fs.',
             self.settings.curator_model,
@@ -112,6 +122,11 @@ class Curator(CuratorProtocol):
         Returns:
             Extraction material also used to fingerprint this acceptance scope.
         """
+        if item.proposal and item.proposal.kind == "retention":
+            approved = item.proposal.retention.model_dump()
+            approved["content"] = item.retention_text or item.proposal.retention.content
+            return json.dumps({"approved_retention": approved, "human_instruction": item.human_instruction},
+                              ensure_ascii=False, sort_keys=True)
         if item.proposal is None or item.result is None:
             raise ValueError("Curation requires both a proposal and a saved result")
         material = {

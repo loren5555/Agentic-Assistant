@@ -119,6 +119,8 @@ uv run python -m assistant run recommend-papers
 | Job | Input | Output |
 | --- | --- | --- |
 | propose-tasks | Pending Inbox; elevated TODO | Workbench proposals |
+| brainstorm-material | A new Papers, Knowledge or Idea research note | Exploration report and individually reviewable proposals |
+| brainstorm-idea | A question in an active Idea | Exploration report with evidence, possible next steps and Workbench links |
 | organize-papers | Pending Notero records | Paper-processing proposals |
 | organize-articles | Pending SimpRead clips | Organization/action proposals |
 | process-signals | Papers/Feed with Follow Up checked; explicitly pending Interests | Workbench proposals on the original records |
@@ -157,6 +159,47 @@ use stated defaults. Follow-up drafting receives earlier questions and answers i
 source history. A new question should explain the new blocker it resolves. Executors
 can return focused questions through the same Needs Input and feedback path.
 Run setup after schema changes to add Needs Input and the Selected Action property.
+
+## Explore research connections with BrainStorm
+
+Run setup with the service stopped to prepare the Sparks output collection. Start
+serve again, then choose one of the commands below to select a starting point automatically.
+To choose a specific page, append `--page` followed by its actual Notion page ID.
+For a paper, copy the link to the individual page in Papers and use the final
+32 hexadecimal digits of the page path, before any query string.
+
+```bash
+uv run python -m assistant run brainstorm-material
+uv run python -m assistant run brainstorm-idea
+```
+
+BrainStorm gives Codex the selected research note and a bounded selection of
+library history, with web search available for public evidence. The report keeps
+findings, evidence, candidate items and limitations. Proposer reads it once and
+can group related findings, leave observations in the report, or submit separate
+decisions. The CLI returns the report even when there are no proposals. A run
+from the maintenance panel also appears in execution history.
+
+In Workbench, approve a specific retention proposal to keep a research lead in
+Sparks, adopt a project in Ideas, or add a finding to the named Idea. Run
+`process-workbench` to apply the decision through Curator and Publisher. An
+investigation or experiment proposal follows its own execution and result review.
+A revision reopens that proposal's underlying candidate. Run `propose-tasks` to
+draft its next version.
+
+Omit `--page` to let the workflow select an eligible seed. The two jobs can be
+scheduled independently in the maintenance panel. Each mode records which seed
+revision has completed, including explorations that produced only a report.
+Each scan checks recent edits first, then resumes a bounded window of older
+pages. Pass a page ID to inspect a specific item outside this window.
+
+For Idea mode, put the question in an `Open Questions` or `Research Question`
+text property or Markdown section (also `待解问题` or `研究问题`), or write a
+question ending in `?` or `？` in the page. When the project has a status column,
+mark it active, for example `Active`, `In progress` or `进行中`. Material mode
+also recognizes `Research Log`, `Research Notes`, `Findings` and `Experiment Log`
+properties or sections (including `研究日志`, `研究记录`, `研究发现` and `实验记录`).
+Publisher's most recent appended research finding can serve as the next seed.
 
 ## Plan, review and execute
 

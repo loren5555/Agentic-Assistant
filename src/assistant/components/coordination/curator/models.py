@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from assistant.components.data.publisher.models import PublicationReceipt
@@ -17,16 +17,25 @@ class RetainedArtifact(BaseModel):
         title: Concise title for retrieval.
         content: Standalone Markdown retaining evidence and uncertainty.
         reason: Value beyond this particular task.
+        target_idea_page_id: Existing project receiving an appended finding.
         reading: Paper reading properties supported by the accepted result.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["knowledge", "idea", "paper", "research_interest"]
+    kind: Literal["spark", "knowledge", "idea", "paper", "research_interest"]
     title: str
     content: str
     reason: str
     reading: PaperReadingMetadata | None = None
+    target_idea_page_id: str | None = Field(default=None, exclude_if=lambda value: value is None, description="Existing Idea receiving this finding, or null for a new entry.")
+
+    @model_validator(mode="after")
+    def validate_destination(self) -> "RetainedArtifact":
+        if getattr(self, "target_idea_page_id", None) is not None:
+            if self.kind != "idea" or not self.target_idea_page_id.strip():
+                raise ValueError("Only a finding for an existing Idea can name a target page")
+        return self
 
 
 class CurationDecision(BaseModel):

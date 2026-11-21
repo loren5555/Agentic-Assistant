@@ -66,10 +66,14 @@ async def process_workbench(self: TaskWorkflows) -> list[str]:
             current.result is not None and current.result.action_id == "plan"
             and current.status in {"Executed", "Finished"} and current.result_review == "Qualified"
         )
+        # A lost acknowledgement after closing retention resumes the original review
+        # so that its durable publication receipts reach the business index.
+        retained = bool(current.proposal and current.proposal.kind == "retention"
+                        and current.status == "Archived" and current.human_review == "Approved")
         actionable = (
             current.status == "Open" and current.human_review == "Approved"
             or current.status == "Executed" and current.result_review == "Qualified"
-            or accepted_plan
+            or accepted_plan or retained
         )
         if not actionable:
             logger.info('Waiting for human review: title=%r.', current.title)
@@ -78,6 +82,8 @@ async def process_workbench(self: TaskWorkflows) -> list[str]:
         if accepted_plan:
             # Preserve the operation identity when a terminal write succeeds but
             # its acknowledgement is lost before the checkpoint is saved.
+            excluded.add("status")
+        if current.proposal and current.proposal.kind == "retention":
             excluded.add("status")
         signal = {"owner": record["workflow_id"], "item": current.model_dump(exclude=excluded)}
         operation = "review:v2:" + digest(json.dumps(signal, sort_keys=True))
@@ -120,7 +126,12 @@ async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
     if item.publication_key != saved.publication_key:
         raise RuntimeError("Report publication changed; reconcile the work before execution")
 
-    if item.status == "Open" and item.human_review == "Approved":
+    retention = item.proposal.kind == "retention" and item.status == "Open" and item.human_review == "Approved"
+    if retention and (item.selected_action_id != "retain_material"
+                      or not item.proposal.selected_action or item.proposal.selected_action.id != "retain_material"
+                      or item.proposal_version != item.proposal.version):
+        raise RuntimeError("The reviewed retention route or proposal version changed")
+    if item.status == "Open" and item.human_review == "Approved" and not retention:
         task = TaskRequest(workbench_url=item.url, proposal=item.proposal,
                            instruction=item.human_instruction, source=source)
         try:
@@ -137,7 +148,7 @@ async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
             except Exception:
                 logger.exception("Could not report execution error: title=%r.", item.title)
             raise
-    elif item.status == "Executed" and item.result_review == "Qualified":
+    elif retention or (item.status == "Executed" and item.result_review == "Qualified"):
         decision = await self.extract(item)
         for position, artifact in enumerate(decision.artifacts):
             identity = f"{item.page_id}:{item.proposal.version}:{position}:{artifact.model_dump_json()}"
@@ -187,6 +198,8 @@ def read_review(self: WorkbenchWorkflows, saved: WorkbenchItem) -> WorkbenchItem
     current.result = saved.result
     current.curation = saved.curation
     current.source_kind = saved.source_kind
+    if saved.proposal and saved.proposal.kind == "retention" and current.human_review == "Approved" and current.status in {"Open", "Archived"}:
+        current.retention_text = self.services.workbench.read_retention_text(current.page_id, saved.proposal.retention)
     logger.info(
         'Human review read: title=%r status=%s approval=%s acceptance=%s.',
         current.title,
@@ -372,16 +385,29 @@ async def extract(self: WorkbenchWorkflows, item: WorkbenchItem) -> CurationDeci
         Current extraction decision.
     """
     logger.info(
-        'Curating accepted result: title=%r.',
+        'Curating %s: title=%r.',
+        "approved material" if item.proposal.kind == "retention" else "accepted result",
         item.title,
         extra={"details": {'page': item.page_id}},
     )
-    if item.result.artifacts:
+    if item.proposal.kind == "retention":
+        decision = await self.services.curator.extract(item)
+        approved = item.proposal.retention
+        if len(decision.artifacts) != 1 or any(
+            artifact.kind != approved.kind or artifact.target_idea_page_id != approved.target_idea_page_id
+            for artifact in decision.artifacts
+        ):
+            raise ValueError("Curator changed the approved retention destination")
+    elif item.result.artifacts:
         # Structured products were part of the accepted result, not inferred later.
         decision = CurationDecision(reason="Retain the structured outputs accepted by the user.",
                                     artifacts=item.result.artifacts)
     else:
         decision = await self.services.curator.extract(item)
+        for position, artifact in enumerate(decision.artifacts):
+            if artifact.kind == "idea":
+                logger.info("Retaining inferred research lead as a Spark pending adoption: title=%r.", artifact.title)
+                decision.artifacts[position] = artifact.model_copy(update={"kind": "spark", "target_idea_page_id": None})
     # A worker or Curator can retain a paper without invoking the dedicated Briefer.
     papers = [artifact for artifact in decision.artifacts if artifact.kind == "paper"
               and (artifact.reading is None or artifact.reading.directions is None)]
@@ -472,6 +498,10 @@ def check_authorization(self: WorkbenchWorkflows, source: SourceMaterial, item: 
     """
     current = self.services.workbench.read_item(item.page_id)
     current_source = self.read_current_source(source)
+    if getattr(item, "retention_text", None) is not None:
+        live_text = self.services.workbench.read_retention_text(item.page_id, item.proposal.retention)
+        if live_text != item.retention_text:
+            raise RuntimeError("Reviewed retention text changed; publication stopped")
     fields = ("status", "human_review", "human_instruction", "result_review", "result_feedback", "publication_key", "selected_action_id", "proposal_version")
     if current_source.fingerprint != source.fingerprint or any(getattr(current, field) != getattr(item, field) for field in fields):
         raise RuntimeError("Source, publication, or human authorization changed; publication stopped")

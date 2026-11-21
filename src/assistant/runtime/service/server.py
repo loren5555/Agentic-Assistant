@@ -33,7 +33,7 @@ from assistant.runtime.service.models import (
     RUNTIME_HEADER,
     runtime_identity,
 )
-from assistant.runtime.service.presentation import result_document
+from assistant.runtime.service.presentation import error_message, result_document
 from assistant.runtime.service.submissions import (
     RECOVERY_QUEUE,
     recover_requested_workflow,
@@ -187,7 +187,7 @@ def create_app(application):
                 {
                     "id": workflow_id,
                     "status": saved.status,
-                    "error": str(saved.error or saved.status),
+                    "error": error_message(saved.error, saved.status),
                 }
             )
         return json_response({"id": workflow_id, "status": saved.status}, 202)

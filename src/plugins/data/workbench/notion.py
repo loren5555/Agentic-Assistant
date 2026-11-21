@@ -6,7 +6,7 @@ import re
 
 from notion_client import Client
 
-from assistant.components.coordination.curator.models import CurationDecision
+from assistant.components.coordination.curator.models import CurationDecision, RetainedArtifact
 from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.coordination.proposer.models import Proposal
 from assistant.components.execution.task_worker.models import TaskResult
@@ -92,6 +92,24 @@ class Workbench(WorkbenchProtocol):
             extra={"details": {'page': page_id}},
         )
         return item
+
+    @staticmethod
+    def _destination(artifact: RetainedArtifact) -> str:
+        if getattr(artifact, "target_idea_page_id", None):
+            return f"Append finding to Idea {artifact.target_idea_page_id}"
+        return "Create an adopted Idea" if artifact.kind == "idea" else "Save a Spark"
+
+    def read_retention_text(self, page_id: str, artifact: RetainedArtifact) -> str:
+        """Read the approved, editable material from its section in the Workbench report."""
+        with Client(auth=self.settings.token) as client:
+            body = self._markdown(client, page_id)
+        before, sep, material = body.partition("## Material to retain")
+        if not sep or f"Destination: {self._destination(artifact)}" not in before:
+            raise ValueError("The retention destination or section changed. Request a revision to change the destination.")
+        material = re.sub(r"\n+Workflow: [^\n]+\s*$", "", material).strip()
+        if not material:
+            raise ValueError("The approved material is empty. Add content in Workbench before retaining it.")
+        return material
 
     @trace_call("component", "workbench.submit")
     def submit(self, source: SourceMaterial, proposal: Proposal, workflow_id: str = "") -> WorkbenchItem:
@@ -268,6 +286,8 @@ class Workbench(WorkbenchProtocol):
                         "that proposal requires fresh approval before execution.")
         for artifact in result.artifacts:
             content += f"\n\n## Proposed {artifact.kind}: {artifact.title}\n\n{artifact.content}\n\nRetention reason: {artifact.reason}"
+            if getattr(artifact, "target_idea_page_id", None):
+                content += f"\n\nDestination: {self._destination(artifact)}"
             if artifact.reading:
                 content += "\n\nReading properties:\n\n" + artifact.reading.model_dump_json(indent=2)
         with Client(auth=self.settings.token) as client:
@@ -473,7 +493,20 @@ class Workbench(WorkbenchProtocol):
             f"Understanding: {proposal.understanding}",
             f"Reason: {proposal.reason}",
         ]
-        if proposal.kind == "clarification":
+        if source.kind == "brainstorm" and source.metadata.get("evidence"):
+            lines.append("## Research evidence")
+            lines.extend(f"- {url}" for url in source.metadata["evidence"])
+        if proposal.kind == "retention":
+            artifact = proposal.retention
+            lines.extend([
+                "## Proposed workflow: Retain reviewed material",
+                f"Destination: {self._destination(artifact)}",
+                f"Archive title: {artifact.title}",
+                f"Retention reason: {artifact.reason}",
+                "Edit the material below or add Human Instruction, then set Human Review to Approved to publish.",
+                "## Material to retain", artifact.content,
+            ])
+        elif proposal.kind == "clarification":
             lines.extend([
                 "## Input needed",
                 *[f"{index}. {question}" for index, question in enumerate(proposal.questions, start=1)],

@@ -16,6 +16,8 @@ from urllib.parse import quote
 from pydantic import BaseModel, ConfigDict, Field
 
 JOB_LABELS = {
+    "brainstorm-material": "从研究笔记探索线索",
+    "brainstorm-idea": "探索在研 Idea 的问题",
     "propose-tasks": "整理 Inbox / TODO",
     "organize-papers": "整理论文",
     "organize-articles": "整理剪辑",
@@ -29,6 +31,8 @@ JOB_LABELS = {
 PHASE_LABELS = {
     **{key.replace("-", "_"): value for key, value in JOB_LABELS.items()},
     "dispatch": "运行工作流", "intake_item": "整理条目并提交提案", "reconcile_item": "处理条目反馈",
+    "brainstorm": "整理研究线索", "explore_brainstorm": "生成探索报告",
+    "submit_brainstorm_proposal": "提交研究提案",
     "daily_newspaper": "生成研究日报",
     "collect_research": "收集研究候选",
     "recommendations": "筛选研究推荐",

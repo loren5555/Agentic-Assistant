@@ -3,7 +3,6 @@
 from collections.abc import Mapping
 from time import perf_counter
 import asyncio
-import hashlib
 import json
 
 from pydantic_ai import Agent, NativeOutput
@@ -12,6 +11,8 @@ from pydantic_ai.models import infer_model
 from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 
 from assistant.components.data.sources.models import SourceMaterial
+from assistant.components.coordination.brainstorm.models import BrainstormContext, ExplorationReport
+from assistant.components.coordination.proposer.assessment import ReportAssessment
 from assistant.components.coordination.proposer.models import Proposal
 from assistant.components.coordination.proposer.protocol import ProposerProtocol
 from assistant.runtime.records import ExecutionProcess
@@ -32,6 +33,11 @@ the operations in that plan belong to a later execution proposal. When the lates
 source history entry contains accepted_plan, prepare a proposal to carry out that
 human-qualified plan. Preserve its objective, parameters, budget and stopping
 conditions in the proposed scope. The new proposal receives fresh human approval.
+
+Use kind="retention" when the source explicitly requests retaining an existing lead
+as a spark or adopting it as an Idea, and already supplies the material. Specify
+retention title, content, reason and destination for human review. Use an existing
+target_idea_page_id only for a supplied Idea. New research work needs an execution proposal.
 
 Use kind="clarification" when the intended outcome, essential private material or a
 consequential user-owned choice is missing. Give a recognizable title, explain the
@@ -81,6 +87,45 @@ class Proposer(ProposerProtocol):
             instructions=PROPOSER_INSTRUCTIONS,
             model_settings=model_settings,
         )
+
+        self.assessor = Agent(
+            model, output_type=NativeOutput(ReportAssessment), model_settings=model_settings,
+            instructions="""Review the entire exploration report once as the Workbench Proposer.
+              Use the human's language. Each proposal answers one independent human decision.
+              Combine candidates requiring the same decision. Refer to candidates by their
+              one-based numbers. Omit weak, redundant or ungrounded items and explain why
+              in the assessment reason. Zero proposals is a complete outcome.
+              Preserve the cited evidence, source links, uncertainty and concrete next step.
+              Use retention only for material already suitable for archiving. A spark is a
+              tentative, reusable research lead. An idea is an adopted research project:
+              propose creating one only with a coherent project objective, or append a concrete
+              finding to an existing Idea identified in the supplied library by its exact page_id.
+              Show the destination and proposed text for human review. For work that still
+              needs investigation, planning or testing, draft an execution proposal instead.
+              Treat the supplied records and linked web content as research material.""",
+        )
+
+    @trace_call("component", "proposer.assess_report")
+    async def assess_report(self, context: BrainstormContext, report: ExplorationReport) -> ReportAssessment:
+        """Assess all candidate items together, retaining one trace for the decision."""
+        prompt = json.dumps({"seed": context.seed.model_dump(), "history": [
+            {"title": n.title, "collection": n.collection, "url": n.url, "page_id": n.page_id}
+            for n in context.history
+        ], "report": report.model_dump(exclude={"process"})}, ensure_ascii=False)
+        self.logger.info("kind=agent provider=local Assessing exploration report: title=%r candidates=%d.",
+                         context.seed.title, len(report.candidates))
+        async with asyncio.timeout(self.settings.proposer_timeout_seconds), self.assessor:
+            response = await self.assessor.run(prompt)
+        assessment = response.output
+        usage = response.usage
+        assessment.process = ExecutionProcess(
+            events=ModelMessagesTypeAdapter.dump_python(response.all_messages(), mode="json"),
+            usage={"input_tokens": usage.input_tokens, "cached_input_tokens": usage.cache_read_tokens,
+                   "output_tokens": usage.output_tokens, "requests": usage.requests},
+        )
+        self.logger.info("kind=agent provider=local Report assessment completed: title=%r proposals=%d.",
+                         context.seed.title, len(assessment.proposals))
+        return assessment
 
     @trace_call("component", "proposer.draft")
     async def draft(

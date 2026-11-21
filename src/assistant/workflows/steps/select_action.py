@@ -14,7 +14,7 @@ from dbos import DBOS
 from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.coordination.proposer.models import Proposal
 from assistant.components.coordination.router.actions import AMINER_RESEARCH, EXECUTION_ACTIONS
-from assistant.components.coordination.router.models import RouterInput
+from assistant.components.coordination.router.models import ActionCandidate, RouterInput
 from assistant.components.coordination.router.prompt import validate_decision
 from logger import get_logger, trace_call
 
@@ -33,6 +33,10 @@ async def select_action(self, source: SourceMaterial, proposal: Proposal) -> Pro
     """
     if proposal.kind == "clarification":
         return proposal
+    if proposal.kind == "retention":
+        route = ActionCandidate(id="retain_material", name="Retain reviewed material",
+                                description="On approval Curator and Publisher archive the displayed material.")
+        return proposal.model_copy(update={"selected_action": route})
     candidates = [candidate for candidate in EXECUTION_ACTIONS
                   if candidate.id != "plan" or proposal.execution_plan is None]
     if self.services.aminer_api_key:

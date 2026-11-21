@@ -11,6 +11,8 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 JobName = Literal[
+    "brainstorm-material",
+    "brainstorm-idea",
     "propose-tasks",
     "organize-papers",
     "organize-articles",
@@ -48,12 +50,22 @@ class JobSubmission(BaseModel):
     def check_page_job(self):
         """Allow page selection only for jobs whose workflow accepts it."""
         if self.page is not None and self.job not in {
+            "brainstorm-material",
+            "brainstorm-idea",
             "organize-papers",
             "organize-articles",
         }:
             raise ValueError(
-                "page is supported only for organize-papers and organize-articles"
+                "page is supported only for organize-papers, organize-articles and BrainStorm jobs"
             )
+        if self.page is not None and self.job in {"brainstorm-material", "brainstorm-idea"}:
+            try:
+                UUID(self.page)
+            except ValueError:
+                raise ValueError(
+                    "--page requires a Notion page ID (32 hexadecimal digits, with or without hyphens). "
+                    "Omit --page to let BrainStorm choose a starting point."
+                ) from None
         return self
 
 

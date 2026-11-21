@@ -27,6 +27,7 @@ class ProviderSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    brainstorm: str = "codex"
     router: str
     investigator: str
     proposer: str = "local"

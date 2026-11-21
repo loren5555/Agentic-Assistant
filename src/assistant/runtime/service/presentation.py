@@ -1,10 +1,37 @@
 """Format saved workflow outputs consistently for clients and the report UI."""
 
+import base64
+import binascii
+import pickletools
+
 from pydantic import BaseModel
 from assistant.components.recommendations.recommender.models import (
     CATEGORIES,
     RecommendationRun,
 )
+
+
+def error_message(error, fallback: str) -> str:
+    """Show the message from a saved exception, omitting serialized state and headers."""
+    if not isinstance(error, str) or not error.startswith("gAS"):
+        return str(error or fallback)
+
+    # DBOS can return the original pickle when an SDK exception cannot be
+    # reconstructed from its message alone. Inspect the constructor argument
+    # without loading any classes or reading the HTTP response state.
+    try:
+        raw = base64.b64decode(error, validate=True)
+        ops = ((op.name, arg) for op, arg, _ in pickletools.genops(raw)
+               if op.name not in {"PROTO", "FRAME", "MEMOIZE"})
+        string_ops = {"SHORT_BINUNICODE", "BINUNICODE", "BINUNICODE8"}
+        module, cls, constructor, message, args = (next(ops) for _ in range(5))
+        if (module[0] in string_ops and cls[0] in string_ops
+                and constructor[0] == "STACK_GLOBAL" and message[0] in string_ops
+                and args[0] == "TUPLE1"):
+            return f"{cls[1]}: {message[1][:2000]}"
+    except (ValueError, binascii.Error, EOFError, StopIteration, RuntimeError):
+        pass
+    return f"{fallback}. See the service log for the original error."
 
 
 def result_document(output):

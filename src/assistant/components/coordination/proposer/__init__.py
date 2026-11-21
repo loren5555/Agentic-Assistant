@@ -5,6 +5,7 @@ Input origin:
     current feedback and prior result context through one SourceMaterial.
 Output destination:
     Execution proposals pass through Router before Workbench approval.
+    Retention proposals show a Spark or Idea and destination for direct approval.
     Clarification proposals go to Workbench as Needs Input, with focused questions
     for the human.
 Responsibility:

@@ -5,7 +5,8 @@ Input origin:
 Output destination:
     Proposals/results in Workbench, accepted typed outputs, or autonomous Feed entries.
 Task map:
-    propose_tasks: Inbox and elevated TODO -> shared intake -> Workbench.
+    brainstorm: new note or active Idea question -> exploration report -> independent Workbench proposals.
+    propose_tasks: Inbox, elevated TODO and revised BrainStorm candidates -> shared intake -> Workbench.
     organize_papers: Notero Processor -> shared intake -> Workbench.
     organize_articles: SimpRead Processor -> shared intake -> Workbench.
     process_signals: Interested paper/feed and explicit interest requests -> intake.

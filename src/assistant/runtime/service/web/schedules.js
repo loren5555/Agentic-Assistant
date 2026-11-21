@@ -235,10 +235,12 @@ function openRun(job) {
 }
 
 function runFields() {
-  $('run-page-label').hidden = !['organize-papers', 'organize-articles'].includes($('run-job-select').value);
+  $('run-page-label').hidden = !['organize-papers', 'organize-articles', 'brainstorm-material', 'brainstorm-idea'].includes($('run-job-select').value);
 }
 
 const descriptions = {
+  "brainstorm-material": "从一篇论文、知识笔记或 Idea 研究记录出发，结合历史积累与公开资料寻找关联。报告中的独立提议可分别审批。",
+  "brainstorm-idea": "围绕一个在研 Idea 寻找解释、方法和可验证的实验，把值得决策的条目提交 Workbench。",
   "propose-tasks": "读取 Inbox 新条目和标为 Elevated 的 TODO，将待办整理成 Workbench 提案供你审批。",
   "organize-papers": "读取 Notero 中待处理的论文，为每篇起草整理提案。执行并验收后，再将阅读成果存入 Papers 等目标库。",
   "organize-articles": "读取简悦收藏的待处理文章，提炼要点并提交 Workbench，由你决定哪些剪辑值得进一步整理。",

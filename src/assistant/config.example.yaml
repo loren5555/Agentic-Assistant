@@ -1,4 +1,5 @@
 providers:
+  brainstorm: codex  # Synthesizes research notes and public evidence into an exploration report.
   processors: notion  # Source-specific extraction, acknowledgement and feedback storage.
   organizer: local  # Shared interpretation of source material and human intent.
   reconciler: local  # Deterministic feedback-to-source updates; no model invocation.
@@ -91,6 +92,9 @@ codex:
   investigator_model: gpt-5.6-luna
   investigator_effort: low
   investigator_timeout_seconds: 300
+  brainstorm_model: null  # Use the signed-in Codex CLI default model.
+  brainstorm_effort: high
+  brainstorm_timeout_seconds: 600
   discovery_model: gpt-5.6-luna
   discovery_effort: low
   discovery_timeout_seconds: 600
@@ -109,6 +113,7 @@ notion:
   todo_data_source_id: <<notion-todo-data-source-id>>
   workbench_data_source_id: <<notion-workbench-data-source-id>>
   knowledge_data_source_id: <<notion-knowledge-data-source-id>>
+  sparks_data_source_id: ""  # Setup locates or creates Sparks under Assistant.
   ideas_data_source_id: <<notion-ideas-data-source-id>>
   notero_data_source_id: <<notion-notero-data-source-id>>
   simpread_data_source_id: <<notion-simpread-data-source-id>>

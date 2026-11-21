@@ -13,6 +13,11 @@ from .metadata import JOB_LABELS, label
 
 # Only operations with a user-visible purpose enter the activity timeline.
 STEPS = {
+    "read_brainstorm_context": ("选择研究起点与历史材料", "研究资料库"),
+    "research_brainstorm": ("探索材料之间的联系", "BrainStorm"),
+    "assess_brainstorm": ("从报告中选取独立提案", "Proposer"),
+    "stage_brainstorm_candidate": ("保留待审批的条目", "研究报告"),
+
     "read_sources": ("读取待处理条目", "来源处理器"),
     "organize_source": ("整理来源材料", "Information Organizer"),
     "draft": ("起草提案", "Proposer"), "select_action": ("选择执行方式", "Router"),
@@ -31,6 +36,7 @@ STEPS = {
     "publish": ("发布每日推荐", "Research Feed"), "save_directions": ("保存后续检索方向", "Collector"),
 }
 TRACE_FIELDS = {
+    "research_brainstorm": "process", "assess_brainstorm": "process",
     "draft": "process", "execute": "process", "decide": "process", "select_action": "routing_process",
     "read": "process", "assess": "process", "discover": "process", "collect": "process",
 }
@@ -42,6 +48,7 @@ FIELDS = {
     "action": "任务", "plan": "计划", "questions": "待确认问题", "content": "内容", "expected_result": "预期成果",
     "selected_action_id": "执行方式", "user_intent": "意图", "summary": "摘要", "reason": "依据",
     "notes": "说明", "answer": "回答", "url": "页面", "understanding": "材料解读", "key_points": "要点",
+    "findings": "研究发现", "limitations": "局限", "claim": "线索", "next_step": "建议",
     "qualified": "通过筛选", "category": "栏目", "day": "日期", "job": "任务",
 }
 OPAQUE = re.compile(r"^(?:[\w-]+:)?[\da-f-]{32,}$|^gAS[A-Za-z0-9+/=]{16,}$", re.I)
@@ -104,6 +111,24 @@ def describe(value):
             v = "是" if v else "否"
         if clean(v):
             lines.append(f"{caption}：{JOB_LABELS.get(v, v)[:8000]}")
+    if "report" in obj and "proposals" in obj:
+        if not obj.get("seed"):
+            return ["本次未找到待探索的研究材料。"]
+        lines.extend(describe(values(obj["seed"]).get("title")))
+        lines.extend(describe(obj["report"]))
+        if reason := clean(obj.get("assessment")):
+            lines.append("提案筛选：" + reason)
+        for proposal in obj["proposals"]:
+            entry = values(proposal)
+            if title := clean(entry.get("title")):
+                lines.append("提案：" + title)
+                if url := clean(entry.get("url")):
+                    lines.append(url)
+    if "findings" in obj and "candidates" in obj:
+        for candidate in obj["candidates"]:
+            entry = values(candidate)
+            lines.extend(describe(entry))
+            lines.extend(url for url in entry.get("evidence", []) if clean(url))
     for key, caption in (("candidates","候选"), ("published","已发布"), ("selected","入选"), ("artifacts","保留成果")):
         if isinstance(obj.get(key), list):
             lines.append(f"{caption}：{len(obj[key])} 项")
@@ -210,7 +235,8 @@ def activity(metadata, workflow_id):
 def calls_page(metadata, before):
     # Only inspect telemetry-producing steps. Page through bounded batches, also
     # when an earlier provider stored no trace for an otherwise eligible step.
-    names = [f"{prefix}.{step}" for prefix in ("ProposalWorkflows","ResearchWorkflows") for step in TRACE_FIELDS]
+    names = [f"{prefix}.{step}{suffix}" for prefix in ("JobWorkflows","ProposalWorkflows","ResearchWorkflows")
+             for step in TRACE_FIELDS for suffix in ("", ".v2")]
     placeholders = ",".join("?" for _ in names)
     with closing(metadata.connect()) as db:
         rows = db.execute(f"""SELECT o.rowid AS cursor,o.*,w.name,w.attributes FROM operation_outputs o

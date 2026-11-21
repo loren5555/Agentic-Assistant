@@ -1,10 +1,12 @@
 """Bind module-first plugin implementations lazily while exposing application interfaces."""
 
 from functools import cached_property
+from pathlib import Path
 
 from assistant.config import AssistantConfig
 from plugins import get_plugin
 
+from assistant.components.coordination.brainstorm.protocol import BrainstormProtocol, ResearchLibraryProtocol
 from assistant.components.coordination.curator.protocol import CuratorProtocol
 from assistant.components.coordination.organizer.protocol import OrganizerProtocol
 from assistant.components.coordination.proposer.protocol import ProposerProtocol
@@ -55,6 +57,10 @@ class Services:
         Returns:
             Lazy processor exposing the shared source contract.
         """
+        if kind == "brainstorm" and kind not in self._processors:
+            from plugins.data.sources.brainstorm import BrainstormProcessor
+            path = Path(self.config.runtime.directory).resolve() / "v2" / "brainstorm.sqlite"
+            self._processors[kind] = BrainstormProcessor(path, limit=self.config.runtime.batch_size)
         if kind not in self._processors:
             name = self.config.providers.processors
             plugin = get_plugin("data.sources", name)
@@ -100,6 +106,20 @@ class Services:
         name = self.config.providers.discovery_pool
         plugin = get_plugin("data.recommendation_tags", name)
         return plugin.RecommendationTags(self.config.provider_options[name])
+
+    @cached_property
+    def research_library(self) -> ResearchLibraryProtocol:
+        """Read the research seed and a bounded selection of related knowledge."""
+        plugin = get_plugin("coordination.brainstorm", "notion")
+        return plugin.ResearchLibrary(self.config.provider_options["notion"],
+                                      cursor_path=Path(self.config.runtime.directory).resolve() / "v2" / "brainstorm.sqlite")
+
+    @cached_property
+    def brainstorm(self) -> BrainstormProtocol:
+        """Explore private research context and public evidence with Codex."""
+        name = self.config.providers.brainstorm
+        plugin = get_plugin("coordination.brainstorm", name)
+        return plugin.Brainstorm(self.config.provider_options.get(name, {}))
 
     # Coordination roles.
 

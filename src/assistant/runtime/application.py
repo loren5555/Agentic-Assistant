@@ -8,7 +8,7 @@ import asyncio
 
 from dbos import DBOS, DBOSConfig, DBOSConfiguredInstance
 
-from assistant.workflows.tasks import dispatch as dispatch_task
+from assistant.workflows.tasks import brainstorm as brainstorm_task, dispatch as dispatch_task
 from assistant.config import AssistantConfig, RuntimeSettings
 from assistant.runtime.index import WorkIndex
 from assistant.runtime.serialization import ComponentSerializer
@@ -57,6 +57,13 @@ class TaskWorkflows(DBOSConfiguredInstance):
     organize_articles = articles_task.organize_articles
     process_signals = signal_task.process_signals
     reconcile_feedback = reconciliation_task.reconcile_feedback
+    brainstorm = brainstorm_task.brainstorm
+    read_brainstorm_context = brainstorm_task.read_brainstorm_context
+    explore_brainstorm = brainstorm_task.explore_brainstorm
+    research_brainstorm = brainstorm_task.research_brainstorm
+    assess_brainstorm = brainstorm_task.assess_brainstorm
+    stage_brainstorm_candidate = brainstorm_task.stage_brainstorm_candidate
+    finish_brainstorm = brainstorm_task.finish_brainstorm
     dispatch = dispatch_task.dispatch
 
 
@@ -77,6 +84,7 @@ class WorkbenchWorkflows(DBOSConfiguredInstance):
         self.index = index
         self.directory = directory
 
+    submit_brainstorm_proposal = brainstorm_task.submit_brainstorm_proposal
     save_checkpoint = proposal_steps.save_checkpoint
     read_source = proposal_steps.read_source
     read_current_source = proposal_steps.read_current_source

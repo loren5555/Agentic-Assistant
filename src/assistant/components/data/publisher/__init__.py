@@ -1,9 +1,10 @@
 """Publish accepted information to its chosen output database.
 
 Input origin:
-    Curator outputs grounded in accepted Workbench results.
+    Curator outputs grounded in approved retention proposals or accepted Workbench results.
 Output destination:
-    Papers, Knowledge, Ideas and Research Interests, with source/work provenance.
+    Sparks, Papers, Knowledge, Ideas and Research Interests, with source and Workbench provenance.
+    Adopted Ideas receive new project pages or appended findings on a reviewed project.
 Responsibility:
     Storage and retry-safe confirmation only. Autonomous recommendation Feed writes
     remain owned by the separate recommendation workflow.

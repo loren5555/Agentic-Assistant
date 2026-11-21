@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from assistant.components.execution.planner.models import ExecutionPlan
 
 
-SourceKind = Literal["inbox", "todo", "notero", "simpread", "paper", "interest", "feed"]
+SourceKind = Literal["inbox", "todo", "notero", "simpread", "paper", "interest", "feed", "brainstorm"]
 
 
 class SourceHistory(BaseModel):

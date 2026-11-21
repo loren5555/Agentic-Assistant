@@ -1,31 +1,18 @@
-"""Select reusable knowledge and ideas from a human-accepted result.
+"""Select durable research material after a human decision in Workbench.
 
 Input origin:
-    process_workbench invokes extract after Result Review = Qualified in Workbench.
-    It supplies a WorkbenchItem whose structured proposal/result is loaded from
-    DBOS state and whose current acceptance/feedback comes from Notion properties.
+    Workbench supplies either a retention proposal approved for immediate
+    publication, including its edited text and Human Instruction, or an
+    executed task whose result the human marked Qualified.
 
 Output destination:
-    CurationDecision returns to process_workbench.extract. The workflow sends each
-    selected artifact to ArtifactPublisher for Knowledge/Ideas publication, saves the
-    receipts, and marks Workbench Archived, or Finished when nothing is retained.
+    Publisher receives one approved retention item or the reusable artifacts
+    from an accepted result. The workflow records publication receipts and
+    closes Workbench as Archived, or Finished when nothing was retained.
 
 Responsibility:
-    Decide what remains useful beyond the completed task and extract grounded,
-    standalone material. An empty extraction is a valid outcome.
-
-Inputs:
-    WorkbenchItem carrying the proposal, completed result, and human acceptance.
-
-Outputs:
-    CurationDecision explaining the choice and listing RetainedArtifact entries
-    for knowledge or ideas. Publication receipts are attached by the workflow.
-
-Participants:
-    Curation agent, process_workbench after Qualified acceptance, ArtifactPublisher,
-    and the human who later reads retained material.
-
-Boundaries:
-    Extraction does not publish or close the task. The workflow archives the
-    selected artifacts and chooses Archived, or Finished when nothing is retained.
+    Preserve evidence and uncertainty in research leads (Sparks), adopted
+    projects (Ideas), project findings, paper notes, knowledge and interests.
+    Direct retention preserves the destination shown for approval. Structured
+    artifacts displayed with a result are authorized by its acceptance.
 """

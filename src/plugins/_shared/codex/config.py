@@ -14,6 +14,9 @@ class CodexSettings(BaseModel):
         investigator_model: Investigation model identifier.
         investigator_effort: Investigation reasoning effort.
         investigator_timeout_seconds: Maximum investigation invocation duration.
+        brainstorm_model: Optional exploration model; defaults to the signed-in CLI model.
+        brainstorm_effort: Reasoning effort for research synthesis.
+        brainstorm_timeout_seconds: Exploration deadline including web search.
         discovery_model: Candidate search model, falling back to investigator_model.
         discovery_effort: Search effort, falling back to investigator_effort.
         discovery_timeout_seconds: Search deadline including web tool use.
@@ -33,6 +36,10 @@ class CodexSettings(BaseModel):
     investigator_model: str | None = None
     investigator_effort: str | None = None
     investigator_timeout_seconds: float = 300
+
+    brainstorm_model: str | None = None
+    brainstorm_effort: str = "high"
+    brainstorm_timeout_seconds: float = Field(default=600, gt=0)
 
     discovery_model: str | None = None
     discovery_effort: str | None = None

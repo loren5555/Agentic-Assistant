@@ -5,14 +5,27 @@ import argparse
 from uuid import UUID
 
 JOB_HELP = {
+    "brainstorm-material": {
+        "help": "Explore research leads from a new paper, knowledge note or Idea log.",
+        "description": "Connect one research note with relevant library history and public sources. "
+                       "Save an exploration report and submit independent proposals to Workbench.",
+        "epilog": "Example: python -m assistant run brainstorm-material",
+    },
+    "brainstorm-idea": {
+        "help": "Explore an open question in an active research Idea.",
+        "description": "Explore an active Idea with library history and web evidence. Read the report in the "
+                       "command output or execution history. Review each proposed next step in Workbench.",
+        "epilog": "Example: python -m assistant run brainstorm-idea",
+    },
     "propose-tasks": {
-        "help": "Organize Inbox and elevated TODO inputs and propose work.",
+        "help": "Propose work from Inbox, elevated TODOs and revised BrainStorm candidates.",
         "description": (
             "Read pending source versions through independent processors. Shared Organizer and\n"
             "Proposer submit Workbench proposals. No execution or final knowledge publication."
         ),
         "epilog": """Sources:
   Inbox Status != Archived; TODO Status = elevated; Agent Processed unchecked.
+  BrainStorm candidates reopened by Workbench feedback enter the same review cycle.
   After verified proposal publication, acknowledge the same source version.
   Review and approve the proposal, then run process-workbench.
 
@@ -87,7 +100,8 @@ Example:
         ),
         "epilog": """Transitions:
   Needs Input: wait for an answer; submitted answers return to the source first.
-  Open / Approved: use the saved workflow; result becomes Executed / Pending.
+  Open / Approved retention: Curator and Publisher store the reviewed Spark or Idea.
+  Open / Approved execution: use the saved workflow; result becomes Executed / Pending.
   plan / Executed / Qualified: finish planning and propose execution for fresh approval.
   Executed / Qualified: retain useful outputs, then Archived; otherwise Finished.
   Revision Requested / Unqualified: reopen source, never directly redo a worker.
@@ -222,7 +236,7 @@ Use COMMAND --help or run JOB --help for detailed behaviour and examples.""",
         ),
         epilog="""Options and configuration:
   Select a job below; run JOB --help describes its sources, writes, and examples.
-  --page PAGE_ID is available only for organize-papers and organize-articles.
+  --page PAGE_ID selects a source for paper/article intake or a BrainStorm starting point.
   Configure providers, model settings, and batch limits in YAML, not as CLI overrides.
   Start serve with the same --config first. --detach returns a durable workflow ID.
   Ctrl+C stops client waiting; accepted work keeps running in serve.
@@ -248,6 +262,9 @@ Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run
     jobs = run.add_subparsers(dest="job", required=True, title="jobs", metavar="JOB")
     for name, documentation in JOB_HELP.items():
         job = jobs.add_parser(name, formatter_class=formatter, parents=[verbose_options, submission_options], **documentation)
+        if name in {"brainstorm-material", "brainstorm-idea"}:
+            job.add_argument("--page", metavar="PAGE_ID", help="Explore this Notion page. "
+                             "By default the research library selects an eligible starting point.")
         if name in {"organize-papers", "organize-articles"}:
             job.add_argument(
                 "--page", metavar="PAGE_ID",
@@ -278,7 +295,7 @@ Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run
   15 minutes. With schedules: {} (default), the service still accepts manual jobs.
   Available jobs: propose-tasks, process-workbench, organize-papers,
   organize-articles, process-signals, reconcile-feedback, recommend-papers,
-  recommend-papers-deep, recommend-papers-light.
+  recommend-papers-deep, recommend-papers-light, brainstorm-material, brainstorm-idea.
 
 Persistence and shutdown:
   Schedules persist in DBOS. This command updates configured schedules and removes

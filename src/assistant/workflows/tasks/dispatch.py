@@ -44,6 +44,9 @@ async def dispatch(self: TaskWorkflows, job: str, day: str, page_id: str | None 
     )
     try:
         match job:
+            case "brainstorm-material" | "brainstorm-idea":
+                mode = "idea" if job == "brainstorm-idea" else "material"
+                output = await self.brainstorm(mode, page_id)
             case "propose-tasks":
                 output = await self.propose_tasks()
             case "process-workbench":

@@ -3,7 +3,7 @@
 import hashlib
 import json
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from assistant.components.coordination.curator.models import CurationDecision
 from assistant.components.coordination.proposer.models import Proposal
@@ -65,6 +65,7 @@ class WorkbenchItem(BaseModel):
     publication_key: str = ""
     publication_applied: bool = False
     proposal_version: int | None = None
+    retention_text: str | None = Field(default=None, exclude_if=lambda value: value is None)
     execution_error: str = ""
     selected_action_id: str = ""
 

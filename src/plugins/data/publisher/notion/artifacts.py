@@ -11,6 +11,8 @@ from assistant.components.data.workbench.models import WorkbenchItem
 from logger import get_logger, trace_call
 from plugins._shared.notion.config import ArtifactStoreSettings
 from plugins._shared.notion.schema import ensure_rich_text
+from plugins._shared.notion.markdown import page_markdown
+from plugins._shared.notion.sparks import resolve_sparks
 
 
 class ArtifactPublisher(ArtifactPublisherProtocol):
@@ -27,6 +29,7 @@ class ArtifactPublisher(ArtifactPublisherProtocol):
         Args:
             options: Notion settings from YAML.
         """
+        self.options = dict(options)
         self.settings = ArtifactStoreSettings.model_validate(options)
         self.title_properties: dict[str, str] = {}
         self.logger = get_logger("plugins.data.publisher.notion.artifacts")
@@ -40,6 +43,8 @@ class ArtifactPublisher(ArtifactPublisherProtocol):
         destinations = [self.settings.knowledge_data_source_id, self.settings.ideas_data_source_id,
                         self.settings.research_interests_data_source_id]
         with Client(auth=self.settings.token) as client:
+            if self.options.get("assistant_page_id") or self.options.get("sparks_data_source_id"):
+                destinations.append(resolve_sparks(client, self.options, create=True))
             for data_source_id in destinations:
                 if data_source_id:
                     ensure_rich_text(client, data_source_id, "Archive Key")
@@ -63,14 +68,11 @@ class ArtifactPublisher(ArtifactPublisherProtocol):
             "idea": self.settings.ideas_data_source_id,
             "research_interest": self.settings.research_interests_data_source_id,
         }
-        data_source_id = destinations[artifact.kind]
         self.logger.info(
             'kind=script provider=notion Publishing retained outcome: destination=%s.',
             artifact.kind,
             extra={"details": {'workbench_page': item.page_id, 'key': key}},
         )
-        if not data_source_id:
-            raise ValueError(f"No Notion data source configured for {artifact.kind}")
         if item.proposal is None:
             raise ValueError("Retained outcomes require an originating proposal")
 
@@ -81,6 +83,11 @@ class ArtifactPublisher(ArtifactPublisherProtocol):
             f"Proposal version: {item.proposal.version}\n\nArchive key: {key}"
         )
         with Client(auth=self.settings.token) as client:
+            data_source_id = resolve_sparks(client, self.options) if artifact.kind == "spark" else destinations[artifact.kind]
+            if not data_source_id:
+                raise ValueError(f"No Notion data source configured for {artifact.kind}")
+            if getattr(artifact, "target_idea_page_id", None):
+                return self._append_finding(client, data_source_id, artifact, content, key)
             title_property = self._title_property(client, data_source_id)
             response = client.data_sources.query(
                 data_source_id=data_source_id,
@@ -124,6 +131,24 @@ class ArtifactPublisher(ArtifactPublisherProtocol):
             extra={"details": {'url': receipt.url}},
         )
         return receipt
+
+    def _append_finding(self, client: Client, data_source_id: str, artifact: RetainedArtifact,
+                        content: str, key: str) -> PublicationReceipt:
+        """Append a marked finding to the reviewed Idea without replacing existing research notes."""
+        page_id = artifact.target_idea_page_id
+        page = client.pages.retrieve(page_id=page_id)
+        parent = page["parent"].get("data_source_id", "")
+        if page.get("archived") or page.get("in_trash") or parent.replace("-", "") != data_source_id.replace("-", ""):
+            raise ValueError("The approved finding target must be an active page in Ideas")
+        marker = f"Archive key: {key}"
+        if marker not in page_markdown(client, page_id):
+            client.pages.update_markdown(page_id=page_id, type="insert_content", insert_content={
+                "content": f"\n\n## Research finding — {artifact.title}\n\n{content}", "position": {"type": "end"},
+            })
+            if marker not in page_markdown(client, page_id):
+                raise ValueError(f"Idea finding readback failed: {page_id}")
+        self.logger.info("Idea finding confirmed: title=%r.", artifact.title)
+        return PublicationReceipt(key=key, url=page["url"])
 
     def _title_property(self, client: Client, data_source_id: str) -> str:
         """Resolve a destination's title column once per store instance.

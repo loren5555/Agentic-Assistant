@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from assistant.components.coordination.curator.models import CurationDecision
+from assistant.components.coordination.curator.models import CurationDecision, RetainedArtifact
 from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.coordination.proposer.models import Proposal
 from assistant.components.execution.task_worker.models import TaskResult
@@ -36,6 +36,10 @@ class WorkbenchProtocol(Protocol):
         Returns:
             Current proposal and human decisions.
         """
+        ...
+
+    def read_retention_text(self, page_id: str, artifact: "RetainedArtifact") -> str:
+        """Read the editable content and verify the displayed publication destination."""
         ...
 
     def submit(self, source: SourceMaterial, proposal: Proposal, workflow_id: str = "") -> WorkbenchItem:

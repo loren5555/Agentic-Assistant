@@ -1,7 +1,8 @@
-"""Submit Inbox and elevated TODO inputs through shared organization and proposal.
+"""Submit Inbox, elevated TODO inputs and revised BrainStorm candidates through shared organization and proposal.
 
 Input origin:
-    Source-specific Inbox/TODO processors read pending versions.
+    Inbox and TODO processors supply pending inputs. The BrainStorm processor supplies
+    candidate revisions reopened by human feedback.
 Output destination:
     Workbench receives proposals; sources are acknowledged after publication.
 Responsibility:
@@ -25,7 +26,7 @@ async def propose_tasks(self: TaskWorkflows) -> list[str]:
     Returns:
         Workbench proposal links.
     """
-    return await self.intake_sources(["inbox", "todo"])
+    return await self.intake_sources(["inbox", "todo", "brainstorm"])
 
 
 @DBOS.step(name="JobWorkflows.lookup.v2")
