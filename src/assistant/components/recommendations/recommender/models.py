@@ -11,6 +11,7 @@ Responsibility:
 from assistant.components.recommendations.discovery.models import DiscoveryResult, PaperCandidate
 from assistant.components.recommendations.evidence_reader.models import PaperEvidence
 from typing import Literal
+from assistant.components.recommendations.tags import DirectionTag
 from pydantic import BaseModel, Field
 from assistant.runtime.records import ExecutionProcess
 
@@ -99,6 +100,7 @@ class PoolTranslation(BaseModel):
     id: str
     display_title: str
     summary: str
+    directions: list[DirectionTag] = Field(default_factory=list, max_length=3)
     topics: list[str]
     discovery_reason: str
 

@@ -186,6 +186,8 @@ class NotionProcessor(SourceProcessor):
                 metadata[name] = prop.get(kind)
             elif kind in {"select", "status"}:
                 metadata[name] = (prop.get(kind) or {}).get("name")
+            elif kind == "relation" and name == "Recommendation Tags":
+                metadata[name] = [entry["id"] for entry in prop["relation"]]
             elif kind == "multi_select":
                 metadata[name] = [entry["name"] for entry in prop.get(kind, [])]
         self.logger.debug('Reading source body: title=%r source=%s.', title, self.kind,

@@ -8,6 +8,10 @@ from assistant.components.recommendations.discovery.models import PaperCandidate
 class DiscoveryPoolProtocol(Protocol):
     """Retain search results before expensive reading and recommendation."""
 
+    def data_source_id(self) -> str:
+        """Resolve the visible Pool for recommendation relations and feedback."""
+        ...
+
     def initialize_schema(self) -> None:
         """Prepare or locate the Assistant-owned discovery database."""
         ...

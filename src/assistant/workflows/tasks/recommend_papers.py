@@ -14,7 +14,6 @@ Responsibility:
     in the business diagram.
 """
 
-from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 import hashlib
@@ -273,21 +272,7 @@ class RecommendationWorkflows(DBOSConfiguredInstance):
             Weighted recommendation context, independent of approved research work.
         """
         self.logger.info("Reading newspaper topics and optional preference feedback.")
-        topic_file = self.directory / "recommendation-topics.json"
-        topics = json.loads(topic_file.read_text()) if topic_file.exists() else self.settings.topics
-        interests = [ResearchInterest(id=f"initial:{topic}", title=topic,
-                     description="User-selected initial topic; retain broad exploration.") for topic in topics]
-        feedback = self.services.discovery_pool.read_feedback()
-        topics = Counter(topic for entry in feedback if entry.feedback == "Interested"
-                         for topic in entry.candidate.topics)
-        interests.extend(ResearchInterest(id=f"learned:{topic}", title=topic,
-                         description=f"Positive preference learned from {count} explicitly liked discoveries.", priority=min(5.0, 1.0 + count))
-                         for topic, count in topics.most_common(20))
-        interests.extend(ResearchInterest(id=f"avoid:{entry.candidate.id}", title=entry.candidate.title,
-                         description="Explicitly disliked item; do not infer dislike of the whole discipline.")
-                         for entry in feedback if entry.feedback == "Not Interested")
-        interests.extend(self.services.feed.read_interested_papers())
-        interests.extend(self.services.feed.read_interested_feed())
+        interests = self.services.recommendation_tags.preferences(self.services.discovery_pool.data_source_id())
         self.logger.info("Recommendation preference context ready: entries=%d.", len(interests))
         return interests
 

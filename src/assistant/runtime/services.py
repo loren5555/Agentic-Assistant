@@ -94,6 +94,13 @@ class Services:
         plugin = get_plugin("data.discovery_pool", self.config.providers.discovery_pool)
         return plugin.DiscoveryPool(self.config.provider_options[self.config.providers.discovery_pool])
 
+    @cached_property
+    def recommendation_tags(self):
+        """Share a single catalog across Pool, Feed and Papers."""
+        name = self.config.providers.discovery_pool
+        plugin = get_plugin("data.recommendation_tags", name)
+        return plugin.RecommendationTags(self.config.provider_options[name])
+
     # Coordination roles.
 
     @cached_property

@@ -17,7 +17,7 @@ from assistant.components.recommendations.recommender.models import Recommendati
 class RecommenderProtocol(Protocol):
     """Assess evidence without publishing or modifying interests."""
 
-    async def translate_pool(self, candidates: list[PaperCandidate]) -> PoolTranslations:
+    async def translate_pool(self, candidates: list[PaperCandidate], catalog: list[dict] | None = None) -> PoolTranslations:
         """Prepare Chinese display text while preserving original bibliographic data."""
         ...
 

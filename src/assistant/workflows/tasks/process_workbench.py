@@ -26,7 +26,8 @@ from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.execution.investigator.models import InvestigationRequest
 from assistant.components.execution.task_worker.models import TaskRequest, TaskResult
 from assistant.components.data.workbench.models import WorkbenchItem, result_publication_key
-from assistant.components.execution.briefer.models import ReadingMaterial
+from assistant.components.recommendations.discovery.models import PaperCandidate
+from assistant.components.execution.briefer.models import PaperReadingMetadata, ReadingMaterial
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
 from logger import get_logger, trace_call
@@ -246,7 +247,7 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, item: WorkbenchIt
         capture = ReadingMaterial(kind=source.kind, page_id=source.page_id, url=source.url,
                              title=source.title, text="\n\n".join([source.context_content, task.instruction,
                                  task.proposal.execution_plan.markdown() if task.proposal.execution_plan else ""]),
-                             metadata=source.metadata, revision=source.revision,
+                             metadata={**source.metadata, "Direction catalog": self.services.recommendation_tags.catalog()}, revision=source.revision,
                              full_text_verified=source.full_text_verified)
         brief = await self.services.briefs.brief(capture)
         artifacts = []
@@ -380,6 +381,20 @@ async def extract(self: WorkbenchWorkflows, item: WorkbenchItem) -> CurationDeci
                                     artifacts=item.result.artifacts)
     else:
         decision = await self.services.curator.extract(item)
+    # A worker or Curator can retain a paper without invoking the dedicated Briefer.
+    papers = [artifact for artifact in decision.artifacts if artifact.kind == "paper"
+              and (artifact.reading is None or artifact.reading.directions is None)]
+    if papers:
+        candidates = [PaperCandidate(id=str(i), title=paper.title, url=item.source_url,
+                                     summary=paper.content) for i, paper in enumerate(papers)]
+        display = await self.services.recommender.translate_pool(candidates, self.services.recommendation_tags.catalog())
+        by_id = {entry.id: entry for entry in display.items}
+        if len(display.items) != len(papers) or set(by_id) != {candidate.id for candidate in candidates}:
+            raise ValueError("Paper classification returned different item identities")
+        for i, paper in enumerate(papers):
+            reading = paper.reading or PaperReadingMetadata()
+            paper.reading = reading.model_copy(update={"directions": by_id[str(i)].directions,
+                                                       "keywords": reading.keywords or by_id[str(i)].topics})
     logger.info(
         'Curation completed: title=%r retained_artifacts=%d.',
         item.title,

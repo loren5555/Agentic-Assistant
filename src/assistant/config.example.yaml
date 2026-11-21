@@ -105,6 +105,7 @@ codex:
 
 notion:
   assistant_page_id: <<notion-assistant-page-id>>
+  recommendation_tags_data_source_id: ""  # Optional. Setup locates or creates Recommendation Tags under Assistant.
   discovery_pool_data_source_id: <<notion-discovery-pool-data-source-id>>
   token: <<notion-token>>
   inbox_data_source_id: <<notion-inbox-data-source-id>>

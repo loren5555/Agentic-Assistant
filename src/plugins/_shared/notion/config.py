@@ -49,6 +49,7 @@ class ResearchFeedSettings(BaseModel):
     research_interests_data_source_id: str = "48f7a170-0249-4c12-aa37-0c33c54f06cc"
     research_feed_data_source_id: str = "ba262e5f-d58d-4f63-a77a-1f27e72b087e"
     papers_data_source_id: str = "3b8835de-f60d-835d-8c98-07c38b24fa6a"
+    recommendation_tags_data_source_id: str = ""
     discovery_pool_data_source_id: str = ""
     assistant_page_id: str = ""
     interests_status_property: str = "Status"

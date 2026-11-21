@@ -60,6 +60,8 @@ def presentation(candidate: PaperCandidate) -> dict:
         "Venue": {"rich_text": text(candidate.quality.venue)},
         "Quality Notes": {"rich_text": text(quality_notes(candidate))},
         "Topics": {"multi_select": [{"name": topic.replace(",", " ")[:100]} for topic in candidate.topics[:10] if topic.strip()]},
+        **({"Recommendation Tags": {"relation": [{"id": tag} for tag in candidate.direction_ids]}}
+           if candidate.direction_ids else {}),
         "Candidate Data": {"rich_text": text(candidate.model_dump_json())},
     }
 
@@ -72,6 +74,10 @@ class DiscoveryPool:
         self.settings = ResearchFeedSettings.model_validate(options)
         self.source_id = self.settings.discovery_pool_data_source_id
         self.logger = get_logger("plugins.data.discovery_pool.notion")
+
+    def data_source_id(self) -> str:
+        with Client(auth=self.settings.token) as client:
+            return self._resolve(client)
 
     def _resolve(self, client: Client) -> str:
         """Locate a setup-created pool without requiring a generated config rewrite."""
@@ -147,6 +153,8 @@ class DiscoveryPool:
         """Reconstruct a cached candidate and its independent human feedback."""
         properties = page["properties"]
         candidate = PaperCandidate.model_validate_json(plain(properties["Candidate Data"]))
+        if "Recommendation Tags" in properties:
+            candidate.direction_ids = [r["id"] for r in properties["Recommendation Tags"]["relation"]]
         return DiscoveryEntry(candidate=candidate, page_id=page["id"], url=page.get("url", ""),
                               feedback=(properties["Feedback"].get("select") or {}).get("name", ""),
                               selected=(properties["State"].get("select") or {}).get("name") == "Selected")
@@ -190,6 +198,7 @@ class DiscoveryPool:
                     known[key] = aliases[alias]
                 if key in known:
                     previous = self._entry(known[key]).candidate
+                    candidate.direction_ids = previous.direction_ids or candidate.direction_ids
                     candidate.discovery_sources = list(dict.fromkeys(previous.discovery_sources + candidate.discovery_sources))
                     candidate.openreview_forum = candidate.openreview_forum or previous.openreview_forum
                     candidate.published_date = candidate.published_date or previous.published_date

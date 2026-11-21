@@ -183,6 +183,8 @@ class ResearchFeed:
                 settings.feed_category_property: {category_kind: {"name": assessment.category}},
                 "Recommendation Date": {"date": {"start": (recommendation.day or datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat())}},
             }
+            if candidate.direction_ids:
+                properties["Recommendation Tags"] = {"relation": [{"id": tag} for tag in candidate.direction_ids]}
             if "Canonical URL" in source["properties"]:
                 properties["Canonical URL"] = {"url": candidate.url}
             if candidate.doi and "DOI" in source["properties"]:

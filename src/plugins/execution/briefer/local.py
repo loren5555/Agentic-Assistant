@@ -10,6 +10,7 @@ from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 
 from assistant.components.execution.briefer.models import ReadingBrief, ReadingMaterial
 from assistant.components.execution.briefer.protocol import BriefWriterProtocol
+from assistant.components.recommendations.tags import TAG_INSTRUCTIONS
 from logger import get_logger, trace_call
 
 BRIEF_INSTRUCTIONS = """Organize captured material for a personal research assistant.
@@ -37,8 +38,8 @@ journal/conference/repository only when explicitly supplied; preserve partial da
 and leave unknown fields empty. Do not confuse import or modification dates with
 publication dates. Suggest a few specific research-topic or method keywords grounded
 in the material; exclude administrative tags such as ai-processed and notion.
-Use tags for broad research areas, retaining useful source Collections and research
-tags; use keywords for specific methods, mechanisms and problems. Supply code_url
+Use the Direction catalog in metadata to assign reading.directions. Source collections
+and tags provide hints. Keep legacy reading.tags empty. Supply code_url
 only for an explicit official implementation link in the material, never guess it.
 Citation keys, DOI, BibTeX and attachment management belong to Notero, not this output.
 """.strip()
@@ -62,7 +63,7 @@ class Briefer(BriefWriterProtocol):
         self.timeout_seconds = float(options.get("brief_timeout_seconds", 180))
         self.logger = get_logger("plugins.execution.briefer.local")
         self.agent = Agent(
-            model, instructions=BRIEF_INSTRUCTIONS,
+            model, instructions=BRIEF_INSTRUCTIONS + TAG_INSTRUCTIONS,
             output_type=NativeOutput(ReadingBrief), model_settings=model_settings,
         )
 

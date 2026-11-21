@@ -89,25 +89,24 @@ async def collect(self, request: CollectionRequest) -> CollectionResult:
 @trace_call("step", "prepare_pool_display")
 async def prepare_pool_display(self, result: CollectionResult) -> CollectionResult:
     """Translate API metadata for Pool without replacing paper titles or evidence."""
-    pending = [
-        candidate
-        for candidate in result.discovery.candidates
-        if not candidate.display_title
-    ]
+    pending = result.discovery.candidates
     if not pending:
         return result
-    self.logger.info("Preparing Chinese Pool summaries: candidates=%d.", len(pending))
-    translations = await self.services.recommender.translate_pool(pending)
+    self.logger.info("Preparing Pool summaries and matching research directions: candidates=%d.", len(pending))
+    catalog = self.services.recommendation_tags
+    translations = await self.services.recommender.translate_pool(pending, catalog.catalog())
     mapped = {item.id: item for item in translations.items}
-    if set(mapped) != {candidate.id for candidate in pending}:
+    if len(mapped) != len(translations.items) or set(mapped) != {candidate.id for candidate in pending}:
         raise ValueError("Pool translation did not preserve all candidate identities")
-    for candidate in pending:
+    assignments = catalog.resolve_batch([mapped[candidate.id].directions for candidate in pending])
+    for candidate, direction_ids in zip(pending, assignments, strict=True):
         display = mapped[candidate.id]
         candidate.display_title = display.display_title
         candidate.summary = display.summary
-        candidate.topics = display.topics
+        candidate.topics = candidate.topics or display.topics
+        candidate.direction_ids = direction_ids
         candidate.discovery_reason = display.discovery_reason
-    self.logger.info("Chinese Pool summaries prepared: candidates=%d.", len(pending))
+    self.logger.info("Pool summaries prepared: candidates=%d classified=%d.", len(pending), sum(bool(ids) for ids in assignments))
     return result
 
 

@@ -8,6 +8,7 @@ from notion_client import Client
 from assistant.components.execution.briefer.models import ReadingBrief, ReadingMaterial
 from assistant.components.data.publisher.models import BriefPublicationReceipt
 from assistant.components.data.publisher.protocol import BriefPublisherProtocol
+from plugins.data.recommendation_tags.notion import RecommendationTags, RELATION, relation
 from logger import get_logger, trace_call
 from plugins._shared.notion.config import SourceCollectionSettings
 from plugins._shared.notion.markdown import page_markdown
@@ -43,6 +44,7 @@ class BriefPublisher(BriefPublisherProtocol):
             options: Notion settings from YAML.
         """
         self.settings = SourceCollectionSettings.model_validate(options)
+        self.catalog = RecommendationTags(options)
         self.logger = get_logger("plugins.data.publisher.notion.briefs")
 
     @trace_call("component", "captures.publish")
@@ -111,6 +113,10 @@ class BriefPublisher(BriefPublisherProtocol):
             if brief.destination == "papers":
                 existing_properties = response["results"][0]["properties"] if response["results"] else {}
                 reading_properties = self._reading_properties(capture, brief, source["properties"], existing_properties)
+                if not existing_properties.get(RELATION, {}).get("relation"):
+                    ids = capture.metadata.get(RELATION) or self.catalog.resolve(brief.reading.directions)
+                    if ids:
+                        reading_properties[RELATION] = relation(ids)
 
             if response["results"]:
                 existing = response["results"][0]
@@ -235,9 +241,6 @@ class BriefPublisher(BriefPublisherProtocol):
         """
         metadata = capture.metadata
         reading = brief.reading
-        source_tags = metadata.get("Collections", []) + metadata.get("Tags", [])
-        source_tags = [tag for tag in source_tags if isinstance(tag, str)
-                       and tag.strip().lower() not in {"ai-processed", "notion"}]
         values = {
             "Original Title": capture.title,
             "Authors": metadata.get("Authors"),
@@ -247,8 +250,8 @@ class BriefPublisher(BriefPublisherProtocol):
             "Publication": metadata.get("Publication") or metadata.get("Proceedings Title") or reading.publication,
             "Year": metadata.get("Year"),
             "Keywords": reading.keywords or metadata.get("Keywords"),
-            "Tags": source_tags or reading.tags,
-            "Link": metadata.get("URL") or metadata.get("Link"),
+
+            "Link": metadata.get("URL") or metadata.get("Link") or metadata.get("Canonical URL"),
             "Code": metadata.get("Code") or reading.code_url,
         }
         properties = {}

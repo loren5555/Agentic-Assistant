@@ -81,6 +81,7 @@ class PaperCandidate(BaseModel):
     summary: str = ""
     display_title: str = ""
     quality: SourceQuality = Field(default_factory=SourceQuality)
+    direction_ids: SkipJsonSchema[list[str]] = Field(default_factory=list)
     topics: list[str] = Field(default_factory=list)
     discovery_sources: list[str] = Field(default_factory=list)
     openreview_forum: str = ""

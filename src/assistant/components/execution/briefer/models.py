@@ -11,6 +11,7 @@ Responsibility:
 from typing import Literal
 import hashlib
 import json
+from assistant.components.recommendations.tags import DirectionTag
 from pydantic import BaseModel, Field
 
 
@@ -105,6 +106,7 @@ class PaperReadingMetadata(BaseModel):
     publication_date: str = ""
     publication: str = ""
     keywords: list[str] = Field(default_factory=list)
+    directions: list[DirectionTag] | None = None
     tags: list[str] = Field(default_factory=list)
     code_url: str = ""
 

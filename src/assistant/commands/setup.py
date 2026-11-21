@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from assistant.runtime.application import Application
 
 
-def initialize_schema(services: Services) -> None:
+def initialize_schema(services: Services, topics: list[str]) -> None:
     """Initialize only the Notion additions used by these workflows.
 
     Args:
@@ -38,6 +38,7 @@ def initialize_schema(services: Services) -> None:
     services.publisher.initialize_schema()
     services.discovery_pool.initialize_schema()
     services.feed.initialize_schema()
+    services.recommendation_tags.initialize(services.discovery_pool.data_source_id(), topics)
     for kind in ("inbox", "todo", "notero", "simpread", "paper", "feed", "interest"):
         logger.info("Initializing source context schema: source=%s.", kind)
         services.processor(kind).initialize_schema()
@@ -51,12 +52,13 @@ async def run(application: Application, options: argparse.Namespace) -> None:
         application: Runtime exposing lazy storage capabilities.
         options: Parsed setup command arguments.
     """
-    await asyncio.to_thread(initialize_schema, application.services)
     topics = getattr(options, "recommendation_topics", None)
+    path = Path(application.settings.runtime.directory).resolve() / "v2" / "recommendation-topics.json"
     if topics:
         topics = list(dict.fromkeys(topic.strip() for topic in topics if topic.strip()))
-        path = Path(application.settings.runtime.directory).resolve() / "v2" / "recommendation-topics.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding="utf-8")
         get_logger("commands.setup").info("Initial recommendation topics saved: %s.", ", ".join(topics))
+    seeds = json.loads(path.read_text()) if path.exists() else application.settings.runtime.recommendations.topics
+    await asyncio.to_thread(initialize_schema, application.services, seeds)
     get_logger("commands.setup").info("Required Notion schema additions initialized.")
