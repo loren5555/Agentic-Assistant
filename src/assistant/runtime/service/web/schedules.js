@@ -10,6 +10,8 @@ import {
   confirmDialog,
   requestRefresh
 } from './ui.js';
+import { recordList, showRecord, fields } from './records.js';
+let listVersion;
 let data = {
   items: [],
   revision: null,
@@ -165,29 +167,19 @@ async function refreshSchedules() {
   $('nav-schedule-count').textContent = data.items.filter(item => item.enabled).length;
   $('schedule-summary').textContent = `${data.items.length} 个定时计划 · ${data.items.filter(item=>item.enabled).length} 个已启用${data.pending_removals?.length?` · ${data.pending_removals.length} 条远端计划待移除`:""}`;
   $('new-schedule').disabled = !data.editable;
-  const cards = [];
-  for (const item of data.items) {
-    const card = el('article', undefined, `schedule-card ${item.enabled?'':'paused'}`);
-    const top = el('div', undefined, 'schedule-card-top');
-    top.append(el('h3', item.title), el('span', !item.synced ? '待同步' : item.enabled ? '已启用' : '已暂停', `badge ${!item.synced?'ERROR':item.enabled?'SUCCESS':'CANCELLED'}`));
-    card.append(top, el('p', describe(item), 'schedule-description'), el('p', item.cron, 'hint mono'), el('p', item.timezone, 'hint'));
-    card.append(el('p', item.next_runs.length ? `下次（本机时间）· ${date(item.next_runs[0])}` : '暂停期间不触发新任务', 'hint'));
-    const actions = el('div', undefined, 'schedule-card-actions');
-    actions.append(button('编辑', () => editor(item.job)), button(item.enabled ? '暂停' : '启用', async () => {
-      try {
-        await change(item.job, {
-          cron: item.cron,
-          timezone: item.timezone,
-          enabled: !item.enabled
-        });
-      } catch (error) {
-        notice(error.message, true);
-      }
-    }), button('运行一次', () => openRun(item.job)), button('删除', () => remove(item), 'danger subtle'));
-    card.append(actions);
-    cards.push(card);
+  const version = JSON.stringify([data.items, data.editable]);
+  if (version !== listVersion) {
+    listVersion = version;
+    const rows = data.items.map(item => ({
+      title: item.title,
+      values: [describe(item), scheduleBadge(item), date(item.next_runs[0])],
+      open: () => showSchedule(item)
+    }));
+    const content = rows.length
+      ? recordList(['工作流', '触发规则', '状态', '下次执行（本机时间）'], rows)
+      : el('p', '还没有定时计划。选择下方工作流，安排第一项日常任务。', 'empty-card');
+    $('schedule-list').replaceChildren(content);
   }
-  $('schedule-list').replaceChildren(...(cards.length ? cards : [el('div', '还没有定时计划。选择下方工作流，安排第一项日常任务。', 'empty-card')]));
   const upcoming = data.items.filter(item => item.enabled && item.next_runs.length).sort((a, b) => new Date(a.next_runs[0]) - new Date(b.next_runs[0]));
   $('upcoming-runs').replaceChildren(...(upcoming.length ? upcoming.slice(0, 5).map(item => {
     const row = el('div', undefined, 'activity-row');
@@ -200,6 +192,37 @@ async function refreshSchedules() {
     row.append(copy);
     return row;
   }) : [el('p', '还没有启用的定时计划。可在任务编排中添加。', 'empty')]));
+}
+
+function scheduleBadge(item) {
+  const status = !item.synced ? '待同步' : item.enabled ? '已启用' : '已暂停';
+  return el('span', status, 'badge ' + (!item.synced ? 'ERROR' : item.enabled ? 'SUCCESS' : 'CANCELLED'));
+}
+
+function showSchedule(item) {
+  const content = el('div');
+  content.append(scheduleBadge(item), fields([
+    ['工作流', item.job], ['触发规则', describe(item)], ['时区', item.timezone], ['Cron', item.cron]
+  ]), el('h3', '接下来执行（本机时间）'));
+  const times = el('ol', undefined, 'record-times');
+  for (const time of item.next_runs) times.append(el('li', date(time)));
+  content.append(times.children.length ? times : el('p', '当前没有排定的执行时间。', 'hint'));
+  function action(label, callback, style) {
+    return button(label, () => {
+      $('record-dialog').close();
+      callback();
+    }, style);
+  }
+  const actions = [action('运行一次', () => openRun(item.job), 'primary')];
+  if (data.editable) {
+    actions.push(action('编辑', () => editor(item.job)),
+      action(item.enabled ? '暂停' : '启用', async () => {
+        try {
+          await change(item.job, {cron: item.cron, timezone: item.timezone, enabled: !item.enabled});
+        } catch (error) { notice(error.message, true); }
+      }), action('删除', () => remove(item), 'danger subtle'));
+  }
+  showRecord(item.title, '定时计划', content, actions);
 }
 
 function openRun(job) {

@@ -242,7 +242,7 @@
               </button>
             </div>
           </div>
-          <div id="schedule-list" class="schedule-grid">
+          <div id="schedule-list" class="panel record-panel">
           </div>
           <section class="panel catalog-panel">
             <div class="panel-heading">
@@ -429,29 +429,10 @@
               </p>
             </div>
           </div>
-          <div class="agent-demo-grid">
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>
-                  调用记录
-                </h2>
-                <span class="quiet-tag">
-                  样例数据
-                </span>
-              </div>
-              <div id="agent-demo-list" class="list-body">
-              </div>
-            </section>
-            <section class="panel agent-detail">
-              <div class="panel-heading">
-                <h2 id="agent-demo-title">
-                  调用详情
-                </h2>
-              </div>
-              <div id="agent-demo-detail">
-              </div>
-            </section>
-          </div>
+          <section class="panel record-panel">
+            <div class="panel-heading"><h2>调用记录</h2><span class="quiet-tag">示例</span></div>
+            <div id="agent-demo-list"></div>
+          </section>
         </section>
       </main>
     </div>
@@ -475,6 +456,12 @@
       <div id="detail-content">
       </div>
     </aside>
+    <dialog id="record-dialog" class="record-dialog" aria-labelledby="record-title">
+      <header><div><small id="record-category"></small><h2 id="record-title"></h2></div>
+        <form method="dialog"><button aria-label="关闭详情" autofocus>✕</button></form>
+      </header>
+      <div id="record-body"></div><footer id="record-actions"></footer>
+    </dialog>
     <dialog id="confirm">
       <form method="dialog">
         <div class="dialog-heading">

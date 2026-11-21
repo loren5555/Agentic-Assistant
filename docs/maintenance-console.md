@@ -31,7 +31,7 @@ runtime. Notion remains the interface for proposal approval, feedback and accept
 2. Select a workflow and repetition: daily, weekly, monthly, hourly or custom cron.
    Monthly presets offer days 1–28; custom cron can express other dates.
 3. Set the execution time and time zone. Preview lists the next five instants in
-   that time zone. The overview and plan-card next-run timestamps use your browser's
+   that time zone. The overview and schedule-list next-run timestamps use your browser's
    local time, explicitly labeled in the UI.
 4. Save and apply. The plan starts producing jobs when its next scheduled time arrives.
    Use **运行一次** for an immediate submission; editing a plan does not execute it.
@@ -112,3 +112,7 @@ local CSS. There is no Node build or separate frontend service.
 `monitoring.py` reads saved executions, `metadata.py` isolates read-only system-table
 queries, and `administration.py` owns explicit execution maintenance. Business
 workflows remain in their existing task and step modules.
+
+Open a schedule row for its time zone, Cron expression, upcoming runs and
+maintenance actions. Open an agent call row to inspect input, output, token
+counts and tools. Both detail sheets support keyboard selection and Escape.

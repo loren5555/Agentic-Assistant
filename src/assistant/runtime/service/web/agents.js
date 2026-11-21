@@ -1,9 +1,9 @@
 // Static interaction demo only. These samples never enter execution storage.
 import {
   $,
-  el,
-  button
+  el
 } from './ui.js';
+import { recordList, showRecord } from './records.js';
 const samples = [{
   role: 'Proposer',
   task: '为论文笔记起草整理提案',
@@ -43,7 +43,6 @@ const samples = [{
 
 function selectSample(index) {
   const sample = samples[index];
-  $('agent-demo-title').textContent = sample.role + ' · 示例调用';
   const container = el('div');
   container.append(el('p', sample.task, 'hint'), el('p', sample.model, 'quiet-tag'));
   const metrics = el('div', undefined, 'metric-grid');
@@ -73,19 +72,17 @@ function selectSample(index) {
     section.append(el('summary', label), el('pre', text));
     container.append(section);
   }
-  $('agent-demo-detail').replaceChildren(container);
-  [...$('agent-demo-list').children].forEach((row, i) => row.classList.toggle('selected', i === index));
+  showRecord(sample.task, sample.role + ' · 调用详情（示例）', container);
 }
 
 function bindAgentDemo() {
-  samples.forEach((sample, index) => {
-    const row = button('', () => selectSample(index), 'activity-row agent-demo-row');
-    const copy = el('div', undefined, 'activity-copy');
-    copy.append(el('strong', sample.role), el('small', sample.task));
-    row.append(copy, el('span', sample.elapsed, 'quiet-tag'));
-    $('agent-demo-list').append(row);
-  });
-  selectSample(0);
+  const rows = samples.map((sample, index) => ({
+    title: sample.task,
+    values: [sample.role, sample.model.split(' / ').at(-1), sample.elapsed,
+             (sample.input + sample.output).toLocaleString(), String(sample.tools.length)],
+    open: () => selectSample(index)
+  }));
+  $('agent-demo-list').replaceChildren(recordList(['任务', '智能体', '提供方', '耗时', 'Tokens', '工具'], rows));
 }
 export {
   bindAgentDemo
