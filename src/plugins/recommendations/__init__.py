@@ -1,7 +1,7 @@
 """Implement public discovery, preference reads, selection and Feed publication.
 
 Input origin:
-    Setup topics and explicit likes provide newspaper preferences. Codex discovers
+    Notion recommendation directions and explicit likes provide newspaper preferences. Codex discovers
     public papers, findings, methods, tools and datasets for the discovery cache.
 Output destination:
     Local ranking and assessment prepare selected recommendations; the Notion Feed

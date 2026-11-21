@@ -61,9 +61,6 @@ async def daily_newspaper(self, day: str, mode: str = "auto"):
         )
         discovery.process = getattr(error, "process", None)
     policy = self.settings.model_dump_json()
-    topic_file = self.directory / "recommendation-topics.json"
-    if topic_file.exists():
-        policy += topic_file.read_text()
     policy_key = hashlib.sha256(policy.encode()).hexdigest()[:12]
     result = await invoke(
         f"edition:collector-v1:{day}:{policy_key}",

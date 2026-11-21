@@ -193,7 +193,7 @@ carry the added metadata. Existing human feedback and selected flags are preserv
 ### Recommendation Tags
 
 Run `uv run python -m assistant setup` with the service stopped. Setup creates
-Recommendation Tags under Assistant, seeds missing initial topics, and adds a
+Recommendation Tags under Assistant and adds a
 relation of that name to Discovery Pool, Research Feed and Papers. Existing
 Topics, Keywords and legacy multi-select Tags retain their values. Existing
 records can be linked directly in Notion. New discoveries and paper briefs are
@@ -201,7 +201,11 @@ classified against the catalog during preparation. Accepted Feed papers carry
 their source relations into Papers.
 
 Each catalog row has a Name, Definition, Aliases, Priority, Feedback Weight and
-Paused checkbox. Seed directions start at priority 1. Newly discovered directions
+Paused checkbox. Create a row in Notion and enter its Name. A blank Priority
+on a manually created row counts as 1. Supply a Definition or Aliases to help
+readers match papers to it. The next fresh preference read uses the row.
+Setup accepts explicit --recommendation-topic values as an optional way to add
+missing rows. Normal setup reads no local topic list. Newly discovered directions
 start at 0. Set Priority to steer searches explicitly. Liking a linked publication
 adds one point per direction, up to four, across the three collections using its
 publication identity. Preference reads recompute Feedback Weight, including when

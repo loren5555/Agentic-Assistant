@@ -60,17 +60,15 @@ class CollectorSettings(BaseModel):
 
 
 class RecommendationSettings(BaseModel):
-    """Configure newspaper topics, cache size and exploratory editorial coverage.
+    """Configure newspaper cache size and exploratory editorial coverage.
 
     Attributes:
-        topics: Initial user-selected topics, independent of approved proposals.
         pool_size: Recent visible cache capacity; explicit likes are preserved.
         selected_count: Maximum selected entries in a daily edition.
         reading_budget: Maximum shortlisted candidates to read per edition.
         exploration: Long-term target weights across core and exploratory fields.
     """
 
-    topics: list[str] = Field(default_factory=list)
     pool_size: int = Field(default=100, ge=10, le=500)
     selected_count: int = Field(default=5, ge=1, le=10)
     reading_budget: int = Field(default=15, ge=1, le=50)

@@ -123,7 +123,7 @@ Example:
   Normal runs select deep mode on runtime.recommendations.collector.deep_weekday
   (Monday=0, Sunday=6), otherwise light. Deep runs reuse a weekly Collector result.
   The daily edition is shared by both modes. No seven-day global discovery cutoff.
-  Same-day retries reuse their durable report; changing setup topics starts a new edition.
+  Same-day retries reuse their durable report; new editions read current Notion recommendation directions.
 
 Examples:
   python -m assistant run recommend-papers
@@ -375,7 +375,8 @@ Scope and prerequisites:
   decisions must be present. Setup adds assistant fields to existing databases.
   Discovery Pool: create under notion.assistant_page_id when no pool is configured.
   Papers / Research Feed: add Follow Up for explicit task requests.
-  Optional --recommendation-topic values initialize the automatic newspaper.
+  Add research directions as rows in Assistant → Recommendation Tags in Notion.
+  A blank Priority on a manually created row counts as 1. Check Paused to suspend it.
   Existing properties and rows are preserved; no model job is requested.
   Stop serve before setup. Setup does not start DBOS or recover workflow tasks.
 
@@ -387,7 +388,7 @@ Examples:
 Run once on a new workspace or after required schema changes, not before every job.""",
     )
     setup.add_argument("--recommendation-topic", dest="recommendation_topics", action="append", metavar="TOPIC",
-                       help="Choose an initial newspaper topic; repeat for multiple topics. Saved locally, without a proposal.")
+                       help="Add a missing direction directly to Notion Recommendation Tags. Repeat for multiple directions.")
     options = parser.parse_args()
     if options.command == "status" and options.result and not options.workflow_id:
         parser.error("status --result requires WORKFLOW_ID")

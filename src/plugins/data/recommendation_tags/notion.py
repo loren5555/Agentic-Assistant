@@ -96,7 +96,7 @@ class RecommendationTags:
             p = page["properties"]
             rows.append(dict(existing_id=page["id"], name=plain(p["Name"]), definition=plain(p["Definition"]),
                              aliases=[v["name"] for v in p["Aliases"]["multi_select"]],
-                             paused=p["Paused"]["checkbox"], priority=p["Priority"]["number"] or 0,
+                             paused=p["Paused"]["checkbox"], priority=1 if p["Priority"]["number"] is None else p["Priority"]["number"],
                              feedback=p["Feedback Weight"]["number"] or 0))
         return rows
 

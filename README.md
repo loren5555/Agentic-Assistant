@@ -124,7 +124,7 @@ uv run python -m assistant run recommend-papers
 | process-signals | Papers/Feed with Follow Up checked; explicitly pending Interests | Workbench proposals on the original records |
 | reconcile-feedback | Revisions, unqualified results, rejections | Reopened source versions; closed old work |
 | process-workbench | Approvals and qualified results | Executed results; accepted outputs |
-| recommend-papers | Initial topics, optional likes and Discovery Pool | Broad discovery cache and selected Research Feed edition |
+| recommend-papers | Notion Recommendation Tags, optional likes and Discovery Pool | Broad discovery cache and selected Research Feed edition |
 
 Every command and job has detailed `--help`. `--page PAGE_ID` on either organization
 job reads one source without forcing duplicate publication.

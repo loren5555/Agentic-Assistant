@@ -29,10 +29,7 @@ runtime:
     recommend-papers-deep: "0 0 7 * * 0"  # Sunday 07:00, Asia/Shanghai.
     recommend-papers-light: "0 0 7 * * 1-6"  # Other six days; same daily edition.
   recommendations:
-    topics:
-    - Reinforcement learning
-    - Decision making
-    - Multi-agent systems
+    # Manage research directions in Notion under Assistant / Recommendation Tags.
     pool_size: 100
     selected_count: 5
     reading_budget: 15

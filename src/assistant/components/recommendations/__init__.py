@@ -1,7 +1,7 @@
 """Prepare an autonomous research newspaper with broad discoveries and a shortlist.
 
 Input origin:
-    Setup topics bootstrap discovery. Optional likes in Discovery Pool, Papers and
+    Notion Recommendation Tags guide discovery. Optional likes in Discovery Pool, Papers and
     Research Feed refine preferences without requiring formal Research Interests.
 Output destination:
     Discovery Pool retains recent lightweight finds; Research Feed presents the
