@@ -19,11 +19,11 @@ or additional server. For another computer, use the SSH forwarding instructions 
 | 运行概览 | Last-24h executions/completions, all-time running/error roots, recent runs, next scheduled jobs and queue totals | Open a saved execution or jump into management |
 | 任务编排 | Desired schedules, enabled/synchronized state, next runs and available workflows | Create/edit/pause/enable/delete a recurring plan or submit one run |
 | 执行记录 | Real execution states, saved inputs, results, errors, steps and parent/child references | Filter, resume/cancel, preview and delete selected terminal records |
-| Agent 调用 | Fixed, clearly labeled sample calls, model/provider labels, tokens, latency and tools | Explore the proposed observation interface |
+| Agent 调用 | Persisted provider invocations, recorded model, tokens and tools | Open the owning business step |
 
-The Agent view is an interaction demo. It does not read actual PydanticAI traces,
-compute real cost or send model requests. All other views use the live local DBOS
-runtime. Notion remains the interface for proposal approval, feedback and acceptance.
+Execution details show business actions and results from the task and its children.
+The Agent list uses traces saved at the originating step. Providers that did not
+save telemetry contribute no call row. Opening a report reads local history. Notion remains the interface for proposal approval, feedback and acceptance.
 
 ## Arrange daily jobs
 

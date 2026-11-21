@@ -11,13 +11,14 @@ from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
 
-from dbos import DBOS
+from dbos import DBOS, WorkflowStatus
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 from starlette.routing import Route
 
 from logger import get_logger
 
+from .activity import activity, calls_page
 from .metadata import RunFilters
 
 logger = get_logger("runtime.service.monitoring")
@@ -25,6 +26,10 @@ logger = get_logger("runtime.service.monitoring")
 
 def document(value):
     """Convert saved typed values into inspectable JSON, never rendered HTML."""
+    if isinstance(value, WorkflowStatus):
+        return {field: document(getattr(value, field, None)) for field in (
+            "workflow_id", "name", "status", "created_at", "completed_at", "output", "error"
+        )}
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
     if is_dataclass(value) and not isinstance(value, type):
@@ -88,6 +93,18 @@ def routes(application, metadata, respond):
             }
         )
 
+    async def report(request):
+        data = await asyncio.to_thread(activity, metadata, request.path_params["workflow_id"])
+        if data is None:
+            raise HTTPException(404, "Workflow no longer exists")
+        return respond(data)
+
+    async def calls(request):
+        cursor = request.query_params.get("before", str(2**63 - 1))
+        if not cursor.isascii() or not cursor.isdigit() or len(cursor) > 19 or int(cursor) > 2**63 - 1:
+            raise HTTPException(400, "Invalid cursor")
+        return respond(await asyncio.to_thread(calls_page, metadata, int(cursor)))
+
     async def overview(request):
         return respond(
             {
@@ -106,6 +123,8 @@ def routes(application, metadata, respond):
 
     return [
         Route("/panel/runs", runs),
+        Route("/panel/calls", calls),
+        Route("/panel/runs/{workflow_id}/activity", report),
         Route("/panel/overview", overview),
         Route("/panel/runs/{workflow_id}", detail),
     ]

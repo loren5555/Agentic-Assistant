@@ -27,6 +27,8 @@ JOB_LABELS = {
     "recommend-papers-light": "每日轻量推荐",
 }
 PHASE_LABELS = {
+    **{key.replace("-", "_"): value for key, value in JOB_LABELS.items()},
+    "dispatch": "运行工作流", "intake_item": "整理条目并提交提案", "reconcile_item": "处理条目反馈",
     "daily_newspaper": "生成研究日报",
     "collect_research": "收集研究候选",
     "recommendations": "筛选研究推荐",
@@ -75,8 +77,9 @@ def label(name: str, attributes: dict) -> str:
     job = attributes.get("job")
     if job in JOB_LABELS:
         return JOB_LABELS[job]
-    phase = name.rsplit(".", 1)[-1]
-    return PHASE_LABELS.get(phase, name or "未命名执行")
+    parts = name.split(".")
+    phase = parts[-2] if len(parts) > 1 and parts[-1].startswith("v") and parts[-1][1:].isdigit() else parts[-1]
+    return PHASE_LABELS.get(phase, "其他工作流")
 
 
 def summarize(row: dict) -> dict:
@@ -86,10 +89,11 @@ def summarize(row: dict) -> dict:
     if started is None and row["status"] not in {"ENQUEUED", "DELAYED", "CANCELLED"}:
         started = row["created_at"]
     end = row.get("completed_at") or int(time.time() * 1000)
+    name = row.get("dispatched") or row["name"]
     return {
         "id": row["workflow_uuid"],
         "name": row["name"],
-        "title": label(row["name"], attributes),
+        "title": label(name, attributes),
         "job": attributes.get("job"),
         "status": row["status"],
         "parent_id": row.get("parent_workflow_id"),
@@ -205,7 +209,7 @@ class RunMetadata:
                 max(1, (total + filters.page_size - 1) // filters.page_size),
             )
             rows = connection.execute(
-                "SELECT w.workflow_uuid,w.status,w.name,w.attributes,w.parent_workflow_id,w.queue_name,w.created_at,w.updated_at,w.started_at_epoch_ms,w.completed_at,w.application_version, (SELECT COUNT(*) FROM operation_outputs o WHERE o.workflow_uuid=w.workflow_uuid) AS step_count FROM workflow_status w WHERE "
+                "SELECT w.workflow_uuid,w.status,w.name,w.attributes,w.parent_workflow_id,w.queue_name,w.created_at,w.updated_at,w.started_at_epoch_ms,w.completed_at,w.application_version, CASE WHEN w.name='JobWorkflows.dispatch' THEN (SELECT c.name FROM workflow_status c WHERE c.parent_workflow_id=w.workflow_uuid ORDER BY c.created_at LIMIT 1) END AS dispatched, (SELECT COUNT(*) FROM operation_outputs o WHERE o.workflow_uuid=w.workflow_uuid) AS step_count FROM workflow_status w WHERE "
                 + where
                 + " ORDER BY w.created_at DESC,w.workflow_uuid DESC LIMIT ? OFFSET ?",
                 [*values, filters.page_size, (page - 1) * filters.page_size],

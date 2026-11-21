@@ -1,89 +1,63 @@
-// Static interaction demo only. These samples never enter execution storage.
-import {
-  $,
-  el
-} from './ui.js';
-import { recordList, showRecord } from './records.js';
-const samples = [{
-  role: 'Proposer',
-  task: '为论文笔记起草整理提案',
-  model: '示例模型 / local',
-  elapsed: '2.8s',
-  input: 842,
-  output: 216,
-  tools: [],
-  inputText: '来源：Notero。整理论文要点，并说明需要后续调查的问题。',
-  outputText: '已形成整理范围、预期产物和需要确认的事实。此为界面示例。'
-}, {
-  role: 'Investigator',
-  task: '调查论文中的相关研究',
-  model: '示例模型 / codex',
-  elapsed: '18.4s',
-  input: 3408,
-  output: 972,
-  tools: [
-    ['web_search', '检索原论文与相关研究'],
-    ['read_source', '阅读公开来源并记录证据']
-  ],
-  inputText: '根据已批准的提案，核对论文主张并提供可追溯的来源。',
-  outputText: '调查报告包含证据、限制与待确认问题。此为界面示例。'
-}, {
-  role: 'Task Worker',
-  task: '核验一个简单计算',
-  model: '示例模型 / local',
-  elapsed: '1.2s',
-  input: 528,
-  output: 38,
-  tools: [
-    ['calculate', '校验表达式 1 + 1']
-  ],
-  inputText: '计算 1 + 1，返回简洁结论。',
-  outputText: '1 + 1 = 2。此为界面示例。'
-}];
+// Real provider traces projected from the step that owns each invocation.
+import {$, api, el, button, date, notice} from './ui.js';
+import {recordList, showRecord, fields} from './records.js';
+import {openDetail} from './executions.js';
 
-function selectSample(index) {
-  const sample = samples[index];
-  const container = el('div');
-  container.append(el('p', sample.task, 'hint'), el('p', sample.model, 'quiet-tag'));
-  const metrics = el('div', undefined, 'metric-grid');
-  for (const [value, label] of [
-      [sample.elapsed, '耗时'],
-      [sample.input, '输入 tokens'],
-      [sample.output, '输出 tokens']
-    ]) {
-    const node = el('div', String(value), 'metric');
-    node.append(el('small', label));
-    metrics.append(node);
+export function lines(title, entries) {
+  const group = el('section', undefined, 'activity-section');
+  group.append(el('h3', title));
+  for (const value of entries) {
+    const link = value.match(/^(?:页面：)?(https?:\/\/\S+)$/);
+    if (link) {
+      const a = el('a', '打开成果页面 ↗');
+      a.href = link[1]; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      group.append(a);
+    } else group.append(el('p', value));
   }
-  container.append(metrics);
-  container.append(el('h3', '工具调用'));
-  for (const [name, description] of sample.tools) {
-    const node = el('div', name, 'tool-line');
-    node.append(el('small', description));
-    container.append(node);
-  }
-  if (!sample.tools.length) container.append(el('p', '此示例直接生成结构化输出。', 'hint'));
-  for (const [label, text] of [
-      ['任务输入', sample.inputText],
-      ['模型输出', sample.outputText]
-    ]) {
-    const section = el('details', undefined, 'saved-section');
-    section.open = true;
-    section.append(el('summary', label), el('pre', text));
-    container.append(section);
-  }
-  showRecord(sample.task, sample.role + ' · 调用详情（示例）', container);
+  return group;
 }
 
-function bindAgentDemo() {
-  const rows = samples.map((sample, index) => ({
-    title: sample.task,
-    values: [sample.role, sample.model.split(' / ').at(-1), sample.elapsed,
-             (sample.input + sample.output).toLocaleString(), String(sample.tools.length)],
-    open: () => selectSample(index)
-  }));
-  $('agent-demo-list').replaceChildren(recordList(['任务', '智能体', '提供方', '耗时', 'Tokens', '工具'], rows));
+export function showCall(step, workflow, task) {
+  const call = step.call;
+  const body = el('div');
+  body.append(fields([['所属任务',task],['业务步骤',step.action],['模型',call.model || '未记录'],
+    ['输入 / 输出 tokens', (call.tokens_in ?? '—') + ' / ' + (call.tokens_out ?? '—')]]));
+  if (call.tools.length) body.append(lines('使用的工具', call.tools));
+  body.append(lines('调用输入',call.input.length ? call.input : ['该次调用未单独保存可展示的输入。']));
+  body.append(lines('调用结果',step.result.length ? step.result : ['该次调用未单独保存可展示的结果。']));
+  showRecord(call.module, 'Agent 调用', body, [button('查看所属步骤', async () => {
+    $('record-dialog').close();
+    location.hash='executions';
+    await openDetail(workflow);
+    const node=document.getElementById('activity-step-'+workflow+'-'+step.number);
+    if (node) { node.open=true; node.scrollIntoView({block:'center'}); node.querySelector('summary').focus(); }
+  })]);
 }
-export {
-  bindAgentDemo
-};
+
+let next=null;
+let calls=[];
+let loading=false;
+let browsingHistory=false;
+let signature;
+export async function loadCalls(more=false, background=false) {
+  if (loading || (background && browsingHistory)) return;
+  loading=true;
+  try {
+    const data=await api('/panel/calls'+(more && next ? '?before='+next : ''));
+    calls=more ? calls.concat(data.calls) : data.calls;
+    next=data.next;
+    browsingHistory=more;
+    const version=JSON.stringify([calls,next]);
+    if (version===signature) return;
+    signature=version;
+    const container=$('agent-demo-list');
+    container.replaceChildren(calls.length ? recordList(['所属任务','模块','业务步骤','调用时间'],calls.map(s=>({
+      title:s.task,values:[s.module,s.action,date(s.time)],open:()=>showCall(s,s.workflow,s.task)
+    }))) : el('p','当前范围内没有已保存的 Agent 调用。','empty'));
+    if(next) container.append(button('查看更早记录',()=>loadCalls(true).catch(error=>notice(error.message,true)),'link-button'));
+  } catch (error) {
+    signature=undefined;
+    $('agent-demo-list').replaceChildren(el('p','暂时无法读取调用记录，请确认管理服务已更新。','empty'));
+    throw error;
+  } finally { loading=false; }
+}

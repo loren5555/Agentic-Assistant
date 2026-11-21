@@ -1021,11 +1021,22 @@ h1 {
 .record-fields dt { color: var(--muted); } .record-fields dd { margin: 0; overflow-wrap: anywhere; }
 .record-times { padding-inline-start: 24px; font-variant-numeric: tabular-nums; } .record-times li { padding: 6px; }
 .job-catalog { grid-template-columns: 1fr; }
-.catalog-item { display: grid; grid-template-columns: minmax(7em, 1fr) minmax(8em, 1fr) auto auto; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding: 12px 0; }
-.catalog-item small { margin: 0; }
+.catalog-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding: 12px 0; }
+.catalog-copy strong, .catalog-copy small { display: inline; }
+.catalog-copy small { margin: 0 0 0 8px; }
+.catalog-description { margin: 5px 0 0; font-size: 13px; line-height: 1.55; color: #53667b; }
 @media (max-width: 720px) {
   .record-table td, .record-table th { padding: 10px; }
   #agent-demo-list :is(td, th):nth-child(n+5), #agent-demo-list :is(td, th):nth-child(3),
   #schedule-list :is(td, th):nth-child(4), .catalog-item small { display: none; }
-  .catalog-item { grid-template-columns: 1fr auto auto; }
+  .catalog-item { grid-template-columns: auto 1fr; gap: 7px 14px; }
+  .catalog-item .catalog-copy { grid-column: 1 / -1; }
+  .catalog-item button { justify-self: start; }
 }
+
+.activity-step { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; padding: 12px 16px; }
+.activity-step summary { cursor: pointer; font-weight: 600; }
+.activity-step .quiet-tag { margin-left: 10px; }
+.activity-step p, .activity-section p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.activity-section { margin-bottom: 20px; }
+.activity-section a { display: block; color: var(--accent); }

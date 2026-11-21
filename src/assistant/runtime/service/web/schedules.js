@@ -238,11 +238,26 @@ function runFields() {
   $('run-page-label').hidden = !['organize-papers', 'organize-articles'].includes($('run-job-select').value);
 }
 
+const descriptions = {
+  "propose-tasks": "读取 Inbox 新条目和标为 Elevated 的 TODO，将待办整理成 Workbench 提案供你审批。",
+  "organize-papers": "读取 Notero 中待处理的论文，为每篇起草整理提案。执行并验收后，再将阅读成果存入 Papers 等目标库。",
+  "organize-articles": "读取简悦收藏的待处理文章，提炼要点并提交 Workbench，由你决定哪些剪辑值得进一步整理。",
+  "process-signals": "把 Papers 和 Research Feed 中勾选 Follow Up 的条目，以及 Research Interests 中待处理的方向，转成 Workbench 提案。",
+  "reconcile-feedback": "将补充说明、修改要求或验收意见写回原始条目，供下次重新提案；驳回的提案则结束处理。",
+  "process-workbench": "根据审批结果执行已批准的任务，把结果写回 Workbench；验收通过后，提取值得归档的成果。",
+  "recommend-papers": "按配置的星期自动选择深度或轻量采集，从 Discovery Pool 精选条目，生成当日 Research Feed。",
+  "recommend-papers-deep": "用 Codex 搜索公开研究并探索新方向，补充候选池，保存后续检索线索，并生成当日推荐。",
+  "recommend-papers-light": "优先沿用每周留下的检索线索，从 OpenReview 补充候选池，并生成当日推荐。"
+};
+
 function bindSchedules() {
   for (const [key, title] of Object.entries(state.jobs)) $('run-job-select').append(new Option(title, key));
   for (const [key, title] of Object.entries(state.jobs)) {
     const item = el('div', undefined, 'catalog-item');
-    item.append(el('strong', title), el('small', key), button('运行一次', () => openRun(key)), button('安排计划', () => editor(key)));
+    const copy = el('div', undefined, 'catalog-copy');
+    copy.append(el('strong', title), el('small', key));
+    if (descriptions[key]) copy.append(el('p', descriptions[key], 'catalog-description'));
+    item.append(copy, button('运行一次', () => openRun(key)), button('安排计划', () => editor(key)));
     $('job-catalog').append(item);
   }
   $('run-job').onclick = () => openRun();

@@ -1,3 +1,4 @@
+import {lines, showCall} from './agents.js';
 import {
   $,
   state,
@@ -44,12 +45,12 @@ function renderRuns(data) {
     check.append(input);
     row.append(check);
     const title = el('td');
-    title.append(button(run.title, () => openDetail(run.id), 'run-title'), el('span', run.name, 'run-subtitle'));
+    title.append(button(run.title, () => openDetail(run.id), 'run-title'));
     row.append(title);
     const status = el('td');
     status.append(badge(run.status));
     row.append(status);
-    row.append(el('td', date(run.created_at)), el('td', duration(run.duration_ms)), el('td', String(run.step_count)));
+    row.append(el('td', date(run.created_at)), el('td', duration(run.duration_ms)));
     const action = el('td');
     action.append(button('查看 →', () => openDetail(run.id), 'row-open'));
     row.append(action);
@@ -61,13 +62,6 @@ function renderRuns(data) {
   $('previous').disabled = data.page <= 1;
   $('next').disabled = data.page * data.page_size >= data.total;
   selection();
-}
-
-function rawSection(title, value, open = false) {
-  const section = el('details', undefined, 'saved-section');
-  section.open = open;
-  section.append(el('summary', title), el('pre', JSON.stringify(value, null, 2) ?? '无'));
-  return section;
 }
 
 function links(title, items) {
@@ -92,8 +86,9 @@ async function refreshDetail() {
   const id = state.detail;
   if (!id) return;
   try {
-    const data = await api(`/panel/runs/${encodeURIComponent(id)}`);
+    const data = await api(`/panel/runs/${encodeURIComponent(id)}/activity`);
     if (state.detail !== id) return;
+    if (!data.run) throw new Error('服务版本需要更新');
     const signature = JSON.stringify({
       ...data,
       run: {
@@ -108,17 +103,15 @@ async function refreshDetail() {
     }
     state.detailSignature = signature;
     const run = data.run;
-    $('detail-title').textContent = run.title;
+    $('detail-title').textContent = data.subject || run.title;
     const meta = el('div');
     meta.append(badge(run.status));
     const fields = el('div', undefined, 'detail-kv');
     for (const [key, value] of [
-        ['执行 ID', id],
-        ['工作流', run.name],
+        ['工作流', run.title],
         ['创建时间', date(run.created_at)],
         ['结束时间', date(run.completed_at)],
-        ['耗时', duration(run.duration_ms)],
-        ['队列', run.queue || '—']
+        ['耗时', duration(run.duration_ms)]
       ]) {
       const entry = el('span', value);
       if (key === '耗时') entry.id = 'detail-duration';
@@ -126,32 +119,33 @@ async function refreshDetail() {
     }
     meta.append(fields);
     $('detail-meta').replaceChildren(meta);
-    const actions = [button('复制 ID', async () => {
-      try {
-        await navigator.clipboard.writeText(id);
-        notice('执行 ID 已复制。');
-      } catch {
-        notice('无法访问剪贴板，可从详情中选中 ID 复制。', true);
-      }
-    })];
+    const actions = [];
     if (!terminal.has(run.status)) actions.push(button('取消任务', () => confirmCancel(run)));
     if (['ERROR', 'CANCELLED', 'MAX_RECOVERY_ATTEMPTS_EXCEEDED'].includes(run.status)) actions.push(button('恢复执行', () => resume(run)));
     if (terminal.has(run.status)) actions.push(button('删除记录', () => deletePreview([id]), 'danger subtle'));
     $('detail-actions').replaceChildren(...actions);
     const content = document.createDocumentFragment();
-    if (data.error) content.append(rawSection('错误信息', data.error, true));
-    content.append(rawSection('保存的结果', data.output, data.output !== null), rawSection('任务输入', data.input));
-    const stepGroup = el('div');
-    stepGroup.append(el('h3', `检查点与步骤 · ${data.steps.length}`));
+    if (data.error.length) content.append(lines('错误信息', data.error));
+    if (data.input.length) content.append(lines('任务输入', data.input));
+    if (data.result.length) content.append(lines('执行结果', data.result));
+    if (data.steps.length) content.append(el('h3','处理过程'));
     for (const step of data.steps) {
-      const node = el('div', undefined, 'step');
-      node.append(el('strong', step.function_name || step.name || '步骤'), el('small', `步骤 ${step.function_id??'—'} · ${step.error?'失败':'已记录'}`), rawSection('查看保存的数据', step));
-      stepGroup.append(node);
+      const node = el('details', undefined, 'activity-step');
+      node.id='activity-step-'+step.workflow+'-'+step.number;
+      const heading=el('summary',step.action);
+      heading.append(el('span',step.module,'quiet-tag'));
+      node.append(heading);
+      if (step.subject) node.append(el('strong',step.subject));
+      for (const text of step.error.concat(step.result)) node.append(el('p',text));
+      if (!step.result.length && !step.error.length) node.append(el('p','已执行，此步骤没有单独的输出。','hint'));
+      if (step.call) node.append(button('查看 Agent 调用',()=>showCall(step,step.workflow,step.subject || data.subject || run.title),'link-button'));
+      content.append(node);
     }
-    content.append(stepGroup);
-    content.append(links('父任务 / 引用方', data.references.parents), links('子任务', data.references.children));
-    if (data.references.partial) content.append(el('p', '关联较多，仅展示前 100 条；删除操作将保留此记录。', 'hint'));
-    if (data.references.business.length) content.append(rawSection('未完成的 Workbench 引用', data.references.business));
+    if (data.more_steps) content.append(el('p','已显示前 120 个业务步骤，打开下级任务可继续查看。','hint'));
+    if (data.children.length) content.append(links('下级任务', data.children));
+    if (data.parents.length) content.append(links('所属任务', data.parents));
+    if (!data.steps.length && !data.children.length && !data.result.length && !data.error.length)
+      content.append(el('p','当前没有已保存的业务结果。','hint'));
     // Preserve folded sections during periodic refresh.
     const previous = [...$('detail-content').querySelectorAll('details')].map(node => node.open);
     $('detail-content').replaceChildren(content);
@@ -159,7 +153,7 @@ async function refreshDetail() {
       if (index < previous.length) node.open = previous[index];
     });
   } catch (error) {
-    if (state.detail === id) $('detail-content').replaceChildren(el('p', error.message, 'hint'));
+    if (state.detail === id) $('detail-content').replaceChildren(el('p', '无法加载业务记录。请确认服务已运行新版后端。', 'hint'));
   }
 }
 

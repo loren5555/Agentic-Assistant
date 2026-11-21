@@ -19,13 +19,13 @@ import {
   bindSchedules
 } from './schedules.js';
 import {
-  bindAgentDemo
+  loadCalls
 } from './agents.js';
 const views = {
   overview: ['运行概览', '运行概览', '关注正在运行的任务、接下来的安排，以及需要处理的异常。'],
   schedules: ['任务编排', '日常任务编排', '创建与调整重复任务；保存后立即应用，重启后继续保留。'],
   executions: ['执行记录', '执行历史与结果', '查看任务状态、检查已保存的产物，恢复或清理需要关注的记录。'],
-  agents: ['Agent 调用', 'Agent 调用记录', '模型调用观测的交互 Demo。真实调用记录将在后续接入。']
+  agents: ['Agent 调用', 'Agent 调用记录', '查看已保存的模型调用、工具和所属业务步骤。']
 };
 
 function navigate() {
@@ -40,16 +40,20 @@ function navigate() {
   $('view-title').textContent = title;
   $('view-description').textContent = description;
   $('view-eyebrow').textContent = 'OPERATIONS / ' + key.toUpperCase();
+  refresh();
 }
-async function refresh() {
+async function refresh(background = false) {
   if (!state.runtime) return;
   if (state.busy) {
-    state.refreshAgain = true;
+    if (!background) state.refreshAgain = true;
     return;
   }
   state.busy = true;
   try {
-    await Promise.all([refreshDashboard(), refreshSchedules(), refreshExecutions(), refreshDetail()]);
+    const requests = [refreshDashboard(), refreshSchedules(), refreshDetail()];
+    if (!$('view-executions').hidden) requests.push(refreshExecutions());
+    if (!$('view-agents').hidden) requests.push(loadCalls(false, background));
+    await Promise.all(requests);
     $('connection').textContent = '服务在线';
     $('connection').className = 'connection';
     $('updated').textContent = `更新于 ${new Date().toLocaleTimeString('zh-CN',{hour12:false})}`;
@@ -68,10 +72,12 @@ async function refresh() {
 async function start() {
   navigate();
   bindExecutions();
-  bindAgentDemo();
   setRefresh(refresh);
   window.addEventListener('hashchange', navigate);
-  $('refresh').onclick = refresh;
+  $('refresh').onclick = () => refresh();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !document.querySelector('dialog[open]')) refresh(true);
+  });
   for (const card of document.querySelectorAll('.stat')) card.onclick = () => {
     location.hash = 'executions';
     $('status').value = card.dataset.status;
@@ -96,7 +102,7 @@ async function start() {
     $('connection').textContent = '未连接';
   }
   setInterval(() => {
-    if (!document.hidden && !document.querySelector('dialog[open]')) refresh();
+    if (!document.hidden && !document.querySelector('dialog[open]')) refresh(true);
   }, 5000);
 }
 start();

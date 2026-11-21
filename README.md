@@ -302,7 +302,7 @@ separate configured model costs of ranking, assessment or non-OpenReview evidenc
 Start `uv run python -m assistant serve`, then open **http://127.0.0.1:8765/**
 for the maintenance console: schedule daily jobs online, submit a single run,
 browse saved results/steps, resume/cancel work, and preview execution-record cleanup.
-Agent-call observation has an explicitly labeled interaction demo. See the
+Agent-call history links recorded provider traces to their originating business steps. See the
 [console guide](docs/maintenance-console.md). See [local service](docs/local-service.md)
 for remote access and maintenance scope.
 
