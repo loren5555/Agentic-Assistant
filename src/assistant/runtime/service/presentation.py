@@ -1,4 +1,4 @@
-"""Format saved workflow outputs consistently for clients and the future report UI."""
+"""Format saved workflow outputs consistently for clients and the report UI."""
 
 from pydantic import BaseModel
 from assistant.components.recommendations.recommender.models import (

@@ -43,7 +43,9 @@ async def scheduled_job(scheduled_time: datetime, context: dict[str, str]):
     Returns:
         Job output, or None when the application was launched in manual mode.
     """
-    if not _serving or context["job"] not in _application.tasks.settings.schedules:
+    configured = _application.tasks.settings.schedules.get(context["job"]) if _application else None
+    if not _serving or configured is None or not getattr(configured, "enabled", True):
+        get_logger("main").debug("Skipping inactive schedule trigger: job=%s.", context["job"])
         return None
     get_logger("main").info("Scheduled job triggered: job=%s scheduled_time=%s workflow=%s.",
                             context["job"], scheduled_time.isoformat(), DBOS.workflow_id)

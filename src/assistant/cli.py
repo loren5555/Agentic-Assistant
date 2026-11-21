@@ -281,13 +281,19 @@ Use serve for recurring schedules, or resume WORKFLOW_ID to recover a failed run
   recommend-papers-deep, recommend-papers-light.
 
 Persistence and shutdown:
-  Schedules persist in DBOS. This command updates configured schedules and pauses
+  Schedules persist in DBOS. This command updates configured schedules and removes
   assistant-* schedules removed from YAML. Missed offline runs are not backfilled.
   Already-started unfinished workflows may recover on launch.
   Press Ctrl+C to stop; shutdown allows active workflows up to 10 seconds to finish.
   run/status/resume work concurrently as HTTP clients. Only one serve may own a
   runtime directory. Stop it before setup. HTTP listens on 127.0.0.1:8765 by default;
   change runtime.service.port in the YAML used by both service and clients.
+
+Browser panel:
+  Open http://127.0.0.1:8765/ after starting the service (use your configured port).
+  Browse saved runs, inputs/results and steps; resume, cancel or preview deletion.
+  Create/edit/pause/delete schedules online; changes persist to the selected YAML.
+  Schedule edits apply immediately without restarting. No frontend process is required.
 
 Examples:
   python -m assistant serve

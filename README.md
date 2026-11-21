@@ -299,6 +299,13 @@ separate configured model costs of ranking, assessment or non-OpenReview evidenc
 
 ## Schedules, inspection and recovery
 
+Start `uv run python -m assistant serve`, then open **http://127.0.0.1:8765/**
+for the maintenance console: schedule daily jobs online, submit a single run,
+browse saved results/steps, resume/cancel work, and preview execution-record cleanup.
+Agent-call observation has an explicitly labeled interaction demo. See the
+[console guide](docs/maintenance-console.md). See [local service](docs/local-service.md)
+for remote access and maintenance scope.
+
 ```yaml
 runtime:
   directory: data/assistant
@@ -318,8 +325,9 @@ uv run python -m assistant status
 uv run python -m assistant resume WORKFLOW_ID
 ```
 
-Cron has six fields (seconds through weekday), in Asia/Shanghai time. Enabled schedules
-persist in DBOS. Serve pauses assistant-owned schedules removed from configuration.
+Cron has six fields (seconds through weekday), using Asia/Shanghai by default.
+Online plans can specify another time zone and persist their enabled state. Serve
+removes Assistant-owned schedules removed from configuration; accepted runs remain.
 Only serve launches DBOS and recovers compatible unfinished work. Manual jobs and
 scheduled dispatch use the same serial business queue; schedule callbacks have a
 separate trigger queue. run/status/resume are HTTP clients and work while serve is

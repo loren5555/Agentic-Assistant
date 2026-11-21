@@ -12,7 +12,8 @@ Output destination:
 
 Inputs:
     Application settings with runtime.schedules: job names mapped to cron
-    expressions. Schedules use Asia/Shanghai and the existing DBOS database.
+    expressions or records with cron/timezone/enabled. Browser edits are saved
+    back to this YAML and synchronized online with the existing DBOS database.
 
 Outputs:
     Persisted schedules, local HTTP submission/inspection endpoints and execution
@@ -27,7 +28,7 @@ Workflow relationship:
 
 Participants and effects:
     DBOS scheduler, job queue, dispatcher, and configured business tasks. This
-    command pauses assistant-owned schedules removed from YAML and applies the
+    command removes assistant-owned schedules removed from YAML and applies the
     configured definitions. Automatic backfill is disabled; an empty mapping
     enables no recurring tasks, though unfinished work can still recover.
 
@@ -40,14 +41,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 import argparse
-import asyncio
 
 from dbos import DBOS
 
-from assistant.runtime import schedules
 from assistant.runtime.service.server import serve_http
-from assistant.runtime.service.submissions import JOB_QUEUE, TRIGGER_QUEUE, RECOVERY_QUEUE
-from logger import get_logger, trace_call
+from assistant.runtime.service.submissions import (
+    JOB_QUEUE,
+    TRIGGER_QUEUE,
+    RECOVERY_QUEUE,
+)
+from logger import trace_call
 
 if TYPE_CHECKING:
     from assistant.runtime.application import Application
@@ -61,27 +64,11 @@ async def run(application: Application, options: argparse.Namespace) -> None:
         application: Configured application runtime.
         options: Parsed command arguments.
     """
-    logger = get_logger("commands.serve")
     await DBOS.register_queue_async(JOB_QUEUE, worker_concurrency=1)
     await DBOS.register_queue_async(TRIGGER_QUEUE, worker_concurrency=1)
     await DBOS.register_queue_async(RECOVERY_QUEUE, worker_concurrency=1)
-    enabled = application.settings.runtime.schedules
-    for schedule in await DBOS.list_schedules_async():
-        name = schedule["schedule_name"]
-        if name.startswith("assistant-") and name.removeprefix("assistant-") not in enabled:
-            await asyncio.to_thread(DBOS.pause_schedule, name)
-            logger.info("Paused schedule removed from configuration: name=%s.", name)
-    definitions = [
-        {
-            "schedule_name": "assistant-" + job, "workflow_fn": schedules.scheduled_job,
-            "schedule": cron, "cron_timezone": "Asia/Shanghai",
-            "context": {"job": job}, "automatic_backfill": False,
-            "queue_name": TRIGGER_QUEUE,
-        }
-        for job, cron in enabled.items()
-    ]
-    await DBOS.apply_schedules_async(definitions)
-    logger.info("Scheduler ready: schedules=%d timezone=Asia/Shanghai backfill=False. Ctrl+C to stop.", len(enabled))
-    for job, cron in enabled.items():
-        logger.info("Schedule enabled: job=%s cron=%s.", job, cron)
+    from assistant.runtime.service.scheduling import ScheduleManager
+
+    application.schedule_manager = ScheduleManager(application.settings)
+    await application.schedule_manager.sync()
     await serve_http(application)

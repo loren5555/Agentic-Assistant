@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>
+      Assistant · 控制台
+    </title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23173e43%27/%3E%3Ctext x=%2716%27 y=%2723%27 text-anchor=%27middle%27 fill=%27white%27 font-size=%2722%27%3EA%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="/assets/console.css">
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="console-brand" href="#overview">
+        <span class="mark">
+          A
+        </span>
+        <div>
+          Assistant
+          <small>
+            OPERATIONS CONSOLE
+          </small>
+        </div>
+      </a>
+      <div class="nav-label">
+        工作空间
+      </div>
+      <nav aria-label="主要导航">
+        <a href="#overview" data-view="overview">
+          <span class="nav-icon">
+            ◫
+          </span>
+          运行概览
+        </a>
+        <a href="#schedules" data-view="schedules">
+          <span class="nav-icon">
+            ◷
+          </span>
+          任务编排
+          <span id="nav-schedule-count" class="nav-count">
+            0
+          </span>
+        </a>
+        <a href="#executions" data-view="executions">
+          <span class="nav-icon">
+            ≡
+          </span>
+          执行记录
+          <span id="nav-error-count" class="nav-count alert" hidden>
+            0
+          </span>
+        </a>
+        <a href="#agents" data-view="agents">
+          <span class="nav-icon">
+            ⌘
+          </span>
+          Agent 调用
+          <span class="demo-tag">
+            DEMO
+          </span>
+        </a>
+      </nav>
+      <div class="sidebar-note">
+        <span class="status-light">
+        </span>
+        LOCAL RUNTIME
+        <p>
+          DBOS 负责持久执行
+          <br>
+          Notion 承载人工工作区
+        </p>
+        <small id="version">
+          连接中
+        </small>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="console-header">
+        <div class="breadcrumb">
+          工作空间
+          <span>
+            /
+          </span>
+          <strong id="view-breadcrumb">
+            运行概览
+          </strong>
+        </div>
+        <div class="service">
+          <span id="connection" class="connection">
+            连接中
+          </span>
+          <button id="refresh" class="icon-button" title="刷新数据">
+            ↻
+            <span>
+              刷新
+            </span>
+          </button>
+          <button id="run-job" class="primary">
+            ＋ 运行任务
+          </button>
+        </div>
+      </header>
+      <main>
+        <div class="heading">
+          <div>
+            <p class="eyebrow" id="view-eyebrow">
+              OPERATIONS / OVERVIEW
+            </p>
+            <h1 id="view-title">
+              运行概览
+            </h1>
+            <p class="muted" id="view-description">
+              关注正在运行的任务、接下来的安排，以及需要处理的异常。
+            </p>
+          </div>
+          <div class="meta">
+            <small id="updated">
+              尚未刷新
+            </small>
+            <span class="live-indicator">
+              每 5 秒刷新
+            </span>
+          </div>
+        </div>
+        <div id="notice" role="status" hidden>
+        </div>
+        <section id="view-overview" class="view">
+          <section class="stats" aria-label="执行统计">
+            <button data-status="" class="stat">
+              <span>
+                24 小时执行
+              </span>
+              <strong id="count-all">
+                —
+              </strong>
+            </button>
+            <button data-status="PENDING" class="stat">
+              <span>
+                <i class="dot active">
+                </i>
+                执行中
+              </span>
+              <strong id="count-running">
+                —
+              </strong>
+            </button>
+            <button data-status="SUCCESS" class="stat">
+              <span>
+                <i class="dot success">
+                </i>
+                24 小时完成
+              </span>
+              <strong id="count-success">
+                —
+              </strong>
+            </button>
+            <button data-status="FAILED" class="stat">
+              <span>
+                <i class="dot error">
+                </i>
+                失败
+              </span>
+              <strong id="count-error">
+                —
+              </strong>
+            </button>
+          </section>
+          <div class="overview-grid">
+            <section class="panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>
+                    最近执行
+                  </h2>
+                  <p class="hint">
+                    过去 24 小时 · 顶层任务
+                  </p>
+                </div>
+                <a href="#executions" class="text-link">
+                  全部记录 →
+                </a>
+              </div>
+              <div id="recent-runs" class="list-body">
+              </div>
+            </section>
+            <section class="panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>
+                    接下来的安排
+                  </h2>
+                  <p class="hint">
+                    已启用的定时计划 · 本机时间
+                  </p>
+                </div>
+                <a href="#schedules" class="text-link">
+                  管理 →
+                </a>
+              </div>
+              <div id="upcoming-runs" class="list-body">
+              </div>
+            </section>
+          </div>
+          <section class="panel queue-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>
+                  执行队列
+                </h2>
+                <p class="hint">
+                  手动与定时任务共用串行业务队列；检查点在本地持久保存。
+                </p>
+              </div>
+              <span class="quiet-tag">
+                DBOS
+              </span>
+            </div>
+            <div id="queues" class="queue-list">
+            </div>
+          </section>
+          <p class="footnote">
+            执行中与错误统计覆盖全部时间；完成统计覆盖近 24 小时 · SUCCESS 表示流程返回，人工审批仍在 Notion 中完成
+          </p>
+        </section>
+        <section id="view-schedules" class="view" hidden>
+          <div class="section-toolbar">
+            <div>
+              <strong id="schedule-summary">
+                读取定时计划…
+              </strong>
+              <p class="hint">
+                修改立即生效，并保存至本地配置；一个流程对应一条定时计划。
+              </p>
+            </div>
+            <div class="actions">
+              <button id="sync-schedules">
+                同步配置
+              </button>
+              <button id="new-schedule" class="primary">
+                ＋ 新建计划
+              </button>
+            </div>
+          </div>
+          <div id="schedule-list" class="schedule-grid">
+          </div>
+          <section class="panel catalog-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>
+                  可用工作流
+                </h2>
+                <p class="hint">
+                  单次运行与定时安排使用相同入口。具体步骤由各工作流负责。
+                </p>
+              </div>
+            </div>
+            <div id="job-catalog" class="job-catalog">
+            </div>
+          </section>
+        </section>
+        <section id="view-executions" class="view" hidden>
+          <div class="section-toolbar">
+            <p class="hint">
+              检查保存的结果与步骤，按需恢复或清理历史。子任务默认折叠。
+            </p>
+            <button id="show-errors" class="danger subtle">
+              查看 / 清理错误记录
+            </button>
+          </div>
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>
+                执行记录
+              </h2>
+              <label class="toggle">
+                <input id="all-levels" type="checkbox">
+                包含子任务
+              </label>
+            </div>
+            <form id="filters" class="filters">
+              <label class="search">
+                <span class="sr-only">
+                  搜索任务
+                </span>
+                <input id="search" placeholder="搜索标题、任务名称或 ID" type="search" maxlength="200">
+              </label>
+              <label>
+                <span class="sr-only">
+                  任务类型
+                </span>
+                <select id="job">
+                  <option value="">
+                    全部任务
+                  </option>
+                </select>
+              </label>
+              <label>
+                <span class="sr-only">
+                  执行状态
+                </span>
+                <select id="status">
+                  <option value="">
+                    全部状态
+                  </option>
+                  <option value="PENDING">
+                    执行中
+                  </option>
+                  <option value="ENQUEUED">
+                    排队中
+                  </option>
+                  <option value="DELAYED">
+                    延后执行
+                  </option>
+                  <option value="SUCCESS">
+                    24 小时完成
+                  </option>
+                  <option value="FAILED">
+                    所有错误
+                  </option>
+                  <option value="ERROR">
+                    失败
+                  </option>
+                  <option value="CANCELLED">
+                    已取消
+                  </option>
+                  <option value="MAX_RECOVERY_ATTEMPTS_EXCEEDED">
+                    恢复次数耗尽
+                  </option>
+                </select>
+              </label>
+              <label>
+                <span class="sr-only">
+                  时间范围
+                </span>
+                <select id="since">
+                  <option value="24h">
+                    过去 24 小时
+                  </option>
+                  <option value="7d" selected>
+                    过去 7 天
+                  </option>
+                  <option value="30d">
+                    过去 30 天
+                  </option>
+                  <option value="all">
+                    全部时间
+                  </option>
+                </select>
+              </label>
+              <button type="submit">
+                查询
+              </button>
+            </form>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="check">
+                      <input id="select-page" type="checkbox" aria-label="选择本页记录">
+                    </th>
+                    <th>
+                      任务
+                    </th>
+                    <th>
+                      状态
+                    </th>
+                    <th>
+                      提交时间
+                    </th>
+                    <th>
+                      耗时
+                    </th>
+                    <th>
+                      检查点
+                    </th>
+                    <th>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="runs">
+                </tbody>
+              </table>
+            </div>
+            <div id="empty" class="empty" hidden>
+              <strong>
+                这里还没有执行记录
+              </strong>
+              <p>
+                调整筛选条件，或通过 CLI 提交任务。页面会自动刷新。
+              </p>
+            </div>
+            <div class="table-footer">
+              <div>
+                <button id="delete-selected" class="danger subtle" disabled>
+                  删除所选记录
+                </button>
+                <small id="selected-count">
+                </small>
+              </div>
+              <div class="pagination">
+                <small id="page-info">
+                  —
+                </small>
+                <button id="previous" aria-label="上一页">
+                  ←
+                </button>
+                <button id="next" aria-label="下一页">
+                  →
+                </button>
+              </div>
+            </div>
+          </section>
+          <p class="footnote">
+            删除先预览引用与影响范围 · 原始资料和 Notion 页面保留
+          </p>
+        </section>
+        <section id="view-agents" class="view" hidden>
+          <div class="demo-banner">
+            <span class="quiet-tag">
+              DEMO
+            </span>
+            <div>
+              <strong>
+                Agent 调用观测 · 交互样例
+              </strong>
+              <p>
+                以下为固定演示数据，用于预览模型、工具与调用链的展示方式。尚未连接 PydanticAI 或其他官方观测接口，不代表真实调用与费用。
+              </p>
+            </div>
+          </div>
+          <div class="agent-demo-grid">
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>
+                  调用记录
+                </h2>
+                <span class="quiet-tag">
+                  样例数据
+                </span>
+              </div>
+              <div id="agent-demo-list" class="list-body">
+              </div>
+            </section>
+            <section class="panel agent-detail">
+              <div class="panel-heading">
+                <h2 id="agent-demo-title">
+                  调用详情
+                </h2>
+              </div>
+              <div id="agent-demo-detail">
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+    <div id="drawer-backdrop" hidden>
+    </div>
+    <aside id="drawer" hidden aria-label="执行详情">
+      <div class="drawer-top">
+        <span class="eyebrow">
+          RUN DETAILS
+        </span>
+        <button id="close-detail" aria-label="关闭详情">
+          ✕
+        </button>
+      </div>
+      <h2 id="detail-title">
+      </h2>
+      <div id="detail-meta">
+      </div>
+      <div id="detail-actions" class="actions">
+      </div>
+      <div id="detail-content">
+      </div>
+    </aside>
+    <dialog id="confirm">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <h2 id="confirm-title">
+          </h2>
+          <button value="cancel" aria-label="关闭">
+            ✕
+          </button>
+        </div>
+        <p id="confirm-note">
+        </p>
+        <div id="confirm-content">
+        </div>
+        <div class="dialog-actions">
+          <button value="cancel">
+            返回
+          </button>
+          <button id="confirm-action" type="button" class="danger">
+            确认
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="schedule-dialog" class="editor-dialog">
+      <form id="schedule-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">
+              SCHEDULE EDITOR
+            </p>
+            <h2 id="schedule-editor-title">
+              新建定时计划
+            </h2>
+          </div>
+          <button type="button" id="close-schedule" aria-label="关闭计划编辑">
+            ✕
+          </button>
+        </div>
+        <p class="hint">
+          保存计划不会立即运行任务。已提交的任务不受后续修改影响。
+        </p>
+        <div class="editor-grid">
+          <label class="wide">
+            工作流
+            <select id="schedule-job" required>
+            </select>
+          </label>
+          <label>
+            重复方式
+            <select id="schedule-frequency">
+              <option value="daily">
+                每天
+              </option>
+              <option value="weekly">
+                每周
+              </option>
+              <option value="monthly">
+                每月
+              </option>
+              <option value="hourly">
+                每小时
+              </option>
+              <option value="custom">
+                自定义 Cron
+              </option>
+            </select>
+          </label>
+          <label>
+            时区
+            <select id="schedule-timezone">
+              <option value="Asia/Shanghai">
+                Asia/Shanghai · 北京时间
+              </option>
+              <option value="UTC">
+                UTC · 世界协调时间
+              </option>
+              <option value="America/New_York">
+                America/New_York
+              </option>
+            </select>
+          </label>
+          <label id="schedule-time-label">
+            执行时间
+            <input id="schedule-time" type="time" value="07:00" required>
+          </label>
+          <label id="schedule-weekday-label" hidden>
+            星期
+            <select id="schedule-weekday">
+              <option value="1">
+                星期一
+              </option>
+              <option value="2">
+                星期二
+              </option>
+              <option value="3">
+                星期三
+              </option>
+              <option value="4">
+                星期四
+              </option>
+              <option value="5">
+                星期五
+              </option>
+              <option value="6">
+                星期六
+              </option>
+              <option value="0">
+                星期日
+              </option>
+            </select>
+          </label>
+          <label id="schedule-monthday-label" hidden>
+            每月日期
+            <input id="schedule-monthday" type="number" min="1" max="28" value="1">
+          </label>
+          <label id="schedule-minute-label" hidden>
+            每小时第几分钟
+            <input id="schedule-minute" type="number" min="0" max="59" value="0">
+          </label>
+          <label id="schedule-cron-label" class="wide" hidden>
+            秒 分 时 日 月 星期
+            <input id="schedule-cron" placeholder="0 0 7 * * *" maxlength="160">
+          </label>
+          <label class="toggle wide">
+            <input id="schedule-enabled" type="checkbox" checked>
+            启用计划
+          </label>
+        </div>
+        <div class="preview-box">
+          <div class="dialog-heading">
+            <strong>
+              接下来五次执行
+            </strong>
+            <button type="button" id="preview-schedule">
+              预览时间
+            </button>
+          </div>
+          <p id="schedule-expression" class="mono hint">
+          </p>
+          <p class="hint">显示计划触发时间，实际开始可能需要等待队列。</p>
+          <div id="schedule-preview" aria-live="polite">
+            选择时间后预览。
+          </div>
+        </div>
+        <p id="schedule-error" class="form-error" role="alert" hidden>
+        </p>
+        <div class="dialog-actions">
+          <button type="button" id="cancel-schedule">
+            取消
+          </button>
+          <button type="submit" id="save-schedule" class="primary">
+            保存并应用
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="run-dialog" class="editor-dialog">
+      <form id="run-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">
+              MANUAL DISPATCH
+            </p>
+            <h2>
+              立即运行任务
+            </h2>
+          </div>
+          <button type="button" id="close-run" aria-label="关闭运行窗口">
+            ✕
+          </button>
+        </div>
+        <p class="hint">
+          任务将进入现有业务队列。提交后可以在执行记录中查看状态和结果。
+        </p>
+        <label class="field">
+          工作流
+          <select id="run-job-select">
+          </select>
+        </label>
+        <label id="run-page-label" class="field" hidden>
+          来源 Page ID（可选）
+          <input id="run-page" placeholder="留空处理待办来源">
+        </label>
+        <p class="hint">
+          执行任务可能调用模型或写入 Notion，沿用当前工作流的审批规则。
+        </p>
+        <p id="run-error" class="form-error" role="alert" hidden>
+        </p>
+        <div class="dialog-actions">
+          <button type="submit" id="submit-run" class="primary">
+            提交任务
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <script type="module" src="/assets/app.js">
+    </script>
+  </body>
+</html>

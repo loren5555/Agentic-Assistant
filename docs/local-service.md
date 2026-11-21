@@ -86,7 +86,8 @@ runtime:
 
 Serve and clients use the same configuration. With a custom file, place `--config`
 before the command in both terminals. Clients use the running service's providers;
-restart serve after changing provider, schedule or model settings.
+restart serve after changing provider or model settings. Schedule edits apply online
+from the panel; after editing YAML manually, click **同步配置** or restart serve.
 
 HTTP binds to `127.0.0.1` only. Each client supplies the resolved runtime directory;
 the server rejects requests targeting another data directory on the same port. This
@@ -111,9 +112,42 @@ its business slot. Business queue identity is retained when explicitly recoverin
 queued workflow. Older interrupted workflows may retain their original execution
 structure; this change does not rewrite existing state.
 
-## Local API for the future report page
+## Browser panel and local API
 
-All requests supply `X-Assistant-Runtime` with the absolute `runtime.directory/v2` path.
+Open **http://127.0.0.1:8765/** after starting `serve` (use the configured port).
+The panel shares that process and needs no frontend build or additional service.
+If you browse from another computer, forward the host's loopback port:
+
+```bash
+ssh -L 8765:127.0.0.1:8765 USER@ASSISTANT_HOST
+```
+
+Then open the same URL locally. The panel provides:
+
+- Root executions by default, with an option to include children, plus title/ID search,
+  job/status/time filters, pagination and five-second refresh.
+- Saved input, output, errors, steps, parent/child links and queue information in a detail drawer.
+- Online schedule CRUD: daily/weekly/monthly/hourly presets or custom six-field
+  cron, time zone, enabled state and next-five preview. Changes persist to the
+  selected local YAML and apply without restarting; unchanged schedules retain
+  their last-firing history. Deleting a plan leaves execution history intact.
+- A workflow catalog with explicit single-run submission to the existing queue.
+- A clearly labeled Agent call demo, separate from all real DBOS records.
+- Resume for failed/cancelled runs using the existing version-checked recovery path.
+- Cancel for the selected execution only. An in-flight external call may finish;
+  children are not cancelled automatically.
+- Deletion preview and confirmation, up to 50 selected records per request. Only
+  terminal executions can be removed; child execution records remain. Deleting a
+  checkpoint removes its recovery history, while Notion and the business index stay intact.
+
+Deletion retains unfinished Workbench references, executions with active children,
+records referenced by retained parent checkpoints, and successful shared collection /
+edition caches. A changed preview must be reviewed again. Partial batch outcomes
+are reported per execution. This is explicit maintenance, not automatic retention.
+
+All API requests supply `X-Assistant-Runtime` with the absolute `runtime.directory/v2`
+path. The index, static assets and bootstrap GET are public loopback reads; the browser
+obtains the runtime identity at bootstrap and sends the header on subsequent requests.
 The API reports DBOS execution states; Notion approval and acceptance remain business
 states and are not inferred from DBOS SUCCESS.
 
@@ -128,8 +162,27 @@ states and are not inferred from DBOS SUCCESS.
 | GET | `/schedules` | Registered schedule definitions |
 | POST | `/workflows/{id}/resume` | Submit recovery with `{request_id?}` |
 
-This is the backend for a later report page. The current release provides JSON
-inspection through CLI; no report frontend has been added.
+| GET | `/panel/bootstrap` | Browser runtime identity and job labels |
+| GET | `/panel/runs` | Paginated metadata, search and filtered counts |
+| GET | `/panel/runs/{id}` | Saved payloads, steps and references |
+| GET | `/panel/overview` | Recent runs, all-time states and queue summaries |
+| POST | `/panel/runs/{id}/cancel` | Cancel this execution only |
+| POST | `/panel/delete-preview` | Inspect `{ids}` and return a confirmation token |
+| POST | `/panel/delete` | Apply `{ids, token}`, rechecking references and state |
+| GET | `/panel/schedules` | Desired/live plans, revisions and next trigger times |
+| POST | `/panel/schedules/preview` | Validate `{cron, timezone, enabled}` and preview five times |
+| PUT | `/panel/schedules/{job}` | Save `{cron, timezone, enabled, revision}` and apply live |
+| DELETE | `/panel/schedules/{job}` | Delete using `{revision}`; retain accepted runs |
+| POST | `/panel/schedules/sync` | Reload desired YAML schedules and retry synchronization |
+
+The [maintenance console guide](maintenance-console.md) describes the four views,
+operator actions, configuration behavior and the demo boundary.
+
+The panel's metadata adapter uses read-only SQLite queries against the DBOS 3.2
+system-table schema for pagination, counts and reference lookup. Payload inspection,
+resume, cancellation and deletion use DBOS public APIs. This adapter is local to the
+service; business workflows and their debugger entry points stay unchanged.
+DBOS SUCCESS means the function completed; a proposal can still await human approval.
 
 ## Optional unattended Linux host
 

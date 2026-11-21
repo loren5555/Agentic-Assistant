@@ -23,6 +23,8 @@ runtime:
   batch_size: 20
   service:
     port: 8765  # Loopback only; use the same port for serve and CLI clients.
+  # The browser saves online edits here. Compact cron strings remain supported.
+  # Full form: {cron: "0 0 7 * * *", timezone: Asia/Shanghai, enabled: false}
   schedules:
     recommend-papers-deep: "0 0 7 * * 0"  # Sunday 07:00, Asia/Shanghai.
     recommend-papers-light: "0 0 7 * * 1-6"  # Other six days; same daily edition.

@@ -3,7 +3,7 @@
 from importlib.resources import files
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from yaml import safe_load
 
 
@@ -106,6 +106,46 @@ class ServiceSettings(BaseModel):
     port: int = Field(default=8765, ge=1024, le=65535)
 
 
+class ScheduleSettings(BaseModel):
+    """Persist one job's recurrence, time zone and enabled state."""
+
+    model_config = ConfigDict(extra="forbid")
+    cron: str = Field(min_length=1, max_length=160)
+    timezone: str = "Asia/Shanghai"
+    enabled: bool = True
+
+    @model_validator(mode="after")
+    def validate_schedule(self):
+        """Use six second-first fields and require an actual future occurrence."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from croniter import croniter
+
+        if len(self.cron.split()) != 6:
+            raise ValueError(
+                "Use six cron fields: second minute hour day month weekday"
+            )
+        try:
+            zone = ZoneInfo(self.timezone)
+            iterator = croniter(
+                self.cron,
+                datetime.now(zone),
+                second_at_beginning=True,
+                max_years_between_matches=8,
+            )
+            iterator.get_next(datetime)
+        except Exception as error:
+            raise ValueError(
+                "Invalid cron/timezone or no occurrence within eight years"
+            ) from error
+        return self
+
+
+def schedule_settings(value: str | ScheduleSettings) -> ScheduleSettings:
+    """Normalize the compact YAML form for runtime and browser consumers."""
+    return ScheduleSettings(cron=value) if isinstance(value, str) else value
+
+
 class RuntimeSettings(BaseModel):
     """Configure local durability and explicitly opt into recurring jobs.
 
@@ -120,8 +160,10 @@ class RuntimeSettings(BaseModel):
 
     directory: str = "data/assistant"
     batch_size: int = 20
-    schedules: dict[str, str] = {}
-    recommendations: RecommendationSettings = Field(default_factory=RecommendationSettings)
+    schedules: dict[str, str | ScheduleSettings] = Field(default_factory=dict)
+    recommendations: RecommendationSettings = Field(
+        default_factory=RecommendationSettings
+    )
     recommendation_maxima: dict[str, int] = Field(default_factory=dict)
     service: ServiceSettings = Field(default_factory=ServiceSettings)
 
@@ -137,6 +179,8 @@ class AssistantConfig(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+    _source: Path | None = PrivateAttr(default=None)
 
     providers: ProviderSettings
     provider_options: dict[str, dict[str, object]]
@@ -166,4 +210,5 @@ def load_settings(path: str | Path | None = None) -> AssistantConfig:
         provider_options=document,
         runtime=runtime,
     )
+    assistant_config._source = Path(str(config_file)).resolve()
     return assistant_config

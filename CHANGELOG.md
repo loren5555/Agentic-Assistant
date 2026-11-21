@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Expanded the local panel into an operations console with overview, daily-job
+  scheduling, execution history/error cleanup and a clearly labeled Agent-call demo.
+- Added online schedule CRUD with presets, time-zone/next-trigger previews, enabled
+  state, revision checks, atomic YAML persistence and live DBOS synchronization.
+  Paused and deleted plans retain their state across restart; accepted runs persist.
+
+- Added a local browser task panel to the existing service: paginated execution
+  browsing, filters, saved payload/step inspection and read-only schedules/queues.
+- Added version-checked resume, explicit cancellation, and previewed record deletion
+  with business-reference/shared-cache protection. No separate frontend runtime is needed.
+
 - Added a coverage-driven Collector ahead of newspaper editing: weekly Codex public
   web/OpenReview exploration, six local API refresh days, and reusable search directions.
 - Added OpenReview API v2 search/public discussion tools and an isolated read-only MCP

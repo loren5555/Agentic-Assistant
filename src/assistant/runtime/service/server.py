@@ -1,4 +1,4 @@
-"""Expose durable execution to local CLI clients and a future report page.
+"""Expose durable execution to local CLI clients and the browser task panel.
 
 Input origin:
     Loopback HTTP requests with the selected runtime directory header.
@@ -11,6 +11,7 @@ Responsibility:
 
 import asyncio
 import json
+from pathlib import Path
 
 from dbos import DBOS, SetWorkflowID
 from pydantic import ValidationError
@@ -18,10 +19,13 @@ from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
-from starlette.routing import Route
+from starlette.responses import JSONResponse, FileResponse
+from starlette.staticfiles import StaticFiles
+from starlette.routing import Route, Mount
 import uvicorn
 
+from assistant.runtime.service import administration, monitoring, scheduling
+from assistant.runtime.service.metadata import RunMetadata, JOB_LABELS
 from assistant.runtime.recovery import check_version
 from assistant.runtime.service.models import (
     JobSubmission,
@@ -53,6 +57,7 @@ def json_response(document, status_code=200):
     return JSONResponse(
         json.loads(json.dumps(document, ensure_ascii=False, default=str)),
         status_code=status_code,
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -80,6 +85,21 @@ def create_app(application):
     # HTTP mutation requests share this event loop. One lock makes duplicate
     # request checks and enqueue operations atomic with respect to other clients.
     submissions = asyncio.Lock()
+    metadata = RunMetadata(application.settings.runtime.directory)
+    web = Path(__file__).with_name("web")
+
+    async def panel(request):
+        return FileResponse(web / "index.html", headers={"Cache-Control": "no-cache"})
+
+    async def bootstrap(request):
+        return json_response(
+            {
+                "runtime": identity,
+                "application_version": DBOS.application_version,
+                "jobs": JOB_LABELS,
+                "status": "ready",
+            }
+        )
 
     async def require_state(workflow_id):
         """Read one workflow's metadata, returning 404 for unknown IDs."""
@@ -179,14 +199,13 @@ def create_app(application):
     async def resume(request: Request):
         """Persist recovery as a durable control task rather than an HTTP wait."""
         workflow_id = request.path_params["workflow_id"]
-        original = await require_state(workflow_id)
-        check_version(original)
-        if original.status in {"SUCCESS", "PENDING", "ENQUEUED", "DELAYED"}:
-            # Watching existing work does not interrupt or duplicate it.
-            return json_response({"id": workflow_id, "target_id": workflow_id}, 202)
         submission = RecoverySubmission.model_validate(await request.json())
         recovery_id = f"recovery:{submission.request_id}"
         async with submissions:
+            original = await require_state(workflow_id)
+            check_version(original)
+            if original.status in {"SUCCESS", "PENDING", "ENQUEUED", "DELAYED"}:
+                return json_response({"id": workflow_id, "target_id": workflow_id}, 202)
             existing = await DBOS.get_workflow_status_async(recovery_id)
             if existing and existing.input["args"][0] != workflow_id:
                 raise ValueError("Request ID already belongs to another recovery")
@@ -207,6 +226,12 @@ def create_app(application):
 
     app = Starlette(
         routes=[
+            Route("/", panel),
+            Route("/panel/bootstrap", bootstrap),
+            Mount("/assets", StaticFiles(directory=web), name="panel-assets"),
+            *monitoring.routes(application, metadata, json_response),
+            *scheduling.routes(application.schedule_manager, json_response),
+            *administration.routes(metadata, json_response, submissions),
             Route("/health", health),
             Route("/jobs", submit, methods=["POST"]),
             Route("/status", status),
@@ -221,7 +246,11 @@ def create_app(application):
 
     async def request_boundary(request, call_next):
         """Reject wrong-runtime requests and report API errors at their boundary."""
-        if request.headers.get(RUNTIME_HEADER) != identity:
+        public_read = request.method in {"GET", "HEAD"} and (
+            request.url.path in {"/", "/panel/bootstrap"}
+            or request.url.path.startswith("/assets/")
+        )
+        if not public_read and request.headers.get(RUNTIME_HEADER) != identity:
             return json_response(
                 {
                     "error": "Runtime mismatch. Use the same --config/runtime.directory as serve."
@@ -260,7 +289,7 @@ async def serve_http(application):
         )
     )
     logger.info(
-        "Local service starting: http://127.0.0.1:%d. Ready for run/status/resume requests.",
+        "Local service starting: http://127.0.0.1:%d. Ready for the browser panel and run/status/resume requests.",
         port,
     )
     await server.serve()

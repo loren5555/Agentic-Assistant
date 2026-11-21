@@ -120,3 +120,71 @@ sequenceDiagram
 Editable sources: [execution](runtime-service.mmd), [recovery](runtime-recovery.mmd).
 
 The [research newspaper sequence](newspaper-sequence.md) expands the deep/light task executed by this service.
+
+## Browse and maintain saved executions
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Browser as Browser Panel
+    participant API as Existing Local Service
+    participant DBOS as DBOS Public API
+    participant State as Local SQLite
+
+    User->>Browser: Open task panel
+    Browser->>API: Load static page and runtime identity
+    loop Every five seconds while visible
+        Browser->>API: Request filtered execution page
+        API->>State: Read bounded metadata and counts
+        API-->>Browser: Titles, states and summary
+    end
+    User->>Browser: Open one execution
+    Browser->>API: Request saved details
+    API->>DBOS: Read saved input, output and steps
+    DBOS-->>API: Saved payloads
+    API-->>Browser: Details and execution references
+    User->>Browser: Select records and preview deletion
+    Browser->>API: POST selected IDs
+    API->>State: Check terminal states and retained references
+    API-->>Browser: Per-record scope, protection reasons and token
+    User->>Browser: Confirm preview
+    Browser->>API: POST selection and token
+    API->>State: Recheck preview and dependencies
+    alt Preview still matches and records eligible
+        API->>DBOS: Delete selected records without child recursion
+        DBOS->>State: Remove execution and its checkpoints
+        API-->>Browser: Per-record outcomes
+    else State or references changed
+        API-->>Browser: Review a new preview
+    end
+```
+
+Browsing reads saved state. Cancellation and recovery use the existing runtime;
+these controls do not change business workflow entry points or Notion content.
+
+## Change a daily schedule online
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Maintenance Console
+    participant API as Schedule Manager
+    participant Config as Local YAML
+    participant DBOS as DBOS Scheduler
+    User->>UI: Select workflow and recurrence
+    UI->>API: Preview cron and time zone
+    API-->>UI: Next five execution times
+    User->>UI: Save and apply
+    UI->>API: Schedule and source revision
+    API->>Config: Compare revision and atomically save desired schedule
+    API->>DBOS: Apply changed cron and enabled state
+    alt Synchronization succeeds
+        DBOS-->>API: Live state
+        API-->>UI: Saved and synchronized
+    else Live synchronization fails
+        API-->>UI: Saved configuration; pending synchronization
+        User->>UI: Retry synchronization
+        UI->>API: Reload desired configuration and synchronize
+    end
+    Note over Config,DBOS: Restart reapplies desired schedules; accepted jobs keep running
+```
