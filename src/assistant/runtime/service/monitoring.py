@@ -18,7 +18,7 @@ from starlette.routing import Route
 
 from logger import get_logger
 
-from .activity import activity, calls_page
+from .activity import UsageTotals, activity, calls_page
 from .presentation import error_message
 from .metadata import RunFilters
 
@@ -106,9 +106,15 @@ def routes(application, metadata, respond):
             raise HTTPException(400, "Invalid cursor")
         return respond(await asyncio.to_thread(calls_page, metadata, int(cursor)))
 
+    usage = UsageTotals()
+
     async def overview(request):
+        activity_data = await asyncio.to_thread(metadata.execution_activity)
         return respond(
             {
+                "usage": await asyncio.to_thread(usage.read, metadata),
+                "activity": activity_data,
+                "month": [d for d in activity_data["days"] if d["day"][:7] == activity_data["days"][-1]["day"][:7]],
                 "recent": await asyncio.to_thread(
                     metadata.list_runs, RunFilters(since="24h", page_size=6, archive="all")
                 ),

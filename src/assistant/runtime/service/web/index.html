@@ -7,8 +7,9 @@
       Assistant · 控制台
     </title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23173e43%27/%3E%3Ctext x=%2716%27 y=%2723%27 text-anchor=%27middle%27 fill=%27white%27 font-size=%2722%27%3EA%3C/text%3E%3C/svg%3E">
+    <script>try { document.documentElement.dataset.theme = localStorage.getItem("console-theme") === "light" ? "light" : "dark"; } catch {}</script>
     <link rel="stylesheet" href="/assets/styles.css">
-    <link rel="stylesheet" href="/assets/console.css?v=schedule-picker">
+    <link rel="stylesheet" href="/assets/console.css?v=summary-v4">
   </head>
   <body>
     <aside class="sidebar">
@@ -51,6 +52,7 @@
             0
           </span>
         </a>
+        <a href="#statistics" data-view="statistics"><span class="nav-icon">▥</span>统计分析</a>
         <a href="#agents" data-view="agents">
           <span class="nav-icon">
             ⌘
@@ -88,6 +90,7 @@
           <span id="connection" class="connection">
             连接中
           </span>
+          <button id="theme-switch" aria-label="切换配色">切换主题</button>
           <button id="refresh" class="icon-button" title="刷新数据">
             ↻
             <span>
@@ -124,46 +127,13 @@
         <div id="notice" role="status" hidden>
         </div>
         <section id="view-overview" class="view">
-          <section class="stats" aria-label="执行统计">
-            <button data-status="" class="stat">
-              <span>
-                24 小时执行
-              </span>
-              <strong id="count-all">
-                —
-              </strong>
-            </button>
-            <button data-status="PENDING" class="stat">
-              <span>
-                <i class="dot active">
-                </i>
-                执行中
-              </span>
-              <strong id="count-running">
-                —
-              </strong>
-            </button>
-            <button data-status="SUCCESS" class="stat">
-              <span>
-                <i class="dot success">
-                </i>
-                24 小时完成
-              </span>
-              <strong id="count-success">
-                —
-              </strong>
-            </button>
-            <button data-status="FAILED" class="stat">
-              <span>
-                <i class="dot error">
-                </i>
-                失败
-              </span>
-              <strong id="count-error">
-                —
-              </strong>
-            </button>
-          </section>
+          <nav class="home-summary" aria-label="工作区摘要">
+            <button data-status="" class="stat"><span>24 小时执行</span><strong id="count-all">—</strong><small id="home-completed"></small></button>
+            <a href="#schedules"><span>定时计划</span><strong id="home-schedules">—</strong><small>已启用 · 查看编排 →</small></a>
+            <a href="#agents"><span>Agent 调用</span><strong id="home-calls">—</strong><small>累计记录 · 查看调用 →</small></a>
+            <a href="#statistics"><span>模型用量</span><strong id="home-tokens">—</strong><small>累计 Token · 统计分析 →</small></a>
+          </nav>
+          <div class="home-status"><button class="stat" data-status="PENDING">执行中 <b id="count-running">—</b></button><button class="stat" data-status="FAILED">失败记录 <b id="count-error">—</b></button></div>
           <div class="overview-grid">
             <section class="panel">
               <div class="panel-heading">
@@ -200,26 +170,7 @@
               </div>
             </section>
           </div>
-          <section class="panel queue-panel">
-            <div class="panel-heading">
-              <div>
-                <h2>
-                  执行队列
-                </h2>
-                <p class="hint">
-                  手动与定时任务共用串行业务队列；检查点在本地持久保存。
-                </p>
-              </div>
-              <span class="quiet-tag">
-                DBOS
-              </span>
-            </div>
-            <div id="queues" class="queue-list">
-            </div>
-          </section>
-          <p class="footnote">
-            执行中与错误统计覆盖全部时间；完成统计覆盖近 24 小时 · SUCCESS 表示流程返回，人工审批仍在 Notion 中完成
-          </p>
+          <details class="panel home-queues"><summary>执行队列详情</summary><div id="queues" class="queue-list"></div></details>
         </section>
         <section id="view-schedules" class="view" hidden>
           <div class="section-toolbar">
@@ -240,6 +191,7 @@
               </button>
             </div>
           </div>
+          <div id="schedule-next" class="agenda-next"></div>
           <div id="schedule-list" class="panel record-panel">
           </div>
           <section class="panel catalog-panel">
@@ -265,9 +217,7 @@
           </div>
           <section class="panel">
             <div class="panel-heading">
-              <h2>
-                执行记录
-              </h2>
+              <h2>执行记录 <small id="execution-mix"></small></h2>
               <label>记录视图
                 <select id="archive-view">
                   <option value="current">当前记录</option>
@@ -314,7 +264,7 @@
                     延后执行
                   </option>
                   <option value="SUCCESS">
-                    24 小时完成
+                    已完成
                   </option>
                   <option value="FAILED">
                     所有错误
@@ -416,10 +366,33 @@
             删除先预览引用与影响范围 · 原始资料和 Notion 页面保留
           </p>
         </section>
-        <section id="view-agents" class="view" hidden>
+        <section id="view-statistics" class="view" hidden>
+          <section id="analytics" aria-label="模型用量分析">
+            <header class="analytics-head"><h2>模型用量</h2><div class="analytics-filters">
+              <select id="usage-period" aria-label="用量时间范围"><option value="24">最近 24 个整点时段</option><option value="168">近 7 天</option><option value="720">近 30 天</option><option value="all">全部历史</option></select>
+              <select id="usage-model" aria-label="筛选模型"><option value="">全部模型</option></select>
+            </div></header>
+            <dl id="usage-kpis" class="kpi-strip"></dl>
+            <div class="analysis-charts">
+              <section class="chart-card"><header><h3>Token 用量趋势</h3><small id="trend-unit"></small></header>
+                <div class="trend-layout"><div id="trend-axis"></div><div id="token-trend"></div></div><div id="trend-labels"></div>
+                <div class="chart-legend"><span>输入</span><span>输出</span></div>
+              </section>
+              <section class="chart-card"><header><h3>Token 构成</h3><small>按用量</small></header>
+                <div class="breakdown"><div id="usage-ring"><b id="ring-value">—</b><small>总 Token</small></div><dl id="ring-key"></dl></div>
+              </section>
+            </div>
+            <details id="caller-details" open><summary>调用者分布</summary><div class="table-wrap"><table><thead><tr><th>调用组件</th><th>调用次数</th><th>占比</th><th>总 Token</th><th>平均步骤耗时</th></tr></thead><tbody id="caller-rows"></tbody></table></div></details>
+            <details id="model-details" open><summary>模型用量明细</summary><div class="table-wrap"><table><thead><tr><th>模型</th><th>调用</th><th>输入 Token</th><th>输出 Token</th><th>平均步骤耗时</th></tr></thead><tbody id="model-rows"></tbody></table></div></details>
+          </section>
+          <p class="hint">累计已人工评审 <b id="review-count">—</b> 个条目，已发布 <b id="artifact-count">—</b> 项评审成果。</p>
+          <section class="panel heat-panel"><h2>过去一年的执行活动</h2><p id="year-caption" class="hint"></p><div class="map-scroll"><div id="year-map" class="activity-map"></div></div></section>
+          <section class="panel heat-panel"><h2>近 30 天的使用时段</h2><p id="hour-caption" class="hint"></p><div class="map-scroll"><div id="hour-map" class="activity-map"></div></div></section>
+          </section>
+        <section id="view-agents" class="view" hidden><section class="panel caller-panel"><h2>调用者分布</h2><p class="hint">全部已保存的 Agent 调用 · 按发起调用的组件汇总</p><div class="table-wrap"><table><thead><tr><th>调用组件</th><th>调用次数</th><th>占比</th><th>总 Token</th><th>平均步骤耗时</th></tr></thead><tbody id="agent-callers"></tbody></table></div></section>
           <section class="panel record-panel">
-            <div class="panel-heading"><h2>调用记录</h2></div>
-            <div id="agent-demo-list"></div>
+            <div class="panel-heading"><h2>调用记录</h2><a class="text-link" href="#statistics">用量分析 ↗</a></div>
+            <div class="call-tools"><input id="call-search" type="search" aria-label="筛选已加载调用" placeholder="在已加载调用中查找任务、模型或模块"><small id="call-count"></small></div><div id="agent-demo-list"></div>
           </section>
         </section>
       </main>
@@ -634,9 +607,9 @@
       </form>
     </dialog>
     <script type="importmap">
-      {"imports": {"/assets/schedules.js": "/assets/schedules.js?v=schedule-picker", "/assets/agents.js": "/assets/agents.js?v=call-usage", "/assets/overview.js": "/assets/overview.js?v=trigger-labels", "/assets/executions.js": "/assets/executions.js?v=trigger-labels"}}
+      {"imports": {"/assets/schedules.js": "/assets/schedules.js?v=summary-v4", "/assets/agents.js": "/assets/agents.js?v=summary-v4", "/assets/overview.js": "/assets/overview.js?v=summary-v4", "/assets/executions.js": "/assets/executions.js?v=summary-v4"}}
     </script>
-    <script type="module" src="/assets/app.js">
+    <script type="module" src="/assets/app.js?v=summary-v4">
     </script>
   </body>
 </html>

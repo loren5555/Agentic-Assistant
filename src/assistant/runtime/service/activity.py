@@ -7,6 +7,7 @@ that produced it, never to later snapshots that copied the result.
 from contextlib import closing
 import json
 import re
+from threading import Lock
 
 from assistant.runtime.serialization import ComponentSerializer
 from .metadata import JOB_LABELS, label
@@ -176,7 +177,8 @@ def call_data(step, obj, role):
             tools.append(item.get("tool") or item["type"])
     usage = trace.get("usage") or {}
     return {"module": role, "provider": provider, "model": model, "tools": tools, "input": list(dict.fromkeys(prompts))[:12],
-            "tokens_in": usage.get("input_tokens"), "tokens_out": usage.get("output_tokens")}
+            "tokens_in": usage.get("input_tokens"), "tokens_out": usage.get("output_tokens"),
+            "cached": usage.get("cached_input_tokens")}
 
 
 def describe_error(raw, encoding):
@@ -188,6 +190,11 @@ def describe_error(raw, encoding):
     return describe(value)
 
 
+def calling_module(name, obj):
+    module = STEPS[name][1]
+    return EXECUTORS.get(obj.get("action_id"), module) if name == "execute" else module
+
+
 def business_step(row):
     name = short_name(row["function_name"])
     if name not in STEPS:
@@ -195,8 +202,7 @@ def business_step(row):
     title, module = STEPS[name]
     value = unpack(row["output"],row["serialization"])
     obj = values(value)
-    if name == "execute":
-        module = EXECUTORS.get(obj.get("action_id"), module)
+    module = calling_module(name, obj)
     lines = describe(value)
     if name == "save_result":
         result = obj.get("result")
@@ -301,11 +307,88 @@ def activity(metadata, workflow_id):
             "parents": refs["parents"], "children": refs["children"]}
 
 
+def trace_names():
+    return [f"{prefix}.{step}{suffix}" for prefix in ("JobWorkflows","ProposalWorkflows","ResearchWorkflows")
+             for step in TRACE_FIELDS for suffix in ("", ".v2")]
+
+
+class UsageTotals:
+    """Reuse measurements from immutable checkpoints and discard deleted records."""
+
+    def __init__(self):
+        self.rows = {}
+        self.lock = Lock()
+
+    def read(self, metadata):
+        names = trace_names() + ["ProposalWorkflows.read_review", "ProposalWorkflows.publish_artifact"]
+        marks = ",".join("?" for _ in names)
+        current = {}
+        with self.lock, closing(metadata.connect()) as db:
+            db.execute("BEGIN")
+            records = db.execute(f"""SELECT o.rowid, o.workflow_uuid, o.function_id, o.completed_at_epoch_ms,
+                    o.function_name, o.started_at_epoch_ms FROM operation_outputs o JOIN workflow_status w USING(workflow_uuid)
+                WHERE (w.application_name='assistant' OR w.application_name IS NULL)
+                AND o.function_name IN ({marks}) AND o.output IS NOT NULL""", names)
+            for row in records:
+                key = tuple(row)
+                if key in self.rows:
+                    current[key] = self.rows[key]
+                    continue
+                payload = db.execute("SELECT output,serialization FROM operation_outputs WHERE rowid=?", (row[0],)).fetchone()
+                obj = values(unpack(*payload))
+                step = short_name(row["function_name"])
+                metric = None
+                if step == "read_review":
+                    reviewed = obj.get("human_review") in {"Approved", "Rejected", "Revision Requested", "Submit External Result"}
+                    accepted = obj.get("result_review") in {"Qualified", "Unqualified"}
+                    if obj.get("page_id") and (reviewed or accepted):
+                        metric = ("review", obj["page_id"])
+                elif step == "publish_artifact":
+                    if obj.get("key") and obj.get("url"):
+                        metric = ("artifact", obj["key"])
+                else:
+                    call = call_data(step, obj, "")
+                    if call:
+                        start = row["started_at_epoch_ms"]
+                        end = row["completed_at_epoch_ms"]
+                        elapsed = end - start if start and end and end >= start else None
+                        metric = ("usage", call["tokens_in"], call["tokens_out"], call["cached"],
+                                  call["model"] or "未记录模型", (start or end or 0) // 3600000, elapsed, calling_module(step, obj))
+                current[key] = metric
+            self.rows = current
+        metrics = [m for m in current.values() if m]
+        calls = [m for m in metrics if m[0] == "usage"]
+        measured = [m for m in calls if isinstance(m[1], int) and isinstance(m[2], int)]
+        cache = [m for m in measured if isinstance(m[3], int) and 0 <= m[3] <= m[1]]
+        # Return compact hourly aggregates. Only the original producing step owns usage.
+        buckets = {}
+        for _, inputs, outputs, cached, model, hour, elapsed, caller in calls:
+            bucket = buckets.setdefault((hour, model, caller), dict(hour=hour, model=model, caller=caller, calls=0, measured=0,
+                inputs=0, outputs=0, cached=0, cache_inputs=0, cache_samples=0, elapsed=0, timed=0))
+            bucket["calls"] += 1
+            if elapsed is not None:
+                bucket["timed"] += 1
+                bucket["elapsed"] += elapsed
+            if isinstance(inputs, int) and isinstance(outputs, int):
+                bucket["measured"] += 1
+                bucket["inputs"] += inputs
+                bucket["outputs"] += outputs
+                if isinstance(cached, int) and 0 <= cached <= inputs:
+                    bucket["cache_samples"] += 1
+                    bucket["cache_inputs"] += inputs
+                    bucket["cached"] += cached
+        return {"series": list(buckets.values()), "calls": len(calls), "measured": len(measured),
+                "input": sum(m[1] for m in measured), "output": sum(m[2] for m in measured),
+                "cache_samples": len(cache), "cache_input": sum(m[1] for m in cache),
+                "cached": sum(m[3] for m in cache),
+                "reviewed": len({m[1] for m in metrics if m[0] == "review"}),
+                "artifacts": len({m[1] for m in metrics if m[0] == "artifact"})}
+
+
 def calls_page(metadata, before):
     # Only inspect telemetry-producing steps. Page through bounded batches, also
     # when an earlier provider stored no trace for an otherwise eligible step.
-    names = [f"{prefix}.{step}{suffix}" for prefix in ("JobWorkflows","ProposalWorkflows","ResearchWorkflows")
-             for step in TRACE_FIELDS for suffix in ("", ".v2")]
+    names = trace_names()
     placeholders = ",".join("?" for _ in names)
     with closing(metadata.connect()) as db:
         rows = db.execute(f"""SELECT o.rowid AS cursor,o.*,w.name,w.attributes FROM operation_outputs o

@@ -25,6 +25,8 @@ function selection() {
 }
 
 function renderRuns(data) {
+  const counts = data.counts;
+  $('execution-mix').textContent = `完成 ${counts.SUCCESS || 0} · 运行中 ${counts.PENDING || 0} · 失败 ${(counts.ERROR || 0)+(counts.MAX_RECOVERY_ATTEMPTS_EXCEEDED || 0)}`;
   state.page = data.page;
   state.items = data.items;
   const rows = document.createDocumentFragment();

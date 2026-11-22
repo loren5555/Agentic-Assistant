@@ -7,6 +7,7 @@ are isolated here because the SDK list API lacks substring search and count quer
 """
 
 from contextlib import closing
+from datetime import date, datetime, time as day_time, timedelta
 import json
 from pathlib import Path
 import sqlite3
@@ -270,6 +271,29 @@ class RunMetadata:
             conditions.append("w.created_at>=?")
             values.append(int((time.time() - periods[filters.since] * 86400) * 1000))
         return " AND ".join(conditions), values
+
+    def execution_activity(self):
+        """Bucket top-level submissions by the service host's calendar and clock."""
+        today = date.today()
+        first = today - timedelta(days=364)
+        last_month = today - timedelta(days=29)
+        days = {(first + timedelta(days=n)).isoformat(): 0 for n in range(365)}
+        hours = [[0] * 24 for _ in range(7)]
+        where, args = self._where(RunFilters(since="all", archive="all"))
+        start = datetime.combine(first, day_time.min)
+        end = datetime.combine(today + timedelta(days=1), day_time.min)
+        with closing(self.connect()) as db:
+            rows = db.execute(f"""
+                SELECT date(w.created_at/1000,'unixepoch','localtime') AS day,
+                       strftime('%H',w.created_at/1000,'unixepoch','localtime') AS hour,
+                       count(*) AS n FROM workflow_status w
+                WHERE {where} AND w.created_at>=? AND w.created_at<? GROUP BY day,hour
+                """, [*args, int(start.timestamp()*1000), int(end.timestamp()*1000)])
+            for day, hour, count in rows:
+                days[day] += count
+                if day >= last_month.isoformat():
+                    hours[date.fromisoformat(day).weekday()][int(hour)] += count
+        return {"days": [{"day": day, "count": n} for day, n in days.items()], "hours": hours}
 
     def list_runs(self, filters: RunFilters) -> dict:
         """Read one page and exact counts without loading workflow inputs/results."""

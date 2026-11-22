@@ -239,12 +239,18 @@ function remove(item) {
 async function refreshSchedules() {
   data = await api('/panel/schedules');
   $('nav-schedule-count').textContent = data.items.filter(item => item.enabled).length;
+  $('home-schedules').textContent = $('nav-schedule-count').textContent;
   $('schedule-summary').textContent = `${data.items.length} 个定时计划 · ${data.items.filter(item=>item.enabled).length} 个已启用${data.pending_removals?.length?` · ${data.pending_removals.length} 条远端计划待移除`:""}`;
   $('new-schedule').disabled = !data.editable;
   const version = JSON.stringify([data.items, data.editable]);
   if (version !== listVersion) {
     listVersion = version;
-    const rows = data.items.map(item => ({
+    const nextTime = item => item.enabled && item.next_runs.length ? Date.parse(item.next_runs[0]) : Infinity;
+    const ordered = [...data.items].sort((a,b) => nextTime(a)-nextTime(b));
+    const first = ordered.find(item => Number.isFinite(nextTime(item)));
+    $('schedule-next').replaceChildren(el('small','下次执行'), first ? button(first.title, () => showSchedule(first), 'record-link') : el('strong','暂无安排'),
+      el('time', first ? date(first.next_runs[0]) : ''));
+    const rows = ordered.map(item => ({
       title: item.title,
       values: [describe(item), scheduleBadge(item), date(item.next_runs[0])],
       open: () => showSchedule(item)

@@ -62,14 +62,23 @@ export async function loadCalls(more=false, background=false) {
     const version=JSON.stringify([calls,next]);
     if (version===signature) return;
     signature=version;
-    const container=$('agent-demo-list');
-    container.replaceChildren(calls.length ? recordList(['所属任务','模块','业务步骤','供应商','模型','总 Token','调用时间'],calls.map(s=>({
-      title:s.task,values:[s.module,s.action,s.call.provider || '未记录',s.call.model || '未记录',totalTokens(s.call),date(s.time)],open:()=>showCall(s,s.workflow,s.task)
-    }))) : el('p','当前范围内没有已保存的 Agent 调用。','empty'));
-    if(next) container.append(button('查看更早记录',()=>loadCalls(true).catch(error=>notice(error.message,true)),'link-button'));
+    renderCalls();
   } catch (error) {
     signature=undefined;
     $('agent-demo-list').replaceChildren(el('p','暂时无法读取调用记录，请确认管理服务已更新。','empty'));
     throw error;
   } finally { loading=false; }
+}
+
+function renderCalls() {
+    const input = $('call-search');
+    input.oninput = renderCalls;
+    const term = input.value.trim().toLowerCase();
+    const filtered = calls.filter(s => [s.task,s.module,s.action,s.call.model,s.call.provider].join(' ').toLowerCase().includes(term));
+    $('call-count').textContent = '显示 ' + filtered.length + ' / 已加载 ' + calls.length;
+    const container=$('agent-demo-list');
+    container.replaceChildren(filtered.length ? recordList(['所属任务','模块','业务步骤','供应商','模型','总 Token','调用时间'],filtered.map(s=>({
+      title:s.task,values:[s.module,s.action,s.call.provider || '未记录',s.call.model || '未记录',totalTokens(s.call),date(s.time)],open:()=>showCall(s,s.workflow,s.task)
+    }))) : el('p','没有匹配的调用记录。','empty'));
+    if(next) container.append(button('查看更早记录',()=>loadCalls(true).catch(error=>notice(error.message,true)),'link-button'));
 }

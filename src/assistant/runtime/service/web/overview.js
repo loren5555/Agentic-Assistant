@@ -1,3 +1,5 @@
+import {renderActivity} from './heatmaps.js';
+import {renderUsage} from './usage.js';
 // Real execution and scheduling summaries for the operations landing page.
 import {
   $,
@@ -18,11 +20,20 @@ async function refreshDashboard() {
   const states = data.states;
   $('count-all').textContent = Object.values(counts).reduce((a, b) => a + b, 0);
   $('count-running').textContent = states.PENDING || 0;
-  $('count-success').textContent = counts.SUCCESS || 0;
+  $('home-completed').textContent = '已完成 ' + (counts.SUCCESS || 0) + ' 次 · 查看记录 →';
   $('count-error').textContent = (states.ERROR || 0) + (states.MAX_RECOVERY_ATTEMPTS_EXCEEDED || 0);
   $('nav-error-count').textContent = $('count-error').textContent;
   $('nav-error-count').hidden = Number($('count-error').textContent) === 0;
-  const rows = data.recent.items.map(run => {
+  if (!$('view-statistics').hidden) renderActivity(data.activity);
+  const usage = data.usage;
+  $('review-count').textContent = usage.reviewed;
+  $('artifact-count').textContent = usage.artifacts;
+  $('home-calls').textContent = usage.calls.toLocaleString('zh-CN');
+  const tokens = usage.input + usage.output;
+  $('home-tokens').textContent = usage.measured ? new Intl.NumberFormat('en', {notation:'compact', maximumFractionDigits:2}).format(tokens) : '—';
+  $('home-tokens').title = usage.measured ? tokens.toLocaleString('zh-CN') + ' Token' : '暂无完整用量记录';
+  if (!$('view-statistics').hidden || !$('view-agents').hidden) renderUsage(usage.series);
+  const rows = data.recent.items.slice(0, 4).map(run => {
     const row = el('div', undefined, 'activity-row');
     row.append(el('div', run.status === 'SUCCESS' ? '✓' : run.status === 'ERROR' ? '!' : '·', 'activity-symbol'));
     const copy = el('div', undefined, 'activity-copy');

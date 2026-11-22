@@ -22,6 +22,7 @@ import {
   loadCalls
 } from './agents.js';
 const views = {
+  statistics: ["统计分析", "统计分析", "查看已保存调用的累计用量与缓存效率。"],
   overview: ['运行概览', '运行概览', '关注正在运行的任务、接下来的安排，以及需要处理的异常。'],
   schedules: ['任务编排', '日常任务编排', '创建与调整重复任务；保存后立即应用，重启后继续保留。'],
   executions: ['执行记录', '执行历史与结果', '查看任务状态、检查已保存的产物，恢复或清理需要关注的记录。'],
@@ -70,6 +71,18 @@ async function refresh(background = false) {
   }
 }
 async function start() {
+  const theme = $('theme-switch');
+  function applyTheme(value) {
+    document.documentElement.dataset.theme = value;
+    theme.textContent = value === 'dark' ? '☀ 日间' : '☾ 夜间';
+    theme.setAttribute('aria-label', value === 'dark' ? '切换到日间模式' : '切换到夜间模式');
+  }
+  applyTheme(document.documentElement.dataset.theme || 'dark');
+  theme.onclick = () => {
+    const value = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    applyTheme(value);
+    try { localStorage.setItem('console-theme', value); } catch {}
+  };
   navigate();
   bindExecutions();
   setRefresh(refresh);
