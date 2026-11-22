@@ -3,8 +3,7 @@
 Input origin:
     The notero processor reads pending source records or an explicit page.
 Output destination:
-    Organizer and Proposer publish a Workbench proposal. Final reading or knowledge
-    outputs are created only after execution and result acceptance.
+    Grounded source briefs go to Papers or Knowledge. Follow-up work goes to Workbench.
 Responsibility:
     Keep this source workflow independently extensible without copying intake logic.
 """
@@ -27,6 +26,6 @@ async def organize_papers(self: TaskWorkflows, page_id: str | None = None) -> li
         page_id: Optional source page; does not bypass deduplication.
 
     Returns:
-        Verified Workbench links.
+        Workbench links for follow-ups, archive links for reading-only inputs.
     """
     return await self.intake_sources(["notero"], page_id)

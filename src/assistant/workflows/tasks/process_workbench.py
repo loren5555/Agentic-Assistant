@@ -141,7 +141,7 @@ async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
         item.status = "Finished"
         await self.save_checkpoint(key, source, item)
         logger.info("Proposing execution of the accepted plan: title=%r.", item.result.plan.title)
-        return await invoke("intake:v2:" + updated.fingerprint, self.submit_proposal, key, updated)
+        return await invoke("intake:v2:" + updated.intake_snapshot, self.submit_proposal, key, updated)
     current_source = self.read_source(source)
     if current_source.fingerprint != source.fingerprint:
         logger.info('Source changed; returning work to normal intake: title=%r.', item.title)
@@ -221,6 +221,7 @@ def read_review(self: WorkbenchWorkflows, saved: WorkbenchItem) -> WorkbenchItem
     current.result = saved.result
     current.curation = saved.curation
     current.source_kind = saved.source_kind
+    current.source_archive = getattr(saved, "source_archive", None)
     if saved.proposal and saved.proposal.kind == "retention" and current.human_review == "Approved" and current.status in {"Open", "Archived"}:
         current.retention_text = self.services.workbench.read_retention_text(current.page_id, saved.proposal.retention)
     logger.info(
@@ -353,6 +354,7 @@ def save_result(self: WorkbenchWorkflows, source: SourceMaterial, item: Workbenc
             self.services.workbench.save_result(item, result)
         current.proposal = item.proposal
         current.source_kind = item.source_kind
+        current.source_archive = source.archive
         current.result = result
         logger.info(
             'Recovered verified execution result: title=%r status=%s; no model rerun required.',
@@ -371,6 +373,7 @@ def save_result(self: WorkbenchWorkflows, source: SourceMaterial, item: Workbenc
         raise RuntimeError(f"Execution result did not reach Executed: {current.status}")
     current.proposal = item.proposal
     current.source_kind = item.source_kind
+    current.source_archive = source.archive
     current.result = result
     logger.info(
         'Execution result publication verified: title=%r status=%s.',

@@ -16,6 +16,10 @@ class PublisherProtocol(Protocol):
         """Prepare destination publication keys and reading fields."""
         ...
 
+    def publish_source_brief(self, material: ReadingMaterial, brief: ReadingBrief) -> BriefPublicationReceipt:
+        """Save a grounded source brief before any follow-up proposal."""
+        ...
+
     def publish(self, source: SourceMaterial, item: WorkbenchItem,
                 artifact: RetainedArtifact, key: str) -> PublicationReceipt:
         """Save an accepted product with its source provenance.

@@ -15,7 +15,7 @@ from assistant.components.recommendations.tags import DirectionTag
 from pydantic import BaseModel, Field
 
 
-ReadingSourceKind = Literal["notero", "simpread"]
+ReadingSourceKind = Literal["notero", "simpread", "inbox"]
 
 
 class ReadingMaterial(BaseModel):

@@ -111,7 +111,7 @@ class ExperimentWorker:
                 if isinstance(error, TimeoutError):
                     raise TimeoutError(f"Codex exceeded the experiment deadline of {settings.experiment_timeout_seconds:g}s") from error
                 raise
-            trace = read_process(stdout.decode(errors="replace"))
+            trace = read_process(stdout.decode(errors="replace"), model=settings.experiment_model)
             if proc.returncode:
                 raise CodexResearchError(f"Codex experiment exited {proc.returncode}: {stderr.decode(errors='replace')[-1500:]}", trace)
             try:

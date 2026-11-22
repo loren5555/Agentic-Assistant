@@ -140,7 +140,7 @@ async def run_web_research[T: BaseModel](
                 await communication
             raise
 
-        telemetry = read_process(stdout.decode(errors="replace"))
+        telemetry = read_process(stdout.decode(errors="replace"), model=model)
         if process.returncode != 0:
             detail = stderr.decode(errors="replace").strip()
             if not detail:

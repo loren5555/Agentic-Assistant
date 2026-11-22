@@ -155,7 +155,7 @@ class DecisionRouter(RouterProtocol):
             validated_decision = validate_decision(request, decision)
 
             # CLI stdout is optional telemetry, not the decision result channel.
-            validated_decision.process = read_process(stdout.decode(errors="replace"))
+            validated_decision.process = read_process(stdout.decode(errors="replace"), model=self.model)
             usage = validated_decision.process.usage
             elapsed_seconds = perf_counter() - started_at
             self.logger.info(

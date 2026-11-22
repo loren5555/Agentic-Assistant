@@ -5,7 +5,7 @@ knowledge outputs. The editable architecture is in [information-flow.drawio](inf
 
 ## Releases and runtime state
 
-The current release is **v0.2.4**, following the shared-intake diagram. See
+The current release is **v0.3.0**, following the shared-intake diagram. See
 [CHANGELOG.md](CHANGELOG.md) for changes, setup instructions and known limitations.
 The pre-refactor implementation is preserved at Git tag **v0.1** (commit `ce8669e`).
 
@@ -17,8 +17,7 @@ owns DBOS execution; CLI clients can submit and inspect tasks concurrently.
 
 Setup adds unchecked source-consumption flags. Existing Notero entries are not
 automatically imported from v0.1's local handled index: mark Agent Processed for old
-sources you do not want to propose again. Even pending papers first create proposals;
-they are not silently rewritten in Papers.
+sources you have already handled. Intake processes pending versions.
 
 DBOS application-version checks remain enabled. Incompatible unfinished workflows
 require explicit handling; the assistant does not silently clear them.
@@ -32,7 +31,7 @@ Inbox / TODO / Notero / SimpRead / Papers / Feed / Interests
                          |
                   Source Processor
                          |
-                Information Organizer
+                Information Organizer ── reusable material → Briefer → Publisher → Papers / Knowledge
                          |
                       Proposer
                          |
@@ -63,8 +62,12 @@ original content, supplements and prior work. They do not interpret Revision/Rej
 statuses or select the next workflow.
 
 Paper and article intake remain separate commands and separate processors. Their
-organization, proposal, review and publication contracts are shared. Intake creates
-proposals, not final reading-library entries.
+organization and review contracts are shared with Inbox. For each source version,
+Organizer decides separately whether the supplied evidence merits a reading brief and
+whether there is work to propose. When both apply, publication happens first. Proposer
+receives the original material plus the verified archive link, summary and evidence level.
+The source is acknowledged after all selected steps finish. Materials with no follow-up
+can enter the library directly. Rejecting a follow-up leaves its source brief available.
 
 A completed result can contain multiple typed artifacts. Explicit accepted products
 are retained as submitted; otherwise Curator assesses whether reusable content exists.
@@ -118,11 +121,11 @@ uv run python -m assistant run recommend-papers
 
 | Job | Input | Output |
 | --- | --- | --- |
-| propose-tasks | Pending Inbox; elevated TODO | Workbench proposals |
+| propose-tasks | Pending Inbox; elevated TODO | Inbox reading briefs where useful, Workbench proposals for follow-up |
 | brainstorm-material | A new Papers, Knowledge or Idea research note | Exploration report and individually reviewable proposals |
 | brainstorm-idea | A question in an active Idea | Exploration report with evidence, possible next steps and Workbench links |
-| organize-papers | Pending Notero records | Paper-processing proposals |
-| organize-articles | Pending SimpRead clips | Organization/action proposals |
+| organize-papers | Pending Notero records | Papers reading briefs and optional Workbench follow-up |
+| organize-articles | Pending SimpRead clips | Knowledge or Papers briefs and optional Workbench follow-up |
 | process-signals | Papers/Feed with Follow Up checked; explicitly pending Interests | Workbench proposals on the original records |
 | reconcile-feedback | Revisions, unqualified results, rejections | Reopened source versions; closed old work |
 | process-workbench | Approvals and qualified results | Executed results; accepted outputs |
@@ -281,8 +284,8 @@ Processors preserve original page bodies and plugin-owned metadata. Shared field
 | --- | --- |
 | Inbox | Status != Archived; acknowledge as Archived |
 | TODO | Status = elevated; acknowledge as handled |
-| SimpRead | Agent Archived unchecked; check after verified proposal submission |
-| Notero | Agent Processed unchecked; check after proposal submission |
+| SimpRead | Agent Archived unchecked; check after intake completes |
+| Notero | Agent Processed unchecked; check after intake completes |
 | Papers | Follow Up checked |
 | Research Feed | Follow Up checked |
 | Research Interests | Agent Pending checked; clear after proposal submission |
@@ -322,7 +325,7 @@ Notero remains the authoritative bibliographic source. SimpRead remains the orig
 clipping library; its Name, URL, Origin, Tags, Note, Summary, Created and Last edited
 time belong to the clipping/user workflow.
 
-After accepted paper organization, Papers retains:
+Papers retains these fields for source briefs and accepted reading results:
 
 | Attributes | Purpose |
 | --- | --- |

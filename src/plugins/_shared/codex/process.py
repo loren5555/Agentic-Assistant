@@ -5,7 +5,7 @@ import json
 from assistant.runtime.records import ExecutionProcess
 
 
-def read_process(output: str) -> ExecutionProcess:
+def read_process(output: str, *, model: str | None = None) -> ExecutionProcess:
     """Collect JSON events and token usage from Codex stdout.
 
     Args:
@@ -38,5 +38,5 @@ def read_process(output: str) -> ExecutionProcess:
             if isinstance(reported_usage, dict) and reported_usage:
                 usage = reported_usage
 
-    process = ExecutionProcess(events=events, usage=usage)
+    process = ExecutionProcess(provider="Codex", model=model, events=events, usage=usage)
     return process

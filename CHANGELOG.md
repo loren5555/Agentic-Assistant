@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-11-22
+
+- Added a visual schedule editor with weekday, month-day, hour and minute
+  selection, readable recurrence summaries and previews of upcoming runs.
+- Show item titles in execution timelines, including Workbench reviews and
+  individual source organization, briefing, publication and acknowledgment steps.
+- Integrated source summarization and archiving into intake before follow-up
+  proposal submission.
 
 - Expanded the local panel into an operations console with overview, daily-job
   scheduling, execution history/error cleanup and a clearly labeled Agent-call demo.

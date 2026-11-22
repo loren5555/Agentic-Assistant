@@ -77,12 +77,30 @@ CLASS_PATHS = {
 }
 
 
+def _restore_openai_api_error(message: str):
+    """Restore the SDK exception before pickle applies its saved request and body."""
+    from openai import APIError
+
+    error = APIError.__new__(APIError)
+    Exception.__init__(error, message)
+    return error
+
+
 class ComponentUnpickler(pickle.Unpickler):
     """Resolve renamed model classes without importing obsolete component trees."""
 
     def find_class(self, module: str, name: str):
         """Map a stored component class to its current owner, otherwise use pickle."""
         module, name = CLASS_PATHS.get(f"{module}.{name}", (module, name))
+        return super().find_class(module, name)
+
+
+class _APIErrorUnpickler(ComponentUnpickler):
+    def find_class(self, module: str, name: str):
+        if (module, name) == ("openai", "APIError"):
+            # APIError.args contains only the message. Its constructor also
+            # requires the request, which pickle restores later as object state.
+            return _restore_openai_api_error
         return super().find_class(module, name)
 
 
@@ -99,4 +117,11 @@ class ComponentSerializer(Serializer):
 
     def deserialize(self, serialized_data: str) -> object:
         """Read current or historical snapshots without modifying stored bytes."""
-        return ComponentUnpickler(io.BytesIO(base64.b64decode(serialized_data))).load()
+        stream = io.BytesIO(base64.b64decode(serialized_data))
+        try:
+            return ComponentUnpickler(stream).load()
+        except TypeError as exc:
+            if str(exc) != "APIError.__init__() missing 1 required positional argument: 'request'":
+                raise
+            stream.seek(0)
+            return _APIErrorUnpickler(stream).load()

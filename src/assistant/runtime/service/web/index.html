@@ -8,7 +8,7 @@
     </title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23173e43%27/%3E%3Ctext x=%2716%27 y=%2723%27 text-anchor=%27middle%27 fill=%27white%27 font-size=%2722%27%3EA%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="/assets/styles.css">
-    <link rel="stylesheet" href="/assets/console.css">
+    <link rel="stylesheet" href="/assets/console.css?v=schedule-picker">
   </head>
   <body>
     <aside class="sidebar">
@@ -268,6 +268,12 @@
               <h2>
                 执行记录
               </h2>
+              <label>记录视图
+                <select id="archive-view">
+                  <option value="current">当前记录</option>
+                  <option value="archived">已归档</option>
+                </select>
+              </label>
               <label class="toggle">
                 <input id="all-levels" type="checkbox">
                 包含子任务
@@ -357,6 +363,7 @@
                     <th>
                       任务
                     </th>
+                    <th>触发方式</th>
                     <th>
                       状态
                     </th>
@@ -385,6 +392,7 @@
             </div>
             <div class="table-footer">
               <div>
+                <button id="archive-selected" disabled>归档所选</button>
                 <button id="delete-selected" class="danger subtle" disabled>
                   删除所选记录
                 </button>
@@ -501,12 +509,7 @@
               <option value="monthly">
                 每月
               </option>
-              <option value="hourly">
-                每小时
-              </option>
-              <option value="custom">
-                自定义 Cron
-              </option>
+              <option value="custom">高级 Cron</option>
             </select>
           </label>
           <label>
@@ -523,44 +526,34 @@
               </option>
             </select>
           </label>
+          <fieldset id="schedule-weekdays" class="wide schedule-picker" hidden>
+            <legend>在哪些星期执行</legend>
+            <div class="schedule-choices"></div>
+          </fieldset>
+          <fieldset id="schedule-monthdays" class="wide schedule-picker" hidden>
+            <legend>每月哪几天执行</legend>
+            <div class="schedule-choices"></div>
+          </fieldset>
+          <label id="schedule-clock-label">
+            时间安排
+            <select id="schedule-clock">
+              <option value="once">固定时刻</option>
+              <option value="multiple">选择多个小时或分钟</option>
+              <option value="hourly">每小时</option>
+            </select>
+          </label>
           <label id="schedule-time-label">
             执行时间
             <input id="schedule-time" type="time" value="07:00" required>
           </label>
-          <label id="schedule-weekday-label" hidden>
-            星期
-            <select id="schedule-weekday">
-              <option value="1">
-                星期一
-              </option>
-              <option value="2">
-                星期二
-              </option>
-              <option value="3">
-                星期三
-              </option>
-              <option value="4">
-                星期四
-              </option>
-              <option value="5">
-                星期五
-              </option>
-              <option value="6">
-                星期六
-              </option>
-              <option value="0">
-                星期日
-              </option>
-            </select>
-          </label>
-          <label id="schedule-monthday-label" hidden>
-            每月日期
-            <input id="schedule-monthday" type="number" min="1" max="28" value="1">
-          </label>
-          <label id="schedule-minute-label" hidden>
-            每小时第几分钟
-            <input id="schedule-minute" type="number" min="0" max="59" value="0">
-          </label>
+          <fieldset id="schedule-hours" class="wide schedule-picker" hidden>
+            <legend>在哪些小时执行</legend>
+            <div class="schedule-choices"></div>
+          </fieldset>
+          <fieldset id="schedule-minutes" class="wide schedule-picker" hidden>
+            <legend>所选小时内的第几分钟</legend>
+            <div class="schedule-choices"></div>
+          </fieldset>
           <label id="schedule-cron-label" class="wide" hidden>
             秒 分 时 日 月 星期
             <input id="schedule-cron" placeholder="0 0 7 * * *" maxlength="160">
@@ -579,7 +572,7 @@
               预览时间
             </button>
           </div>
-          <p id="schedule-expression" class="mono hint">
+          <p id="schedule-expression" class="hint">
           </p>
           <p class="hint">显示计划触发时间，实际开始可能需要等待队列。</p>
           <div id="schedule-preview" aria-live="polite">
@@ -640,6 +633,9 @@
         </div>
       </form>
     </dialog>
+    <script type="importmap">
+      {"imports": {"/assets/schedules.js": "/assets/schedules.js?v=schedule-picker", "/assets/agents.js": "/assets/agents.js?v=call-usage", "/assets/overview.js": "/assets/overview.js?v=trigger-labels", "/assets/executions.js": "/assets/executions.js?v=trigger-labels"}}
+    </script>
     <script type="module" src="/assets/app.js">
     </script>
   </body>

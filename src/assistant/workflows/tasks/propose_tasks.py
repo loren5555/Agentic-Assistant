@@ -4,7 +4,7 @@ Input origin:
     Inbox and TODO processors supply pending inputs. The BrainStorm processor supplies
     candidate revisions reopened by human feedback.
 Output destination:
-    Workbench receives proposals; sources are acknowledged after publication.
+    Papers or Knowledge receives reusable Inbox material. Workbench receives follow-up proposals.
 Responsibility:
     Select source roles, not perform execution or handle human feedback.
 """
@@ -24,14 +24,14 @@ async def propose_tasks(self: TaskWorkflows) -> list[str]:
     """Submit pending human input without executing its proposals.
 
     Returns:
-        Workbench proposal links.
+        Workbench links for proposals and archive links for reading-only Inbox items.
     """
     return await self.intake_sources(["inbox", "todo", "brainstorm"])
 
 
 @DBOS.step(name="JobWorkflows.lookup.v2")
 @trace_call("step", "lookup")
-def lookup(self: TaskWorkflows, key: str) -> dict | None:
+def lookup(self: TaskWorkflows, key: str, snapshot: str | None = None) -> dict | None:
     """Locate the latest submitted version.
 
     Args:
@@ -40,4 +40,6 @@ def lookup(self: TaskWorkflows, key: str) -> dict | None:
     Returns:
         Saved business pointer, or None.
     """
+    if snapshot and self.index.is_acknowledged(snapshot):
+        return {"acknowledged_snapshot": snapshot}
     return self.index.get(key)

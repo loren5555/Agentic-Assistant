@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from assistant.components.coordination.curator.models import CurationDecision
 from assistant.components.coordination.proposer.models import Proposal
 from assistant.components.execution.task_worker.models import TaskResult
-from assistant.components.data.sources.models import SourceKind
+from assistant.components.data.sources.models import SourceArchive, SourceKind
 
 
 SUBMIT_EXTERNAL_RESULT = "Submit External Result"
@@ -62,6 +62,7 @@ class WorkbenchItem(BaseModel):
     result_feedback: str
     source_url: str
     source_kind: SourceKind | None = None
+    source_archive: SourceArchive | None = None
     proposal: Proposal | None = None
     result: TaskResult | None = None
     curation: CurationDecision | None = None

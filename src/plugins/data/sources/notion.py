@@ -241,7 +241,7 @@ class NotionProcessor(SourceProcessor):
         return props
 
     @trace_call("component", "processor.acknowledge")
-    def acknowledge(self, source: SourceMaterial) -> None:
+    def acknowledge(self, source: SourceMaterial) -> str | None:
         """Consume only the version represented by the published proposal.
 
         Args:
@@ -249,15 +249,32 @@ class NotionProcessor(SourceProcessor):
         """
         self.logger.info('Acknowledging input: title=%r source=%s version=%d.', source.title, self.kind, source.version)
         with Client(auth=self.token) as client:
-            current = self._read(client, client.pages.retrieve(page_id=source.page_id))
-            if current.fingerprint != source.fingerprint:
-                raise RuntimeError("Source changed before acknowledgement")
             props = self._queue_properties(client, False)
-            client.pages.update(page_id=source.page_id, properties=props)
+            page = client.pages.retrieve(page_id=source.page_id)
+            if page["parent"].get("data_source_id", "").replace("-", "") != str(self.data_source_id).replace("-", ""):
+                raise ValueError(f"Page does not belong to {self.kind}: {source.page_id}")
+            version = int(page["properties"].get("Agent Version", {}).get("number") or 1)
+            if (version, page["last_edited_time"]) != (source.version, source.revision):
+                self.logger.info('Proposal retained; skipping source acknowledgement because the input changed: '
+                                 'title=%r version=%s→%s edited=%s→%s.',
+                                 source.title, source.version, version, source.revision, page["last_edited_time"])
+                return None
+            archive = getattr(source, "archive", None)
+            archived_paper = self.kind == "notero" and archive is not None and archive.destination == "papers"
+            if archived_paper:
+                props["Agent In Papers"] = {"checkbox": True}
+            if page["properties"].get("Agent Processed", {}).get("checkbox") and (
+                not archived_paper or page["properties"].get("Agent In Papers", {}).get("checkbox")
+            ):
+                return source.revision
+            updated = client.pages.update(page_id=source.page_id, properties=props)
             verified = client.pages.retrieve(page_id=source.page_id)
+            if archived_paper and not verified["properties"]["Agent In Papers"]["checkbox"]:
+                raise ValueError(f"Notero archive acknowledgement was not saved: {source.title}")
             if not verified["properties"]["Agent Processed"]["checkbox"]:
                 raise ValueError("Source acknowledgement was not saved")
         self.logger.info('Input acknowledged: title=%r source=%s.', source.title, self.kind)
+        return updated["last_edited_time"] if updated else None
 
     @trace_call("component", "processor.apply_feedback")
     def apply_feedback(self, source: SourceMaterial, feedback: SourceHistory) -> SourceMaterial:

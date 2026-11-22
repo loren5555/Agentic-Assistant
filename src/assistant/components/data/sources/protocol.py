@@ -54,8 +54,8 @@ class SourceProcessor(Protocol):
         """
         ...
 
-    def acknowledge(self, source: SourceMaterial) -> None:
-        """Confirm successful proposal intake.
+    def acknowledge(self, source: SourceMaterial) -> str | None:
+        """Confirm successful proposal intake and return the resulting revision if available.
 
         Args:
             source: Unchanged source version whose proposal was published.

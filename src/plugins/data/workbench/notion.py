@@ -547,6 +547,7 @@ class Workbench(WorkbenchProtocol):
         lines = [
             f"## {proposal.title}",
             f"Source ({source.kind}): {source.url}",
+            *([f"Archived reading ({source.archive.evidence_level}): {source.archive.url}"] if source.archive else []),
             f"Understanding: {proposal.understanding}",
             f"Reason: {proposal.reason}",
         ]
@@ -619,7 +620,7 @@ class Workbench(WorkbenchProtocol):
         """
         source = SourceMaterial(
             kind=item.source_kind or "inbox", page_id="", url=item.source_url,
-            title=item.title, text="", revision="",
+            title=item.title, text="", revision="", archive=item.source_archive,
         )
         return source
 

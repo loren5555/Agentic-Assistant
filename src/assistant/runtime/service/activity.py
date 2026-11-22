@@ -10,6 +10,7 @@ import re
 
 from assistant.runtime.serialization import ComponentSerializer
 from .metadata import JOB_LABELS, label
+from .presentation import error_message
 
 # Only operations with a user-visible purpose enter the activity timeline.
 STEPS = {
@@ -19,6 +20,8 @@ STEPS = {
     "stage_brainstorm_candidate": ("保留待审批的条目", "研究报告"),
 
     "read_sources": ("读取待处理条目", "来源处理器"),
+    "brief_source": ("摘要来源材料", "Source Briefer"),
+    "publish_source_brief": ("归档来源摘要", "Information Publisher"),
     "organize_source": ("整理来源材料", "Information Organizer"),
     "draft": ("起草提案", "Proposer"), "select_action": ("选择执行方式", "Router"),
     "decide": ("选择执行方式", "Router"), "publish_proposal": ("提交提案", "Workbench"),
@@ -142,8 +145,16 @@ def call_data(step, obj, role):
         trace = values(values(obj.get("discovery")).get("process"))
     if not (trace.get("events") or trace.get("usage")):
         return None
-    model, tools, prompts = "", [], []
+    provider = clean(trace.get("provider"))
+    model = clean(trace.get("model"))
+    tools, prompts = [], []
     for event in trace.get("events", []):
+        provider = clean(event.get("provider_name")) or provider
+        if not provider:
+            if event.get("type") == "aminer.deep_research.completed":
+                provider = "AMiner"
+            elif event.get("type") in {"thread.started", "turn.completed"}:
+                provider = "Codex"
         model = clean(event.get("model_name")) or model
         for part in event.get("parts", []):
             if part.get("part_kind") == "user-prompt" and isinstance(part.get("content"), str):
@@ -162,8 +173,17 @@ def call_data(step, obj, role):
         if event.get("type") == "item.completed" and item.get("type") in {"web_search","mcp_tool_call","command_execution"}:
             tools.append(item.get("tool") or item["type"])
     usage = trace.get("usage") or {}
-    return {"module": role, "model": model, "tools": tools, "input": list(dict.fromkeys(prompts))[:12],
+    return {"module": role, "provider": provider, "model": model, "tools": tools, "input": list(dict.fromkeys(prompts))[:12],
             "tokens_in": usage.get("input_tokens"), "tokens_out": usage.get("output_tokens")}
+
+
+def describe_error(raw, encoding):
+    value = unpack(raw, encoding)
+    if isinstance(value, Unreadable):
+        if encoding in (None, "py_pickle") and isinstance(raw, str) and raw.startswith("gAS"):
+            return [error_message(raw, "无法读取已保存的异常详情")]
+        return ["无法读取已保存的异常详情，请查看服务日志。"]
+    return describe(value)
 
 
 def business_step(row):
@@ -187,9 +207,36 @@ def business_step(row):
             lines = describe(json.loads(obj["organization"])) or lines
         except ValueError:
             pass
-    error = unpack(row["error"], row["serialization"])
-    return {"number": row["function_id"], "action": title, "module": module, "subject": clean(obj.get("title")),
-            "result": lines, "error": describe(error), "call": call_data(name, obj, module)}
+    error = describe_error(row["error"], row["serialization"])
+    subject = clean(obj.get("title"))
+    if name == "read_sources" and isinstance(value, (list, tuple)) and len(value) == 1:
+        subject = clean(values(value[0]).get("title"))
+    return {"number": row["function_id"], "action": title, "module": module, "subject": subject,
+            "result": lines, "error": error, "call": call_data(name, obj, module)}
+
+
+def workflow_args(raw, encoding):
+    inputs = values(unpack(raw, encoding))
+    return [*inputs.get("args", inputs.get("positionalArgs", [])),
+            *inputs.get("kwargs", inputs.get("namedArgs", {})).values()]
+
+
+def item_titles(db, workflow_id):
+    row = db.execute("""SELECT w.serialization,coalesce(i.inputs,w.inputs) AS inputs
+        FROM workflow_status w LEFT JOIN workflow_input i USING(workflow_uuid)
+        WHERE workflow_uuid=?""", (workflow_id,)).fetchone()
+    source = item = ""
+    for arg in workflow_args(row["inputs"], row["serialization"]):
+        obj = values(arg)
+        # Review workflows store source and item together in a state snapshot.
+        if "source" in obj and "item" in obj:
+            source = clean(values(obj["source"]).get("title"))
+            item = clean(values(obj["item"]).get("title"))
+        elif "kind" in obj and "page_id" in obj:
+            source = clean(obj.get("title"))
+        elif "human_review" in obj:
+            item = clean(obj.get("title"))
+    return source, item
 
 
 def activity(metadata, workflow_id):
@@ -213,26 +260,42 @@ def activity(metadata, workflow_id):
             UNION SELECT o.child_workflow_id FROM operation_outputs o JOIN family f ON o.workflow_uuid=f.id
             JOIN workflow_status w ON w.workflow_uuid=o.child_workflow_id
             WHERE w.application_name='assistant' OR w.application_name IS NULL
-        ) SELECT o.* FROM operation_outputs o JOIN family f ON f.id=o.workflow_uuid
+        ) SELECT o.*, w.name AS workflow_name FROM operation_outputs o JOIN family f ON f.id=o.workflow_uuid
+          JOIN workflow_status w ON w.workflow_uuid=f.id
           WHERE o.function_name IN ({marks}) ORDER BY o.started_at_epoch_ms,o.rowid LIMIT 121""",
                           [workflow_id,*operations]).fetchall()
         steps = []
+        titles = {}
         for stored in rows[:120]:
             step = business_step(stored)
-            step["workflow"] = stored["workflow_uuid"]
+            owner = step["workflow"] = stored["workflow_uuid"]
+            name = short_name(stored["function_name"])
+            source_step = name in {"organize_source", "brief_source", "publish_source_brief", "acknowledge", "read_source"}
+            if stored["workflow_name"].startswith("ProposalWorkflows.") and (source_step or not step["subject"]):
+                if owner not in titles:
+                    titles[owner] = item_titles(db, owner)
+                source, item = titles[owner]
+                if source_step:
+                    step["subject"] = source or step["subject"]
+                else:
+                    step["subject"] = item or source
             steps.append(step)
-    inputs = values(unpack(row["inputs"], row["serialization"]))
-    args = [*inputs.get("args", inputs.get("positionalArgs", [])),
-            *inputs.get("kwargs", inputs.get("namedArgs", {})).values()]
+    args = workflow_args(row["inputs"], row["serialization"])
     subject = next((clean(values(a).get("title")) for a in args if clean(values(a).get("title"))), "")
     subject = subject or next((step["subject"] for step in steps if step["subject"]), "")
     if short_name(run["name"]) == "dispatch" and args and isinstance(args[0], str):
         run["title"] = JOB_LABELS.get(args[0], run["title"])
+    errors = describe_error(row["error"], row["serialization"])
+    if run["status"] == "ERROR":
+        failed = next((step for step in reversed(steps) if step["error"]), None)
+        if failed:
+            reason = f"{failed['module']} · {failed['action']}：{'；'.join(failed['error'])}"
+            errors = [reason, *(line for line in errors if line not in failed["error"])]
     refs = metadata.references(workflow_id)
     return {"run": run, "subject": subject if all(step["workflow"] == workflow_id for step in steps) else "",
             "more_steps": len(rows) > 120, "input": [line for a in args for line in describe(a)],
             "result": describe(unpack(row["output"],row["serialization"])),
-            "error": describe(unpack(row["error"],row["serialization"])), "steps": steps,
+            "error": errors, "steps": steps,
             "parents": refs["parents"], "children": refs["children"]}
 
 

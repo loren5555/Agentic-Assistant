@@ -12,6 +12,9 @@ from pathlib import Path
 import sqlite3
 import time
 from urllib.parse import quote
+from typing import Literal
+
+from .models import TERMINAL_STATES
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -30,7 +33,7 @@ JOB_LABELS = {
 }
 PHASE_LABELS = {
     **{key.replace("-", "_"): value for key, value in JOB_LABELS.items()},
-    "dispatch": "运行工作流", "intake_item": "整理条目并提交提案", "reconcile_item": "处理条目反馈",
+    "dispatch": "运行工作流", "intake_item": "整理来源条目", "reconcile_item": "处理条目反馈",
     "brainstorm": "整理研究线索", "explore_brainstorm": "生成探索报告",
     "submit_brainstorm_proposal": "提交研究提案",
     "daily_newspaper": "生成研究日报",
@@ -60,6 +63,35 @@ STATES = {
 }
 
 
+# Resolve business names before filtering and pagination, including older recovery
+# wrappers whose only link to the original work is a saved DBOS.getResult step.
+RUNS = """
+WITH runs AS (
+    SELECT w.*,
+      COALESCE(json_extract(w.attributes,'$.job'),
+        CASE w.name
+          WHEN 'scheduled_job' THEN COALESCE(
+            CASE WHEN w.schedule_name LIKE 'assistant-%' THEN substr(w.schedule_name,11) END,
+            (SELECT json_extract(c.attributes,'$.job') FROM workflow_status c
+             WHERE c.parent_workflow_id=w.workflow_uuid AND c.name='JobWorkflows.dispatch' LIMIT 1))
+          WHEN 'recover_requested_workflow' THEN (
+            WITH RECURSIVE lineage(id) AS (
+                SELECT COALESCE(json_extract(w.attributes,'$.target_id'),
+                    (SELECT o.child_workflow_id FROM operation_outputs o
+                     WHERE o.workflow_uuid=w.workflow_uuid AND o.function_name='DBOS.getResult'
+                       AND o.child_workflow_id IS NOT NULL ORDER BY o.function_id DESC LIMIT 1))
+                UNION SELECT a.parent_workflow_id FROM workflow_status a JOIN lineage ON a.workflow_uuid=lineage.id
+            )
+            SELECT COALESCE(json_extract(t.attributes,'$.job'), substr(t.schedule_name,11))
+            FROM workflow_status t JOIN lineage ON t.workflow_uuid=lineage.id
+            WHERE json_extract(t.attributes,'$.job') IS NOT NULL OR t.schedule_name LIKE 'assistant-%'
+            LIMIT 1)
+        END) AS business_job
+    FROM workflow_status w
+)
+"""
+
+
 class RunFilters(BaseModel):
     """Bound metadata queries independently from any execution request."""
 
@@ -72,6 +104,7 @@ class RunFilters(BaseModel):
     search: str = Field(default="", max_length=200)
     since: str = "7d"
     queue: str = ""
+    archive: Literal["current", "archived", "all"] = "current"
 
 
 def label(name: str, attributes: dict) -> str:
@@ -94,12 +127,21 @@ def summarize(row: dict) -> dict:
     if started is None and row["status"] not in {"ENQUEUED", "DELAYED", "CANCELLED"}:
         started = row["created_at"]
     end = row.get("completed_at") or int(time.time() * 1000)
+    job = row.get("business_job") or attributes.get("job")
+    trigger = None
+    if row["name"] == "scheduled_job":
+        trigger = "定时"
+    elif row["name"] == "recover_requested_workflow":
+        trigger = "恢复"
+    elif row["name"] == "JobWorkflows.dispatch" and row["workflow_uuid"].startswith("manual:"):
+        trigger = "手动"
     name = row.get("dispatched") or row["name"]
     return {
         "id": row["workflow_uuid"],
         "name": row["name"],
-        "title": label(name, attributes),
-        "job": attributes.get("job"),
+        "title": label(name, {**attributes, "job": job}),
+        "trigger": trigger,
+        "job": job,
         "status": row["status"],
         "parent_id": row.get("parent_workflow_id"),
         "queue": row.get("queue_name"),
@@ -132,12 +174,48 @@ class RunMetadata:
         connection.execute("PRAGMA query_only=ON")
         return connection
 
+    def panel_connection(self):
+        """Store visibility in the panel database and read DBOS through a read-only attachment."""
+        connection = sqlite3.connect(self.directory.joinpath("panel.sqlite").as_uri(), uri=True)
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("CREATE TABLE IF NOT EXISTS archived_runs "
+                               "(id TEXT PRIMARY KEY, created_at INTEGER, updated_at INTEGER)")
+            connection.execute("ATTACH DATABASE ? AS history", (self.path.as_uri() + "?mode=ro",))
+        except Exception:
+            connection.close()
+            raise
+        return connection
+
+    def change_archive(self, ids, archived):
+        """Apply a reversible visibility change to the selected finished executions."""
+        handled = []
+        with closing(self.panel_connection()) as connection, connection:
+            for run_id in dict.fromkeys(ids):
+                row = connection.execute(
+                    "SELECT created_at, updated_at, status FROM history.workflow_status WHERE workflow_uuid=? "
+                    "AND (application_name='assistant' OR application_name IS NULL)", (run_id,)
+                ).fetchone()
+                if not row or row["status"] not in TERMINAL_STATES:
+                    continue
+                if archived:
+                    connection.execute("INSERT OR REPLACE INTO archived_runs VALUES (?, ?, ?)",
+                                       (run_id, row["created_at"], row["updated_at"]))
+                else:
+                    connection.execute("DELETE FROM archived_runs WHERE id=?", (run_id,))
+                handled.append(run_id)
+        return handled
+
     def _where(self, filters: RunFilters, include_status=True):
         """Build parameterized filter predicates; overview ignores only state."""
         conditions = [
             "(w.application_name = 'assistant' OR w.application_name IS NULL)"
         ]
         values = []
+        if filters.archive != "all":
+            archived = ("EXISTS (SELECT 1 FROM archived_runs a WHERE a.id=w.workflow_uuid "
+                        "AND a.created_at=w.created_at AND a.updated_at=w.updated_at)")
+            conditions.append(archived if filters.archive == "archived" else "NOT " + archived)
         if filters.scope not in {"roots", "all"}:
             raise ValueError("scope must be roots or all")
         if filters.scope == "roots":
@@ -155,7 +233,7 @@ class RunMetadata:
             else:
                 raise ValueError("Unknown workflow status")
         if filters.job:
-            conditions.append("json_extract(w.attributes, '$.job')=?")
+            conditions.append("w.business_job=?")
             values.append(filters.job)
         if filters.queue:
             conditions.append("w.queue_name=?")
@@ -172,13 +250,13 @@ class RunMetadata:
                 "w.workflow_uuid LIKE ? ESCAPE '\\'",
                 "w.name LIKE ? ESCAPE '\\'",
                 "json_extract(w.attributes,'$.title') LIKE ? ESCAPE '\\'",
-                "json_extract(w.attributes,'$.job') LIKE ? ESCAPE '\\'",
+                "w.business_job LIKE ? ESCAPE '\\'",
             ]
             values.extend([search] * 4)
             # Search the friendly names actually displayed in the table too.
             for job, title in JOB_LABELS.items():
                 if filters.search.casefold() in title.casefold():
-                    matches.append("json_extract(w.attributes,'$.job')=?")
+                    matches.append("w.business_job=?")
                     values.append(job)
             for phase, title in PHASE_LABELS.items():
                 if filters.search.casefold() in title.casefold():
@@ -197,13 +275,13 @@ class RunMetadata:
         """Read one page and exact counts without loading workflow inputs/results."""
         where, values = self._where(filters)
         scope, count_values = self._where(filters, include_status=False)
-        with closing(self.connect()) as connection:
+        with closing(self.panel_connection()) as connection:
             total = connection.execute(
-                "SELECT COUNT(*) FROM workflow_status w WHERE " + where, values
+                RUNS + "SELECT COUNT(*) FROM runs w WHERE " + where, values
             ).fetchone()[0]
             counts = dict(
                 connection.execute(
-                    "SELECT w.status, COUNT(*) FROM workflow_status w WHERE "
+                    RUNS + "SELECT w.status, COUNT(*) FROM runs w WHERE "
                     + scope
                     + " GROUP BY w.status",
                     count_values,
@@ -214,7 +292,7 @@ class RunMetadata:
                 max(1, (total + filters.page_size - 1) // filters.page_size),
             )
             rows = connection.execute(
-                "SELECT w.workflow_uuid,w.status,w.name,w.attributes,w.parent_workflow_id,w.queue_name,w.created_at,w.updated_at,w.started_at_epoch_ms,w.completed_at,w.application_version, CASE WHEN w.name='JobWorkflows.dispatch' THEN (SELECT c.name FROM workflow_status c WHERE c.parent_workflow_id=w.workflow_uuid ORDER BY c.created_at LIMIT 1) END AS dispatched, (SELECT COUNT(*) FROM operation_outputs o WHERE o.workflow_uuid=w.workflow_uuid) AS step_count FROM workflow_status w WHERE "
+                RUNS + "SELECT w.business_job,w.workflow_uuid,w.status,w.name,w.attributes,w.parent_workflow_id,w.queue_name,w.created_at,w.updated_at,w.started_at_epoch_ms,w.completed_at,w.application_version, CASE WHEN w.name='JobWorkflows.dispatch' THEN (SELECT c.name FROM workflow_status c WHERE c.parent_workflow_id=w.workflow_uuid ORDER BY c.created_at LIMIT 1) END AS dispatched, (SELECT COUNT(*) FROM operation_outputs o WHERE o.workflow_uuid=w.workflow_uuid) AS step_count FROM runs w WHERE "
                 + where
                 + " ORDER BY w.created_at DESC,w.workflow_uuid DESC LIMIT ? OFFSET ?",
                 [*values, filters.page_size, (page - 1) * filters.page_size],
@@ -232,7 +310,7 @@ class RunMetadata:
         """Read one owned metadata row without materializing its serialized payload."""
         with closing(self.connect()) as connection:
             row = connection.execute(
-                "SELECT workflow_uuid,status,name,attributes,parent_workflow_id,queue_name,created_at,updated_at,started_at_epoch_ms,completed_at,application_version FROM workflow_status WHERE workflow_uuid=? AND (application_name='assistant' OR application_name IS NULL)",
+                RUNS + "SELECT business_job,workflow_uuid,status,name,attributes,parent_workflow_id,queue_name,created_at,updated_at,started_at_epoch_ms,completed_at,application_version FROM runs WHERE workflow_uuid=? AND (application_name='assistant' OR application_name IS NULL)",
                 (workflow_id,),
             ).fetchone()
         return summarize(dict(row)) if row else None

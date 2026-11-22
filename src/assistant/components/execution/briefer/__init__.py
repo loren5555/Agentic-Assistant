@@ -1,11 +1,11 @@
-"""Provide evidence-aware reading briefs used during approved execution.
+"""Prepare reading briefs from the evidence available in a source.
 
 Input origin:
-    An approved paper/article task and its original source material.
+    Intake supplies reusable Inbox, Notero or SimpRead material. Approved reading
+    tasks may also supply a reading objective and human instructions.
 Output destination:
-    Briefer returns a reading product for Workbench acceptance.
-    The reading product is published only through Information Publisher after acceptance.
+    During intake, Publisher stores a grounded brief in Papers or Knowledge.
+    During approved execution, Workbench receives the result for acceptance.
 Responsibility:
     Preserve original abstracts, useful reading metadata and evidence scope.
-    Source extraction belongs to processors; intake no longer publishes final briefs.
 """

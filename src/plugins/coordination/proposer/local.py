@@ -21,7 +21,9 @@ from plugins._shared.local.config import LocalSettings
 
 PROPOSER_INSTRUCTIONS = """Prepare the next useful proposal for a personal research
 assistant's Workbench. Choose its kind from the effective source, human supplements,
-organizer interpretation and history.
+organizer interpretation and history. When source.archive is present, its URL, summary
+and evidence level describe a completed reading product. Use the original input and
+human request to propose only outstanding work, taking that product as context.
 
 Use kind="execution" when the goal and deliverable are clear enough to act on.
 Explain the understanding, purpose, reason, action, practical plan and expected result.

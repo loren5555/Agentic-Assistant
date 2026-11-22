@@ -21,22 +21,22 @@ JOB_HELP = {
         "help": "Propose work from Inbox, elevated TODOs and revised BrainStorm candidates.",
         "description": (
             "Read pending source versions through independent processors. Shared Organizer and\n"
-            "Proposer submit Workbench proposals. No execution or final knowledge publication."
+            "Proposer submit outstanding work to Workbench. Reusable Inbox material is archived first."
         ),
         "epilog": """Sources:
   Inbox Status != Archived; TODO Status = elevated; Agent Processed unchecked.
   BrainStorm candidates reopened by Workbench feedback enter the same review cycle.
-  After verified proposal publication, acknowledge the same source version.
+  Acknowledge the same source version when intake completes.
   Review and approve the proposal, then run process-workbench.
 
 Example:
   python -m assistant run propose-tasks""",
     },
     "organize-papers": {
-        "help": "Prepare Workbench proposals from pending Notero papers.",
+        "help": "Archive pending Notero papers and propose follow-up work.",
         "description": (
             "Read raw Notero papers, organize their supplied evidence and propose reading work.\n"
-            "Papers publication happens after execution and acceptance, not during intake."
+            "Archive grounded briefs in Papers and submit outstanding work to Workbench."
         ),
         "epilog": """Sources and outputs:
   Agent Processed unchecked selects pending Notero inputs. --page checks one record.
@@ -47,14 +47,14 @@ Example:
   python -m assistant run organize-papers --page NOTERO_PAGE_ID""",
     },
     "organize-articles": {
-        "help": "Prepare work and knowledge proposals from pending SimpRead clips.",
+        "help": "Archive useful SimpRead clips and propose follow-up work.",
         "description": (
             "SimpRead Processor reads clips and user notes. Shared Organizer identifies useful\n"
-            "knowledge and actionable findings; Proposer submits them to Workbench."
+            "material for Papers or Knowledge and sends follow-up work to Proposer."
         ),
         "epilog": """Sources and outputs:
   Read Agent Archived unchecked and Agent Processed unchecked.
-  Acknowledge after proposal publication, not after downstream execution.
+  Acknowledge after archiving and any follow-up proposal.
   A source can lead to multiple accepted Knowledge, Papers, Ideas or Interests outputs.
   Reconciled feedback reopens the same source with a new version.
 

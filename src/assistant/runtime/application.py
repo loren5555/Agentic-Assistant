@@ -90,6 +90,8 @@ class WorkbenchWorkflows(DBOSConfiguredInstance):
     read_source = proposal_steps.read_source
     read_current_source = proposal_steps.read_current_source
     draft = proposal_steps.draft
+    brief_source = proposal_steps.brief_source
+    publish_source_brief = proposal_steps.publish_source_brief
     organize_source = proposal_steps.organize_source
     publish_proposal = proposal_steps.publish_proposal
     acknowledge = proposal_steps.acknowledge

@@ -61,9 +61,9 @@ local:
   router_model: openai-codex:gpt-6-luna
   router_effort: low
   timeout_seconds: 120
-  proposer_model: openai-codex:gpt-6.2-sol
-  organizer_model: openai-codex:gpt-6.2-sol
-  organizer_effort: medium
+  proposer_model: openai-codex:gpt-6.1-sol
+  organizer_model: openai-codex:gpt-6.1-sol
+  organizer_effort: low
   organizer_timeout_seconds: 180
   proposer_effort: medium
   proposer_timeout_seconds: 180
@@ -75,15 +75,15 @@ local:
   worker_timeout_seconds: 180
   worker_toolsets:
     calculator.local: {}  # plugins/execution/tools/calculator/local.py:create_toolset
-  curator_model: openai-codex:gpt-6.2-sol
+  curator_model: openai-codex:gpt-6.1-sol
   curator_effort: medium
   curator_timeout_seconds: 180
   investigator_model: openai-codex:gpt-6.2-sol
   investigator_effort: high
   investigator_timeout_seconds: 300
-  brief_model: openai-codex:gpt-6.2-sol
-  recommendation_model: openai-codex:gpt-6.2-sol
-  brief_effort: low
+  brief_model: openai-codex:gpt-6.1-sol
+  recommendation_model: openai-codex:gpt-6-astra
+  brief_effort: medium
 
 codex:
   router_model: gpt-6-luna
@@ -99,13 +99,13 @@ codex:
   experiment_model: gpt-6.2-astra
   experiment_effort: high
   experiment_timeout_seconds: 3600
-  discovery_model: gpt-6.2-astra
+  discovery_model: gpt-6-astra
   discovery_effort: high
   discovery_timeout_seconds: 600
   discovery_max_candidates: 60
   discovery_recent_days: 7
-  evidence_model: gpt-6.2-sol
-  evidence_effort: low
+  evidence_model: gpt-6.1-sol
+  evidence_effort: medium
   evidence_timeout_seconds: 180
 
 notion:

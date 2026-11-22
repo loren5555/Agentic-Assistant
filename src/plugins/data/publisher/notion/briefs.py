@@ -50,7 +50,8 @@ class BriefPublisher(BriefPublisherProtocol):
         self.logger = get_logger("plugins.data.publisher.notion.briefs")
 
     @trace_call("component", "captures.publish")
-    def publish(self, capture: ReadingMaterial, brief: ReadingBrief, *, artifact_key: str | None = None) -> BriefPublicationReceipt:
+    def publish(self, capture: ReadingMaterial, brief: ReadingBrief, *, artifact_key: str | None = None,
+                mark_notero: bool = True) -> BriefPublicationReceipt:
         """Create or replace only the assistant-owned brief section.
 
         Args:
@@ -171,7 +172,7 @@ class BriefPublisher(BriefPublisherProtocol):
                     **reading_properties,
                 }
                 if brief.destination == "papers":
-                    properties["Source Type"] = {"select": {"name": capture.metadata.get("Source Type") or ("Zotero" if capture.kind == "notero" else "SimpRead")}}
+                    properties["Source Type"] = {"select": {"name": capture.metadata.get("Source Type") or {"notero": "Zotero", "simpread": "SimpRead", "inbox": "Inbox"}[capture.kind]}}
                 page = client.pages.create(
                     parent={"type": "data_source_id", "data_source_id": data_source_id},
                     properties=properties, markdown=section,
@@ -211,7 +212,7 @@ class BriefPublisher(BriefPublisherProtocol):
                 )
                 raise ValueError(f"Brief publication key readback failed: {page_id}")
             receipt = BriefPublicationReceipt(page_id=page_id, url=verified["url"], key=key, fingerprint=capture.fingerprint)
-            if capture.kind == "notero" and brief.destination == "papers" and not artifact_key:
+            if mark_notero and capture.kind == "notero" and brief.destination == "papers" and not artifact_key:
                 # Confirm the destination first, including on publication retries.
                 self.logger.info('Marking Notero entry as published to Papers: title=%r.', capture.title)
                 client.pages.update(page_id=capture.page_id,

@@ -1,9 +1,9 @@
-"""Approved reading capability.
+"""Source reading capability.
 
 Input origin:
-    Available source material from the approved task.
+    Available source material from intake or an approved reading task.
 Output destination:
-    A grounded reading brief returns to the execution workflow.
+    A grounded reading brief returns to intake or to the execution workflow.
 Responsibility:
     Define briefing behavior without storage or workflow progression.
 """

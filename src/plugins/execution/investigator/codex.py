@@ -170,7 +170,7 @@ class Investigator(InvestigatorProtocol):
             report = InvestigationReport.model_validate_json(response)
 
             # Mixed CLI diagnostics are telemetry, not the business-result channel.
-            report.process = read_process(stdout.decode(errors="replace"))
+            report.process = read_process(stdout.decode(errors="replace"), model=self.model)
             usage = report.process.usage
             elapsed_seconds = perf_counter() - started_at
             self.logger.info(

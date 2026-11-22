@@ -3,6 +3,6 @@
 Inputs:
     SourceProcessor snapshots, including original content, supplements and history.
 Outputs:
-    Grounded key points, explicit versus inferred intent and possible output types,
-    supplied to Proposer. Organizer does not publish or approve its own findings.
+    Grounded key points and two independent decisions for intake: retain available
+    material through Briefer and Publisher, and propose outstanding work through Proposer.
 """

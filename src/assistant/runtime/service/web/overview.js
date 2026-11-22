@@ -26,7 +26,9 @@ async function refreshDashboard() {
     const row = el('div', undefined, 'activity-row');
     row.append(el('div', run.status === 'SUCCESS' ? '✓' : run.status === 'ERROR' ? '!' : '·', 'activity-symbol'));
     const copy = el('div', undefined, 'activity-copy');
-    copy.append(button(run.title, () => openDetail(run.id), 'link-button'), el('small', `${date(run.created_at)} · ${duration(run.duration_ms)}`));
+    copy.append(button(run.title, () => openDetail(run.id), 'link-button'));
+    if (run.trigger) copy.append(el('span', run.trigger + '触发', 'trigger-tag'));
+    copy.append(el('small', `${date(run.created_at)} · ${duration(run.duration_ms)}`));
     row.append(copy, badge(run.status));
     return row;
   });

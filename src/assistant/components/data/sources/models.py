@@ -30,6 +30,15 @@ class SourceHistory(BaseModel):
     accepted_plan: ExecutionPlan | None = None
 
 
+class SourceArchive(BaseModel):
+    """Verified reading product supplied alongside the original material."""
+
+    url: str
+    destination: Literal["papers", "knowledge"]
+    summary: str
+    evidence_level: str
+
+
 class SourceMaterial(BaseModel):
     """Describe material submitted by a human.
 
@@ -60,6 +69,13 @@ class SourceMaterial(BaseModel):
     metadata: dict = Field(default_factory=dict)
     full_text_verified: bool = False
     organization: str = ""
+    archive: SourceArchive | None = None
+
+    @property
+    def intake_snapshot(self) -> str:
+        """Identify a proposal input by its origin, semantic version and edit time."""
+        identity = [self.kind, self.page_id, self.version, self.revision]
+        return "snapshot:" + hashlib.sha256(json.dumps(identity).encode()).hexdigest()
 
     @property
     def fingerprint(self) -> str:
@@ -68,7 +84,7 @@ class SourceMaterial(BaseModel):
         Returns:
             Digest covering source content, feedback and semantic version.
         """
-        content = self.model_dump(exclude={"revision", "organization"})
+        content = self.model_dump(exclude={"revision", "organization", "archive"})
         return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
     @property

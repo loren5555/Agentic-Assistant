@@ -21,47 +21,85 @@ let editorRevision = null;
 let previewSequence = 0;
 let dispatch = null;
 
+const pickerFields = {
+  weekdays: {start: 0, end: 6, label: n => '周' + '日一二三四五六'[n]},
+  monthdays: {start: 1, end: 31, label: n => n + '日'},
+  hours: {start: 0, end: 23, label: n => n + '时'},
+  minutes: {start: 0, end: 59, label: n => String(n).padStart(2, '0')}
+};
+
+function fillPicker(name, selected) {
+  const {start, end, label} = pickerFields[name];
+  const choices = [];
+  for (let index = start; index <= end; index++) {
+    const n = name === 'weekdays' ? (index + 1) % 7 : index;
+    const choice = el('label');
+    const input = el('input');
+    input.type = 'checkbox';
+    input.value = n;
+    input.checked = selected.includes(n);
+    choice.append(input, el('span', label(n)));
+    choices.push(choice);
+  }
+  $('schedule-' + name).querySelector('.schedule-choices').replaceChildren(...choices);
+}
+
+function selectedField(name) {
+  const group = $('schedule-' + name);
+  const numbers = [...group.querySelectorAll(':checked')].map(input => Number(input.value)).sort((a,b) => a-b);
+  if (!numbers.length) throw new Error('请选择' + group.querySelector('legend').textContent + '。');
+  const parts = [];
+  for (let i = 0; i < numbers.length; i++) {
+    const first = numbers[i];
+    while (numbers[i+1] === numbers[i]+1) i++;
+    const last = numbers[i];
+    parts.push(last === first ? first : first + '-' + last);
+  }
+  return parts.join(',');
+}
+
 function specFromForm() {
   const frequency = $('schedule-frequency').value;
-  const [hour, minute] = $('schedule-time').value.split(':').map(Number);
   let cron = $('schedule-cron').value.trim();
-  if (frequency === 'daily') cron = `0 ${minute} ${hour} * * *`;
-  if (frequency === 'weekly') cron = `0 ${minute} ${hour} * * ${$('schedule-weekday').value}`;
-  if (frequency === 'monthly') cron = `0 ${minute} ${hour} ${$('schedule-monthday').value} * *`;
-  if (frequency === 'hourly') cron = `0 ${$('schedule-minute').value} * * * *`;
-  return {
-    cron,
-    timezone: $('schedule-timezone').value,
-    enabled: $('schedule-enabled').checked
-  };
+  if (frequency !== 'custom') {
+    const clock = $('schedule-clock').value;
+    let hour, minute;
+    if (clock === 'once') {
+      if (!$('schedule-time').value) throw new Error('请选择执行时间。');
+      [hour, minute] = $('schedule-time').value.split(':').map(Number);
+    } else {
+      hour = clock === 'hourly' ? '*' : selectedField('hours');
+      minute = selectedField('minutes');
+    }
+    const day = frequency === 'monthly' ? selectedField('monthdays') : '*';
+    const weekday = frequency === 'weekly' ? selectedField('weekdays') : '*';
+    cron = `0 ${minute} ${hour} ${day} * ${weekday}`;
+  }
+  return {cron, timezone: $('schedule-timezone').value, enabled: $('schedule-enabled').checked};
 }
 
 function frequencyFields() {
   const mode = $('schedule-frequency').value;
-  $('schedule-time-label').hidden = ['custom', 'hourly'].includes(mode);
-  $('schedule-time').required = !$('schedule-time-label').hidden;
-  $('schedule-weekday-label').hidden = mode !== 'weekly';
-  $('schedule-monthday-label').hidden = mode !== 'monthly';
-  $('schedule-cron-label').hidden = mode !== 'custom';
-  $('schedule-minute-label').hidden = mode !== 'hourly';
-  $('schedule-cron').required = mode === 'custom';
-  for (const [field, label] of [
-      ['schedule-time', 'schedule-time-label'],
-      ['schedule-weekday', 'schedule-weekday-label'],
-      ['schedule-monthday', 'schedule-monthday-label'],
-      ['schedule-minute', 'schedule-minute-label'],
-      ['schedule-cron', 'schedule-cron-label']
-    ]) {
-    $(field).disabled = $(label).hidden;
-    $(field).required = !$(label).hidden;
-  }
+  const visual = mode !== 'custom';
+  const clock = $('schedule-clock').value;
+  $('schedule-clock-label').hidden = !visual;
+  $('schedule-time-label').hidden = !visual || clock !== 'once';
+  $('schedule-time').disabled = $('schedule-time-label').hidden;
+  $('schedule-weekdays').hidden = mode !== 'weekly';
+  $('schedule-monthdays').hidden = mode !== 'monthly';
+  $('schedule-hours').hidden = !visual || clock !== 'multiple';
+  $('schedule-minutes').hidden = !visual || clock === 'once';
+  $('schedule-cron-label').hidden = visual;
+  $('schedule-cron').required = !visual;
 }
+
 async function preview() {
   const sequence = ++previewSequence;
   $('schedule-preview').textContent = '计算执行时间…';
-  const spec = specFromForm();
-  $('schedule-expression').textContent = `${spec.cron} · ${spec.timezone}`;
+  $('schedule-expression').textContent = '';
   try {
+    const spec = specFromForm();
+    $('schedule-expression').textContent = `${describe(spec)} · ${spec.timezone}`;
     const result = await api('/panel/schedules/preview', {
       method: 'POST',
       body: JSON.stringify(spec)
@@ -76,17 +114,77 @@ async function preview() {
   }
 }
 
-function describe(item) {
-  const fields = item.cron.split(/\s+/);
-  if (fields[0] !== '0') return '自定义时间';
-  if (/^\d+$/.test(fields[1]) && /^\d+$/.test(fields[2])) {
-    const time = `${fields[2].padStart(2,'0')}:${fields[1].padStart(2,'0')}`;
-    if (fields.slice(3).join(' ') === '* * *') return `每天 ${time}`;
-    if (fields[3] === '*' && fields[4] === '*' && /^\d$/.test(fields[5])) return `每周${'日一二三四五六'[Number(fields[5])]} ${time}`;
-    if (/^\d+$/.test(fields[3]) && fields[4] === '*' && fields[5] === '*') return `每月 ${fields[3]} 日 ${time}`;
+// Keep inclusive ranges compact even for schedules that cover many hours.
+function cronList(field, format) {
+  return field.split(',').map(part => part.split('-').map(format).join('至')).join('、');
+}
+
+const numericList = /^\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$/;
+const integer = /^\d+$/;
+const pad = value => value.padStart(2, '0');
+
+function describe({cron}) {
+  const [second, minute, hour, day, month, weekday] = cron.trim().split(/\s+/);
+  const fallback = `Cron · ${cron}`;
+  if (second !== '0' || month !== '*') return fallback;
+
+  let period = '每天';
+  if (day === '*' && numericList.test(weekday)) {
+    period = '每' + cronList(weekday, n => '周' + '日一二三四五六'[Number(n) % 7]);
+  } else if (weekday === '*' && numericList.test(day)) {
+    period = '每月' + cronList(day, n => Number(n) + '日');
+  } else if (day !== '*' || weekday !== '*') {
+    return fallback;
   }
-  if (/^\d+$/.test(fields[1]) && fields.slice(2).join(' ') === '* * * *') return `每小时 ${fields[1]} 分`;
-  return '自定义时间';
+
+  if (hour === '*') {
+    const prefix = period === '每天' ? '' : period + '，';
+    if (minute === '*') return prefix + '每分钟';
+    const interval = /^\*\/(\d+)$/.exec(minute);
+    if (interval && 60 % Number(interval[1]) === 0) return `${prefix}每 ${Number(interval[1])} 分钟`;
+    if (numericList.test(minute)) return prefix + '每小时的' + cronList(minute, n => Number(n) + '分');
+  } else if (numericList.test(hour) && numericList.test(minute)) {
+    if (!hour.includes('-') && integer.test(minute)) {
+      return period + ' ' + cronList(hour, n => pad(n) + ':' + pad(minute));
+    }
+    return period + ' ' + cronList(hour, n => Number(n) + '点') + '，各小时的' + cronList(minute, n => Number(n) + '分');
+  }
+  return fallback;
+}
+
+// Only load fields the picker can represent exactly. Other rules stay in advanced mode.
+function expandField(field, {start, end}) {
+  const numbers = new Set();
+  for (const part of field.split(',')) {
+    const match = /^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/.exec(part);
+    if (!match) return null;
+    const [a, b] = match[1].split('-').map(Number);
+    const first = match[1] === '*' ? start : a;
+    const last = match[1] === '*' || (match[2] && b === undefined) ? end : b ?? a;
+    const stride = Number(match[2] || 1);
+    if (stride < 1 || first < start || last > end || first > last) return null;
+    for (let n = first; n <= last; n += stride) numbers.add(n);
+  }
+  return [...numbers];
+}
+
+function loadRule(cron) {
+  const [second, minute, hour, day, month, weekday] = cron.trim().split(/\s+/);
+  const hours = expandField(hour, pickerFields.hours);
+  const minutes = expandField(minute, pickerFields.minutes);
+  const weekdays = expandField(weekday, pickerFields.weekdays);
+  const monthdays = expandField(day, pickerFields.monthdays);
+  const visual = second === '0' && month === '*' && (weekday === '*' || day === '*')
+    && hours && minutes && weekdays && monthdays;
+  $('schedule-cron').value = cron;
+  $('schedule-frequency').value = !visual ? 'custom' : weekday !== '*' ? 'weekly' : day !== '*' ? 'monthly' : 'daily';
+  $('schedule-clock').value = !visual ? 'once' : hour === '*' ? 'hourly' :
+    hours.length === 1 && minutes.length === 1 ? 'once' : 'multiple';
+  $('schedule-time').value = pad(String(hours?.[0] ?? 7)) + ':' + pad(String(minutes?.[0] ?? 0));
+  fillPicker('hours', hour === '*' ? [7] : hours ?? [7]);
+  fillPicker('minutes', minutes ?? [0]);
+  fillPicker('weekdays', weekday === '*' ? [1] : weekdays ?? [1]);
+  fillPicker('monthdays', day === '*' ? [1] : monthdays ?? [1]);
 }
 
 function editor(job = null) {
@@ -105,35 +203,11 @@ function editor(job = null) {
   if (job && available.includes(job)) $('schedule-job').value = job;
   editorRevision = data.revision;
   $('schedule-editor-title').textContent = existing ? '编辑定时计划' : '新建定时计划';
-  $('schedule-frequency').value = 'daily';
-  $('schedule-time').value = '07:00';
-  $('schedule-minute').value = '0';
-  $('schedule-weekday').value = '1';
-  $('schedule-monthday').value = '1';
+  loadRule(existing?.cron || '0 0 7 * * *');
   const zone = existing?.timezone || 'Asia/Shanghai';
   if (![...$('schedule-timezone').options].some(option => option.value === zone)) $('schedule-timezone').append(new Option(zone, zone));
   $('schedule-timezone').value = zone;
   $('schedule-enabled').checked = existing?.enabled ?? true;
-  $('schedule-cron').value = existing?.cron || '0 0 7 * * *';
-  if (existing) {
-    $('schedule-frequency').value = 'custom';
-    const text = describe(existing);
-    const fields = existing.cron.split(/\s+/);
-    if (text.startsWith('每天')) $('schedule-frequency').value = 'daily';
-    if (text.startsWith('每周')) {
-      $('schedule-frequency').value = 'weekly';
-      $('schedule-weekday').value = fields[5];
-    }
-    if (text.startsWith('每月') && Number(fields[3]) <= 28) {
-      $('schedule-frequency').value = 'monthly';
-      $('schedule-monthday').value = fields[3];
-    }
-    if (text.startsWith('每小时')) {
-      $('schedule-frequency').value = 'hourly';
-      $('schedule-minute').value = fields[1];
-    }
-    if (/^\d+$/.test(fields[2])) $('schedule-time').value = `${fields[2].padStart(2,'0')}:${fields[1].padStart(2,'0')}`;
-  }
   $('schedule-error').hidden = true;
   frequencyFields();
   $('schedule-dialog').showModal();
@@ -245,9 +319,9 @@ function runFields() {
 const descriptions = {
   "brainstorm-material": "从一篇论文、知识笔记或 Idea 研究记录出发，结合历史积累与公开资料寻找关联。报告中的独立提议可分别审批。",
   "brainstorm-idea": "围绕一个在研 Idea 寻找解释、方法和可验证的实验，把值得决策的条目提交 Workbench。",
-  "propose-tasks": "读取 Inbox 新条目和标为 Elevated 的 TODO，将待办整理成 Workbench 提案供你审批。",
-  "organize-papers": "读取 Notero 中待处理的论文，为每篇起草整理提案。执行并验收后，再将阅读成果存入 Papers 等目标库。",
-  "organize-articles": "读取简悦收藏的待处理文章，提炼要点并提交 Workbench，由你决定哪些剪辑值得进一步整理。",
+  "propose-tasks": "归档 Inbox 中可复用的材料，将后续工作和 Elevated TODO 提交至 Workbench。",
+  "organize-papers": "读取 Notero 中待处理的论文，将有依据的阅读摘要存入 Papers，有后续任务时再向 Workbench 提案。",
+  "organize-articles": "读取简悦收藏的待处理文章，将有价值的材料归入 Knowledge 或 Papers，需要跟进时提交 Workbench。",
   "process-signals": "把 Papers 和 Research Feed 中勾选 Follow Up 的条目，以及 Research Interests 中待处理的方向，转成 Workbench 提案。",
   "reconcile-feedback": "将补充说明、修改要求或验收意见写回原始条目，供下次重新提案；驳回的提案则结束处理。",
   "process-workbench": "执行已批准的任务，或接收你提交的已有报告。验收通过后，提取值得归档的成果。",
@@ -272,12 +346,11 @@ function bindSchedules() {
   $('close-run').onclick = () => $('run-dialog').close();
   $('run-job-select').onchange = runFields;
   $('run-page').oninput = runFields;
-  $('schedule-frequency').onchange = () => {
+  $('schedule-form').onchange = () => {
     frequencyFields();
     preview();
   };
   $('preview-schedule').onclick = preview;
-  for (const id of ['schedule-time', 'schedule-weekday', 'schedule-monthday', 'schedule-minute', 'schedule-cron', 'schedule-timezone']) $(id).onchange = preview;
   $('schedule-form').onsubmit = async event => {
     event.preventDefault();
     $('save-schedule').disabled = true;

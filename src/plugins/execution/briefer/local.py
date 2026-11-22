@@ -24,8 +24,9 @@ the source is captured notes or metadata, even if it contains substantial text.
 
 Notero sources are scholarly papers and normally belong in papers. SimpRead may contain
 papers, tutorials, methods, or questions: scholarly briefs belong in papers; reusable
-explanations belong in knowledge. Choose proposal if classification is uncertain or
-useful work requires additional investigation, user choices, or unavailable evidence.
+explanations belong in knowledge. Apply the same distinction to mixed Inbox material.
+Archive what is supported even when the user also requests future work. Choose proposal
+when the available material cannot support a useful grounded brief.
 An abstract-only brief is allowed when honestly labeled; metadata alone is not a paper
 reading and should normally propose retrieving evidence. Give a concise organized
 brief, purpose and rationale without manufacturing reusable knowledge. Use the source

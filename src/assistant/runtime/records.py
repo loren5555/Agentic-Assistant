@@ -16,6 +16,8 @@ class ExecutionProcess(BaseModel):
             preserved as reported, not added to input tokens.
     """
 
+    provider: str | None = None
+    model: str | None = None
     events: list[dict[str, object]] = Field(default_factory=list)
     usage: dict[str, object] = Field(default_factory=dict)
 

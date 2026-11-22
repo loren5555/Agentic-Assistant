@@ -31,6 +31,10 @@ class Selection(BaseModel):
     ]
 
 
+class ArchiveChange(Selection):
+    archived: bool
+
+
 class Deletion(Selection):
     """Require the exact preview snapshot before applying a deletion."""
 
@@ -110,6 +114,12 @@ def preview(metadata, ids):
 
 def routes(metadata, respond, lock):
     """Serialize administration with manual submission/recovery requests."""
+
+    async def archive(request):
+        change = ArchiveChange.model_validate(await request.json())
+        async with lock:
+            handled = await asyncio.to_thread(metadata.change_archive, change.ids, change.archived)
+        return respond({"handled": handled})
 
     async def inspect_deletion(request):
         selected = Selection.model_validate(await request.json())
@@ -213,6 +223,7 @@ def routes(metadata, respond, lock):
             )
 
     return [
+        Route("/panel/archive", archive, methods=["POST"]),
         Route("/panel/delete-preview", inspect_deletion, methods=["POST"]),
         Route("/panel/delete", delete, methods=["POST"]),
         Route("/panel/runs/{workflow_id}/cancel", cancel, methods=["POST"]),

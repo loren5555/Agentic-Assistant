@@ -17,6 +17,8 @@ import {
 
 function selection() {
   $('selected-count').textContent = state.selected.size ? `已选 ${state.selected.size} 条` : '';
+  $('archive-selected').disabled = !state.selected.size;
+  $('archive-selected').textContent = $('archive-view').value === 'archived' ? '移回当前记录' : '归档所选';
   $('delete-selected').disabled = !state.selected.size;
   $('select-page').checked = state.items.length > 0 && state.items.every(item => state.selected.has(item.id));
   $('select-page').indeterminate = state.items.some(item => state.selected.has(item.id)) && !$('select-page').checked;
@@ -47,6 +49,10 @@ function renderRuns(data) {
     const title = el('td');
     title.append(button(run.title, () => openDetail(run.id), 'run-title'));
     row.append(title);
+    const trigger = el('td');
+    if (run.trigger) trigger.append(el('span', run.trigger, 'trigger-tag'));
+    else trigger.textContent = '—';
+    row.append(trigger);
     const status = el('td');
     status.append(badge(run.status));
     row.append(status);
@@ -106,6 +112,7 @@ async function refreshDetail() {
     $('detail-title').textContent = data.subject || run.title;
     const meta = el('div');
     meta.append(badge(run.status));
+    if (run.trigger) meta.append(el('span', run.trigger, 'trigger-tag'));
     const fields = el('div', undefined, 'detail-kv');
     for (const [key, value] of [
         ['工作流', run.title],
@@ -132,10 +139,9 @@ async function refreshDetail() {
     for (const step of data.steps) {
       const node = el('details', undefined, 'activity-step');
       node.id='activity-step-'+step.workflow+'-'+step.number;
-      const heading=el('summary',step.action);
+      const heading=el('summary', step.subject ? `${step.action}：${step.subject}` : step.action);
       heading.append(el('span',step.module,'quiet-tag'));
       node.append(heading);
-      if (step.subject) node.append(el('strong',step.subject));
       for (const text of step.error.concat(step.result)) node.append(el('p',text));
       if (!step.result.length && !step.error.length) node.append(el('p','已执行，此步骤没有单独的输出。','hint'));
       if (step.call) node.append(button('查看 Agent 调用',()=>showCall(step,step.workflow,step.subject || data.subject || run.title),'link-button'));
@@ -229,6 +235,7 @@ async function refreshExecutions() {
     status: $('status').value,
     job: $('job').value,
     search: $('search').value.trim(),
+    archive: $('archive-view').value,
     since: $('since').value
   });
   const data = await api(`/panel/runs?${params}`);
@@ -243,7 +250,11 @@ function bindExecutions() {
     state.selected.clear();
     requestRefresh();
   };
-  for (const id of ['job', 'status', 'since', 'all-levels']) $(id).onchange = () => {
+  for (const id of ['job', 'status', 'since', 'all-levels', 'archive-view']) $(id).onchange = () => {
+    if (id === 'archive-view' && $('archive-view').value === 'archived') {
+      $('since').value = 'all';
+      $('all-levels').checked = true;
+    }
     state.page = 1;
     state.selected.clear();
     requestRefresh();
@@ -268,6 +279,22 @@ function bindExecutions() {
     });
     selection();
   };
+  $('archive-selected').onclick = async () => {
+    const ids = [...state.selected];
+    const archived = $('archive-view').value === 'current';
+    try {
+      const {handled} = await api('/panel/archive', {
+        method: 'POST', body: JSON.stringify({ids, archived})
+      });
+      state.selected.clear();
+      const skipped = ids.length - handled.length;
+      notice(`${archived ? '已归档' : '已移回当前记录'} ${handled.length} 条。` +
+        (skipped ? `跳过 ${skipped} 条未结束或已不存在的记录。` : ''));
+      await requestRefresh();
+    } catch (error) {
+      notice(error.message, true);
+    }
+  };
   $('delete-selected').onclick = () => deletePreview([...state.selected]);
   $('close-detail').onclick = closeDetail;
   $('drawer-backdrop').onclick = closeDetail;
@@ -276,6 +303,7 @@ function bindExecutions() {
   });
 
   $('show-errors').onclick = () => {
+    $('archive-view').value = 'current';
     $('status').value = 'FAILED';
     $('search').value = '';
     $('job').value = '';

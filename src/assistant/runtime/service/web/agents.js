@@ -17,11 +17,23 @@ export function lines(title, entries) {
   return group;
 }
 
+function tokens(count) {
+  return Number.isFinite(count) ? count.toLocaleString('zh-CN') : '未记录';
+}
+
+function totalTokens(call) {
+  if (Number.isFinite(call.tokens_in) && Number.isFinite(call.tokens_out)) {
+    return tokens(call.tokens_in + call.tokens_out);
+  }
+  return '未记录';
+}
+
 export function showCall(step, workflow, task) {
   const call = step.call;
   const body = el('div');
-  body.append(fields([['所属任务',task],['业务步骤',step.action],['模型',call.model || '未记录'],
-    ['输入 / 输出 tokens', (call.tokens_in ?? '—') + ' / ' + (call.tokens_out ?? '—')]]));
+  body.append(fields([['所属任务',task],['业务步骤',step.action],['供应商',call.provider || '未记录'],
+    ['模型',call.model || '未记录'],['总 Token',totalTokens(call)],
+    ['输入 Token',tokens(call.tokens_in)],['输出 Token',tokens(call.tokens_out)]]));
   if (call.tools.length) body.append(lines('使用的工具', call.tools));
   body.append(lines('调用输入',call.input.length ? call.input : ['该次调用未单独保存可展示的输入。']));
   body.append(lines('调用结果',step.result.length ? step.result : ['该次调用未单独保存可展示的结果。']));
@@ -51,8 +63,8 @@ export async function loadCalls(more=false, background=false) {
     if (version===signature) return;
     signature=version;
     const container=$('agent-demo-list');
-    container.replaceChildren(calls.length ? recordList(['所属任务','模块','业务步骤','调用时间'],calls.map(s=>({
-      title:s.task,values:[s.module,s.action,date(s.time)],open:()=>showCall(s,s.workflow,s.task)
+    container.replaceChildren(calls.length ? recordList(['所属任务','模块','业务步骤','供应商','模型','总 Token','调用时间'],calls.map(s=>({
+      title:s.task,values:[s.module,s.action,s.call.provider || '未记录',s.call.model || '未记录',totalTokens(s.call),date(s.time)],open:()=>showCall(s,s.workflow,s.task)
     }))) : el('p','当前范围内没有已保存的 Agent 调用。','empty'));
     if(next) container.append(button('查看更早记录',()=>loadCalls(true).catch(error=>notice(error.message,true)),'link-button'));
   } catch (error) {

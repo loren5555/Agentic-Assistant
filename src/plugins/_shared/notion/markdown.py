@@ -1,6 +1,7 @@
-"""Read page text while representing Notion link previews explicitly."""
+"""Read Notion page text and restore embedded bookmarks and link previews."""
 
 import re
+from urllib.parse import urlsplit
 
 from notion_client import Client
 from logger import get_logger
@@ -11,7 +12,7 @@ UNKNOWN_BLOCK = re.compile(r'<unknown\b[^>]*\burl="([^"]*)"[^>]*\s*/>')
 
 
 def page_markdown(client: Client, page_id: str) -> str:
-    """Read page text and resolve link previews omitted by the Markdown API.
+    """Read page text and resolve links omitted by the Markdown API.
 
     Args:
         client: Connection owned by the surrounding operation.
@@ -27,16 +28,33 @@ def page_markdown(client: Client, page_id: str) -> str:
     if response["truncated"] and not missing:
         raise ValueError(f"Notion Markdown is truncated without recoverable block IDs: {page_id}")
 
+    # Notion may emit bookmark placeholders without listing their IDs as missing.
+    # Only resolve unlisted IDs from Notion block links on the requested page.
+    block_ids = {block_id.replace("-", "").lower(): block_id for block_id in missing}
+    for match in UNKNOWN_BLOCK.finditer(content):
+        if not re.search(r'\salt="bookmark"', match[0]):
+            continue
+        link = urlsplit(match[1])
+        key = link.fragment.replace("-", "").lower()
+        if (link.scheme == "https" and link.hostname in {"app.notion.com", "www.notion.so", "notion.so"}
+                and link.path.replace("-", "").lower().rstrip("/").endswith(page_id.replace("-", "").lower())
+                and re.fullmatch("[0-9a-f]{32}", key)):
+            block_ids.setdefault(key, key)
+
     replacements = {}
-    for block_id in missing:
+    for key, block_id in block_ids.items():
         block = client.blocks.retrieve(block_id=block_id)
+        if block["type"] == "bookmark" and block["bookmark"].get("url"):
+            bookmark = block["bookmark"]
+            caption = "".join(part["plain_text"] for part in bookmark.get("caption", []))
+            replacements[key] = f"<{bookmark['url']}>" + (f" — {caption}" if caption else "")
+            continue
         if block["type"] != "link_preview":
             raise ValueError(
                 f"Incomplete Notion Markdown: page={page_id} block={block_id} "
                 f"type={block['type']}; page content remains unread"
             )
         url = block["link_preview"].get("url")
-        key = block_id.replace("-", "")
         if url:
             replacements[key] = f"<{url}>"
             logger.debug("Recovered a link preview URL.", extra={"details": {"page": page_id, "block": block_id}})
@@ -52,7 +70,7 @@ def page_markdown(client: Client, page_id: str) -> str:
 
     def replace_preview(match: re.Match[str]) -> str:
         """Replace a preview in place, retaining its position in the page."""
-        key = match.group(1).rsplit("#", 1)[-1].replace("-", "")
+        key = match.group(1).rsplit("#", 1)[-1].replace("-", "").lower()
         if key in replacements:
             resolved.add(key)
             return replacements[key]
@@ -61,6 +79,6 @@ def page_markdown(client: Client, page_id: str) -> str:
     content = UNKNOWN_BLOCK.sub(replace_preview, content)
     if resolved != replacements.keys() or "<unknown " in content:
         raise ValueError(f"Unresolved Notion Markdown blocks remain: {page_id}")
-    logger.debug("Notion Markdown read: characters=%d link_previews=%d.", len(content), len(resolved),
+    logger.debug("Notion Markdown read: characters=%d linked_blocks=%d.", len(content), len(resolved),
                  extra={"details": {"page": page_id}})
     return content

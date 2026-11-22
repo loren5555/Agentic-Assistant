@@ -13,7 +13,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from dbos import DBOS, SetWorkflowID
+from dbos import DBOS, SetWorkflowAttributes, SetWorkflowID
 from pydantic import ValidationError
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
@@ -210,7 +210,7 @@ def create_app(application):
             if existing and existing.input["args"][0] != workflow_id:
                 raise ValueError("Request ID already belongs to another recovery")
             if not existing:
-                with SetWorkflowID(recovery_id):
+                with SetWorkflowID(recovery_id), SetWorkflowAttributes({"target_id": workflow_id}):
                     await DBOS.enqueue_workflow_async(
                         RECOVERY_QUEUE, recover_requested_workflow, workflow_id
                     )

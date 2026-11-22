@@ -27,6 +27,8 @@ class WorkIndex:
                 "source_key TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, "
                 "workflow_id TEXT NOT NULL, page_id TEXT NOT NULL, status TEXT NOT NULL)"
             )
+            connection.execute("CREATE TABLE IF NOT EXISTS source_acknowledgements ("
+                               "submitted TEXT PRIMARY KEY, acknowledged TEXT NOT NULL)")
             connection.execute("CREATE TABLE IF NOT EXISTS recommendation_coverage ("
                                "identity TEXT PRIMARY KEY, breadth TEXT, age TEXT, day TEXT)")
 
@@ -71,9 +73,25 @@ class WorkIndex:
         """
         with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.row_factory = sqlite3.Row
-            row = connection.execute("SELECT * FROM work WHERE source_key = ?", (source_key,)).fetchone()
+            row = connection.execute(
+                "SELECT w.*, a.acknowledged AS acknowledged_snapshot FROM work w "
+                "LEFT JOIN source_acknowledgements a ON a.submitted=w.fingerprint WHERE w.source_key=?",
+                (source_key,),
+            ).fetchone()
         record = dict(row) if row is not None else None
         return record
+
+    def is_acknowledged(self, snapshot: str) -> bool:
+        """Recognize handled inputs including archive-only and no-action outcomes."""
+        with closing(sqlite3.connect(self.path)) as connection:
+            return connection.execute("SELECT 1 FROM source_acknowledgements WHERE acknowledged=? LIMIT 1",
+                                      (snapshot,)).fetchone() is not None
+
+    def record_acknowledgement(self, submitted: str, acknowledged: str) -> None:
+        """Recognize the timestamp produced by our own successful source update."""
+        with closing(sqlite3.connect(self.path)) as connection, connection:
+            connection.execute("INSERT OR REPLACE INTO source_acknowledgements VALUES (?, ?)",
+                               (submitted, acknowledged))
 
     def save(self, source_key: str, fingerprint: str, workflow_id: str, page_id: str, status: str) -> None:
         """Publish the pointer only after its DBOS state event has been saved.

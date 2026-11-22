@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="component-information-map" name="Component Information Map">
-        <mxGraphModel dx="2037" dy="920" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2450" pageHeight="2520" math="0" shadow="0">
+        <mxGraphModel dx="1503" dy="438" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2450" pageHeight="2520" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -19,7 +19,7 @@
                 <mxCell id="task-label" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#475569;" value="Proposals, human review and execution" vertex="1">
                     <mxGeometry height="35" width="1000" x="340" y="400" as="geometry"/>
                 </mxCell>
-                <mxCell id="capture-label" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#475569;" value="Shared information organization and publication" vertex="1">
+                <mxCell id="capture-label" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#475569;" value="Source archiving · independent of follow-up approval" vertex="1">
                     <mxGeometry height="35" width="1000" x="1040" y="357" as="geometry"/>
                 </mxCell>
                 <mxCell id="inbox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontColor=#172033;arcSize=12;" value="Inbox" vertex="1">
@@ -28,10 +28,10 @@
                 <mxCell id="todo" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontColor=#172033;arcSize=12;" value="TODO: Elevated" vertex="1">
                     <mxGeometry height="54" width="160" x="40" y="559" as="geometry"/>
                 </mxCell>
-                <mxCell id="input" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Inbox Processor" vertex="1">
+                <mxCell id="input" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Inbox Processor&#xa;Notes, requests, or both" vertex="1">
                     <mxGeometry height="54" width="150" x="330" y="441" as="geometry"/>
                 </mxCell>
-                <mxCell id="proposer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Proposer" vertex="1">
+                <mxCell id="proposer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Proposer&#xa;Use source brief if available" vertex="1">
                     <mxGeometry height="54" width="150" x="850" y="606" as="geometry"/>
                 </mxCell>
                 <mxCell id="workbench" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;fontColor=#172033;arcSize=12;" value="Workbench&#xa;One decision per proposal&#xa;Human review" vertex="1">
@@ -72,7 +72,7 @@
                 <mxCell id="simpread" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontColor=#172033;arcSize=12;" value="SimpRead" vertex="1">
                     <mxGeometry height="54" width="160" x="40" y="760" as="geometry"/>
                 </mxCell>
-                <mxCell id="capture" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Information Organizer" vertex="1">
+                <mxCell id="capture" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Information Organizer&#xa;Identify material and intent" vertex="1">
                     <mxGeometry height="54" width="180" x="607" y="606" as="geometry"/>
                 </mxCell>
                 <mxCell id="papers" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontColor=#172033;arcSize=12;" value="Papers" vertex="1">
@@ -99,7 +99,7 @@
                 <mxCell id="e2" edge="1" parent="1" source="todo" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="todo-processor" value="Read elevated items">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e3" edge="1" parent="1" source="input" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="capture" value="Material and intent">
+                <mxCell id="e3" edge="1" parent="1" source="input" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="capture" value="Note and/or request">
                     <mxGeometry relative="1" x="-0.7007" y="50" as="geometry">
                         <mxPoint as="offset"/>
                         <Array as="points">
@@ -167,7 +167,7 @@
                 <mxCell id="e17" edge="1" parent="1" source="simpread" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="simpread-processor" value="Read articles">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e20" edge="1" parent="1" source="capture" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;dashed=1;entryDx=0;entryDy=0;whiteSpace=wrap;labelWidth=65;" target="proposer" value="Organized&#xa;input">
+                <mxCell id="e20" edge="1" parent="1" source="capture" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;entryX=0;entryY=0.5;dashed=1;entryDx=0;entryDy=0;whiteSpace=wrap;labelWidth=65;" target="proposer" value="Follow-up&#xa;if needed">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points"/>
                         <mxPoint x="759.9999999999995" y="633" as="sourcePoint"/>
@@ -196,7 +196,7 @@
                 <mxCell id="todo-processor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="TODO Processor" vertex="1">
                     <mxGeometry height="54" width="170" x="320" y="559" as="geometry"/>
                 </mxCell>
-                <mxCell id="notero-processor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Notero Processor" vertex="1">
+                <mxCell id="notero-processor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Notero Processor&#xa;Paper reading material" vertex="1">
                     <mxGeometry height="54" width="160" x="325" y="660" as="geometry"/>
                 </mxCell>
                 <mxCell id="notero-processor-intake" edge="1" parent="1" source="notero-processor" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="capture" value="">
@@ -208,7 +208,7 @@
                         <mxPoint x="600.0000000000005" y="633" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="simpread-processor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="SimpRead Processor" vertex="1">
+                <mxCell id="simpread-processor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="SimpRead Processor&#xa;Articles and clippings" vertex="1">
                     <mxGeometry height="54" width="160" x="325" y="760" as="geometry"/>
                 </mxCell>
                 <mxCell id="simpread-processor-intake" edge="1" parent="1" source="simpread-processor" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="capture" value="Source material">
@@ -502,6 +502,31 @@
                         <Array as="points">
                             <mxPoint x="2130" y="633"/>
                             <mxPoint x="2130" y="422"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="source-briefer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=14;fontColor=#172033;arcSize=12;" value="Source Briefer&#xa;Summarize available evidence" vertex="1">
+                    <mxGeometry height="60" width="205" x="1370" y="295" as="geometry"/>
+                </mxCell>
+                <mxCell id="source-material-to-briefer" edge="1" parent="1" source="capture" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;jumpStyle=arc;exitX=0.5;exitY=0;entryX=0;entryY=0.5;" target="source-briefer" value="Material worth retaining from Inbox, Notero or SimpRead">
+                    <mxGeometry relative="1" x="0.42" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="697" y="325"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="source-brief-to-publisher" edge="1" parent="1" source="source-briefer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#64748b;fontColor=#334155;fontSize=11;labelBackgroundColor=#ffffff;jumpStyle=arc;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" target="archive" value="Source brief → Papers or Knowledge">
+                    <mxGeometry relative="1" x="-0.43" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="2005" y="325"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="archived-context-to-proposer" edge="1" parent="1" source="archive" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;endArrow=block;strokeColor=#64748b;fontSize=11;labelBackgroundColor=#ffffff;jumpStyle=arc;exitX=0.25;exitY=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;exitDx=0;exitDy=0;" target="proposer" value="Verified brief and link for follow-up">
+                    <mxGeometry relative="1" x="-0.0483" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1967.5" y="400"/>
+                            <mxPoint x="887.5" y="400"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>

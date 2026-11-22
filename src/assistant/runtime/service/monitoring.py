@@ -110,11 +110,11 @@ def routes(application, metadata, respond):
         return respond(
             {
                 "recent": await asyncio.to_thread(
-                    metadata.list_runs, RunFilters(since="24h", page_size=6)
+                    metadata.list_runs, RunFilters(since="24h", page_size=6, archive="all")
                 ),
                 "states": (
                     await asyncio.to_thread(
-                        metadata.list_runs, RunFilters(since="all", page_size=1)
+                        metadata.list_runs, RunFilters(since="all", page_size=1, archive="all")
                     )
                 )["counts"],
                 "schedules": document(await DBOS.list_schedules_async()),

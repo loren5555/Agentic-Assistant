@@ -5,14 +5,14 @@ from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.data.workbench.models import WorkbenchItem
 from assistant.components.coordination.curator.models import RetainedArtifact
 from assistant.components.execution.briefer.models import ReadingMaterial, ReadingBrief, PaperReadingMetadata
-from assistant.components.data.publisher.models import PublicationReceipt
+from assistant.components.data.publisher.models import BriefPublicationReceipt, PublicationReceipt
 from plugins.data.publisher.notion.artifacts import ArtifactPublisher
 from plugins.data.publisher.notion.briefs import BriefPublisher
 from logger import get_logger, trace_call
 
 
 class InformationPublisher:
-    """Choose a destination writer after human acceptance, without new model calls."""
+    """Publish grounded source briefs and accepted task outputs to their destinations."""
 
     def __init__(self, options: Mapping[str, object]) -> None:
         """Bind writer implementations without network requests.
@@ -28,6 +28,10 @@ class InformationPublisher:
         """Prepare output keys and reading properties."""
         self.archive.initialize_schema()
         self.papers.initialize_schema()
+
+    def publish_source_brief(self, material: ReadingMaterial, brief: ReadingBrief) -> BriefPublicationReceipt:
+        """Save a grounded source brief before any follow-up proposal."""
+        return self.papers.publish(material, brief, mark_notero=False)
 
     @trace_call("component", "publisher.publish")
     def publish(self, source: SourceMaterial, item: WorkbenchItem,
