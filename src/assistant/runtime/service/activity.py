@@ -19,6 +19,8 @@ STEPS = {
     "assess_brainstorm": ("从报告中选取独立提案", "Proposer"),
     "stage_brainstorm_candidate": ("保留待审批的条目", "研究报告"),
 
+    "revise_notes": ("复盘反馈并修订角色笔记", "Memory Reviewer"),
+    "apply_notes": ("保存角色笔记", "Memory"),
     "read_sources": ("读取待处理条目", "来源处理器"),
     "brief_source": ("摘要来源材料", "Source Briefer"),
     "publish_source_brief": ("归档来源摘要", "Information Publisher"),

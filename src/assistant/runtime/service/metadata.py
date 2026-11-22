@@ -33,7 +33,7 @@ JOB_LABELS = {
 }
 PHASE_LABELS = {
     **{key.replace("-", "_"): value for key, value in JOB_LABELS.items()},
-    "dispatch": "运行工作流", "intake_item": "整理来源条目", "reconcile_item": "处理条目反馈",
+    "dispatch": "运行工作流", "review_memory": "复盘反馈与更新记忆", "intake_item": "整理来源条目", "reconcile_item": "处理条目反馈",
     "brainstorm": "整理研究线索", "explore_brainstorm": "生成探索报告",
     "submit_brainstorm_proposal": "提交研究提案",
     "daily_newspaper": "生成研究日报",

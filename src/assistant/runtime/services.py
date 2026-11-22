@@ -8,6 +8,7 @@ from plugins import get_plugin
 
 from assistant.components.coordination.brainstorm.protocol import BrainstormProtocol, ResearchLibraryProtocol
 from assistant.components.coordination.curator.protocol import CuratorProtocol
+from assistant.components.coordination.memory_reviewer.protocol import MemoryReviewerProtocol
 from assistant.components.coordination.organizer.protocol import OrganizerProtocol
 from assistant.components.coordination.proposer.protocol import ProposerProtocol
 from assistant.components.coordination.reconciler.protocol import ReconcilerProtocol
@@ -23,6 +24,7 @@ from assistant.components.recommendations.evidence_reader.protocol import Eviden
 from assistant.components.recommendations.recommender.protocol import RecommenderProtocol
 
 from assistant.components.data.discovery_pool.protocol import DiscoveryPoolProtocol
+from assistant.components.data.memory.protocol import MemoryProtocol
 from assistant.components.data.publisher.protocol import PublisherProtocol
 from assistant.components.data.research_feed.protocol import ResearchFeedProtocol
 from assistant.components.data.sources.models import SourceKind
@@ -47,6 +49,17 @@ class Services:
         self._processors: dict[str, SourceProcessor] = {}
 
     # Data access and destinations.
+
+    @cached_property
+    def memory(self) -> MemoryProtocol:
+        """Bind the configured store to this assistant's runtime directory."""
+        plugin = get_plugin("data.memory", self.config.providers.memory)
+        return plugin.Memory(Path(self.config.runtime.directory).resolve() / "v2" / "memory")
+
+    @cached_property
+    def memory_reviewer(self) -> MemoryReviewerProtocol:
+        plugin = get_plugin("coordination.memory_reviewer", "local")
+        return plugin.MemoryReviewer(self.config.provider_options["local"])
 
     def processor(self, kind: SourceKind) -> SourceProcessor:
         """Resolve the adapter owning one source collection.

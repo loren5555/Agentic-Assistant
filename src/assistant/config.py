@@ -42,6 +42,7 @@ class ProviderSettings(BaseModel):
     recommender: str = "local"
     processors: str = "notion"
     organizer: str = "local"
+    memory: str = "local"
     reconciler: str = "local"
     publisher: str = "notion"
     direction_proposer: str = "local"

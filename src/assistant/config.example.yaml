@@ -1,4 +1,5 @@
 providers:
+  memory: local  # Role experience under runtime.directory/v2/memory.
   brainstorm: codex  # Synthesizes research notes and public evidence into an exploration report.
   processors: notion  # Source-specific extraction, acknowledgement and feedback storage.
   organizer: local  # Shared interpretation of source material and human intent.
@@ -62,6 +63,7 @@ local:
   router_effort: low
   timeout_seconds: 120
   proposer_model: openai-codex:gpt-6.1-sol
+  # memory_reviewer_model: Defaults to proposer_model for feedback review.
   organizer_model: openai-codex:gpt-6.1-sol
   organizer_effort: low
   organizer_timeout_seconds: 180

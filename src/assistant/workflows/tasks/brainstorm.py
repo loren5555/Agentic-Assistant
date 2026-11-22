@@ -12,6 +12,7 @@ from __future__ import annotations
 from functools import partial
 import json
 
+from assistant.runtime.agent_context import use_instructions
 from dbos import DBOS
 
 from assistant.components.coordination.brainstorm.models import BrainstormContext, BrainstormMode, ExplorationReport
@@ -60,7 +61,11 @@ def read_brainstorm_context(self, mode: BrainstormMode, page_id: str | None) -> 
 async def explore_brainstorm(self, context: BrainstormContext, identity: str) -> dict:
     """Checkpoint research and assessment before sending decisions to Workbench."""
     report = await self.research_brainstorm(context)
-    assessment = await self.assess_brainstorm(context, report)
+    instructions = None
+    if report.candidates:
+        snapshot = self.proposals.recall_memory("proposer")
+        instructions = snapshot["instructions"]
+    assessment = await self.assess_brainstorm(context, report, instructions)
     proposals = []
     for entry in assessment.proposals:
         source = self.stage_brainstorm_candidate(context, identity, report, entry)
@@ -83,10 +88,11 @@ async def research_brainstorm(self, context: BrainstormContext) -> ExplorationRe
 
 @DBOS.step(name="JobWorkflows.assess_brainstorm")
 @trace_call("step", "assess_brainstorm")
-async def assess_brainstorm(self, context: BrainstormContext, report: ExplorationReport) -> ReportAssessment:
+async def assess_brainstorm(self, context: BrainstormContext, report: ExplorationReport, instructions: str | None = None) -> ReportAssessment:
     if not report.candidates:
         return ReportAssessment(reason="No candidate items were proposed.", proposals=[])
-    assessment = await self.services.proposer.assess_report(context, report)
+    with use_instructions(instructions):
+        assessment = await self.services.proposer.assess_report(context, report)
     ideas = {n.page_id.replace("-", "").lower() for n in [context.seed, *context.history] if n.collection == "idea"}
     for entry in assessment.proposals:
         if max(entry.candidate_numbers) > len(report.candidates):

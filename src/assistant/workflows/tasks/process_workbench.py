@@ -32,6 +32,7 @@ from assistant.components.execution.briefer.models import PaperReadingMetadata, 
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
 from assistant.workflows.steps.receive_delivery import process_delivery
+from assistant.workflows.steps.review_memory import queue_feedback
 from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
@@ -130,6 +131,7 @@ async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
     source = SourceMaterial.model_validate(state["source"])
     saved = WorkbenchItem.model_validate(state["item"])
     item = self.read_review(saved)
+    await queue_feedback(self, item, source)
     if item.needs_input:
         logger.info('Clarification proposal awaits feedback reconciliation: title=%r.', item.title)
         return item.url

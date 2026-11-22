@@ -22,6 +22,7 @@ from assistant.components.execution.briefer.models import ReadingBrief, ReadingM
 from assistant.components.coordination.proposer.models import Proposal
 from assistant.components.data.workbench.models import WorkbenchItem
 from assistant.runtime.records import digest
+from assistant.runtime.agent_context import use_instructions
 from logger import get_logger, trace_call
 
 if TYPE_CHECKING:
@@ -46,7 +47,8 @@ async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMate
         'Organizing input: title=%r.', source.title,
         extra={"details": {'source_page': source.page_id, 'workflow': DBOS.workflow_id}},
     )
-    source = await self.organize_source(source)
+    context = self.recall_memory("organizer")
+    source = await self.organize_source(source, context["instructions"])
     decision = OrganizedInformation.model_validate_json(source.organization)
     supports_archive = source.kind in {"inbox", "notero", "simpread"}
     propose = not supports_archive or decision.worth_proposing or any(h.workbench_url for h in source.history)
@@ -68,7 +70,8 @@ async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMate
         logger.info("Input finished: title=%r outcome=%s.", source.title,
                     source.archive.destination if source.archive else "no action")
         return source.archive.url if source.archive else None
-    proposal = await self.draft(source)
+    context = self.recall_memory("proposer")
+    proposal = await self.draft(source, context["instructions"])
     proposal = await self.select_action(source, proposal)
     item = self.publish_proposal(source, proposal)
     await self.save_checkpoint(key, source, item)
@@ -83,7 +86,7 @@ async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMate
 
 @DBOS.step(name="ProposalWorkflows.organize_source")
 @trace_call("step", "organize_source")
-async def organize_source(self: WorkbenchWorkflows, source: SourceMaterial) -> SourceMaterial:
+async def organize_source(self: WorkbenchWorkflows, source: SourceMaterial, instructions: str | None = None) -> SourceMaterial:
     """Checkpoint shared interpretation before proposal drafting.
 
     Args:
@@ -92,7 +95,8 @@ async def organize_source(self: WorkbenchWorkflows, source: SourceMaterial) -> S
     Returns:
         The same source with a derived interpretation for Proposer.
     """
-    interpretation = await self.services.organizer.organize(source)
+    with use_instructions(instructions):
+        interpretation = await self.services.organizer.organize(source)
     return source.model_copy(update={"organization": interpretation.model_dump_json()})
 
 
@@ -115,7 +119,7 @@ def publish_source_brief(self: WorkbenchWorkflows, material: ReadingMaterial, br
 
 @DBOS.step(name="ProposalWorkflows.draft")
 @trace_call("step", "draft")
-async def draft(self: WorkbenchWorkflows, source: SourceMaterial) -> Proposal:
+async def draft(self: WorkbenchWorkflows, source: SourceMaterial, instructions: str | None = None) -> Proposal:
     """Checkpoint one provider draft separately from external publication.
 
     Args:
@@ -131,7 +135,8 @@ async def draft(self: WorkbenchWorkflows, source: SourceMaterial) -> Proposal:
         source.version,
         extra={"details": {'page': source.page_id}},
     )
-    proposal = await self.services.proposer.draft(source)
+    with use_instructions(instructions):
+        proposal = await self.services.proposer.draft(source)
     if source.history:
         proposal.execution_plan = source.history[-1].accepted_plan
     logger.info(

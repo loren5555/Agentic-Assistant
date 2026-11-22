@@ -10,6 +10,7 @@ from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 
 from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.coordination.organizer.models import OrganizedInformation
+from assistant.runtime.agent_context import current_instructions
 from logger import get_logger, trace_call
 
 
@@ -59,7 +60,7 @@ class InformationOrganizer:
         try:
             async with asyncio.timeout(self.timeout):
                 async with self.agent:
-                    result = await self.agent.run(source.context_content)
+                    result = await self.agent.run(source.context_content, instructions=current_instructions())
         except asyncio.CancelledError:
             self.logger.warning('Input organization cancelled: title=%r.', source.title)
             raise

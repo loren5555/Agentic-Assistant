@@ -16,6 +16,7 @@ from assistant.components.coordination.proposer.assessment import ReportAssessme
 from assistant.components.coordination.proposer.models import Proposal
 from assistant.components.coordination.proposer.protocol import ProposerProtocol
 from assistant.runtime.records import ExecutionProcess
+from assistant.runtime.agent_context import current_instructions
 from logger import get_logger, trace_call
 from plugins._shared.local.config import LocalSettings
 
@@ -117,7 +118,7 @@ class Proposer(ProposerProtocol):
         self.logger.info("kind=agent provider=local Assessing exploration report: title=%r candidates=%d.",
                          context.seed.title, len(report.candidates))
         async with asyncio.timeout(self.settings.proposer_timeout_seconds), self.assessor:
-            response = await self.assessor.run(prompt)
+            response = await self.assessor.run(prompt, instructions=current_instructions())
         assessment = response.output
         usage = response.usage
         assessment.process = ExecutionProcess(
@@ -152,7 +153,7 @@ class Proposer(ProposerProtocol):
         try:
             async with asyncio.timeout(self.settings.proposer_timeout_seconds):
                 async with self.agent:
-                    response = await self.agent.run(prompt)
+                    response = await self.agent.run(prompt, instructions=current_instructions())
         except asyncio.CancelledError:
             self.logger.warning("kind=agent provider=local action=draft_proposal Agent invocation cancelled: elapsed=%.2fs.", perf_counter() - started_at)
             raise

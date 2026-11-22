@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import sqlite3
+import json
 from contextlib import closing
 from datetime import date, timedelta
 
@@ -31,6 +32,17 @@ class WorkIndex:
                                "submitted TEXT PRIMARY KEY, acknowledged TEXT NOT NULL)")
             connection.execute("CREATE TABLE IF NOT EXISTS recommendation_coverage ("
                                "identity TEXT PRIMARY KEY, breadth TEXT, age TEXT, day TEXT)")
+
+    def remember_feedback(self, event) -> list[dict]:
+        """Keep submitted observations so a later comment can corroborate earlier tasks."""
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute("CREATE TABLE IF NOT EXISTS memory_feedback (event_id TEXT PRIMARY KEY, page TEXT, evidence TEXT)")
+            db.execute("INSERT OR IGNORE INTO memory_feedback VALUES (?,?,?)",
+                       (event.event_id, event.page_id, event.model_dump_json()))
+            rows = db.execute("SELECT evidence FROM memory_feedback WHERE page != ? AND rowid < "
+                              "(SELECT rowid FROM memory_feedback WHERE event_id=?) ORDER BY rowid DESC LIMIT 12",
+                              (event.page_id, event.event_id))
+            return [json.loads(row[0]) for row in rows]
 
     def coverage_counts(self, day: str, days: int) -> dict[str, int]:
         """Read rolling publication coverage using age at publication time."""

@@ -525,3 +525,28 @@ With this credential the proposal router can also select **学术文献调研 ·
 Review the proposed route in Workbench, approve it and run `process-workbench`
 to receive the hosted research report. The general public-source investigation
 action continues to use its configured provider.
+
+## Local agent memory
+
+Write ordinary feedback in Workbench. Submit proposal comments in **Human Instruction**
+with the approval, revision or rejection decision. Submit result comments in **Result
+Feedback** with the acceptance decision. The next Workbench processing or relevant
+feedback reconciliation queues a separate memory review. A decision without written
+feedback needs no model call. Existing finished work is not replayed.
+
+The reviewer uses the manually maintained project skill
+[`revise-role-memory`](src/assistant/skills/revise-role-memory/SKILL.md), the
+current task and comment, up to twelve earlier observations from other pages and
+both complete notebooks. It can leave both unchanged, revise one or both, or
+withdraw a preference. The background review uses the local proposer model by
+default. Its execution record explains the decision and links to the Workbench
+page. A failed model review can be retried independently of the original task.
+
+Personal experience lives in `<runtime.directory>/v2/memory/organizer.md` and
+`proposer.md`. Each decision reads its role's complete note plus the shared,
+manually maintained [project skill](src/assistant/skills/project-agent/SKILL.md).
+DBOS checkpoints those instructions before the call, including for BrainStorm
+proposal assessment. A new decision picks up revisions automatically. Each newly
+written note is limited to 4,000 characters during revision; recall preserves its
+entire text. Empty notebooks are valid. You can inspect the notes without editing
+them. Existing active per-entry memories are consolidated into a role notebook on first use.

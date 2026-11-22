@@ -14,6 +14,7 @@ from assistant.components.data.sources.models import SourceMaterial
 from assistant.components.data.workbench.models import WorkbenchItem, SUBMIT_EXTERNAL_RESULT
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
+from assistant.workflows.steps.review_memory import queue_feedback
 from logger import get_logger, trace_call
 
 logger = get_logger("workflows.reconcile_feedback")
@@ -54,6 +55,7 @@ async def reconcile_feedback(self) -> list[str]:
         if not (revised or rejected or unqualified or closed):
             continue
         source = SourceMaterial.model_validate(state["source"])
+        await queue_feedback(self.proposals, current, source)
         identity = self.services.reconciler.reconcile(source, current)
         operation = "reconcile:v2:" + digest(current.page_id + identity.model_dump_json())
         urls.append(await invoke(operation, self.proposals.reconcile_item, record["source_key"], source, current))

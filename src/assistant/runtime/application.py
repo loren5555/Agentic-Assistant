@@ -11,6 +11,8 @@ from dbos import DBOS, DBOSConfig, DBOSConfiguredInstance
 from assistant.workflows.tasks import brainstorm as brainstorm_task, dispatch as dispatch_task
 from assistant.config import AssistantConfig, RuntimeSettings
 from assistant.runtime.index import WorkIndex
+from assistant.runtime import agent_context
+from assistant.workflows.steps import review_memory as memory_steps
 from assistant.runtime.serialization import ComponentSerializer
 from assistant.runtime.services import Services
 from assistant.workflows.steps import submit_proposal as proposal_steps, intake_sources as source_steps
@@ -92,6 +94,12 @@ class WorkbenchWorkflows(DBOSConfiguredInstance):
     draft = proposal_steps.draft
     brief_source = proposal_steps.brief_source
     publish_source_brief = proposal_steps.publish_source_brief
+    recall_memory = agent_context.recall_memory
+    review_memory = memory_steps.review_memory
+    memory_evidence = memory_steps.memory_evidence
+    read_role_notes = memory_steps.read_role_notes
+    revise_notes = memory_steps.revise_notes
+    apply_notes = memory_steps.apply_notes
     organize_source = proposal_steps.organize_source
     publish_proposal = proposal_steps.publish_proposal
     acknowledge = proposal_steps.acknowledge

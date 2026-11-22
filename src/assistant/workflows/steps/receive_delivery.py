@@ -20,6 +20,7 @@ from assistant.components.data.workbench.protocol import ExternalReportError
 from assistant.components.execution.task_worker.models import TaskResult
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
+from assistant.workflows.steps.review_memory import queue_feedback
 from logger import get_logger, trace_call
 
 logger = get_logger("workflows.receive_delivery")
@@ -73,6 +74,7 @@ async def process_delivery(self, record: dict, state: dict, saved: WorkbenchItem
 async def receive_delivery(self, key: str, source: SourceMaterial, item: WorkbenchItem, result: TaskResult) -> str:
     """Save the submitted snapshot and its resulting Workbench state for acceptance."""
     logger.info("Receiving externally completed work: title=%r.", item.title)
+    await queue_feedback(self, item, source)
     current = self.save_result(source, item, result)
     await self.save_checkpoint(key, source, current)
     logger.info("External result received for review: title=%r.", current.title)

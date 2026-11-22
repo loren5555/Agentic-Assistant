@@ -44,6 +44,7 @@ import argparse
 
 from dbos import DBOS
 
+from assistant.workflows.steps.review_memory import MEMORY_QUEUE
 from assistant.runtime.service.server import serve_http
 from assistant.runtime.service.submissions import (
     JOB_QUEUE,
@@ -64,6 +65,7 @@ async def run(application: Application, options: argparse.Namespace) -> None:
         application: Configured application runtime.
         options: Parsed command arguments.
     """
+    await DBOS.register_queue_async(MEMORY_QUEUE, worker_concurrency=1)
     await DBOS.register_queue_async(JOB_QUEUE, worker_concurrency=1)
     await DBOS.register_queue_async(TRIGGER_QUEUE, worker_concurrency=1)
     await DBOS.register_queue_async(RECOVERY_QUEUE, worker_concurrency=1)
