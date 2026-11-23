@@ -6,7 +6,7 @@ Input origin:
 Output destination:
     Execution returns to Workbench. Accepted plans return to Proposer via source
     history and receive fresh execution approval. Other accepted outcomes pass
-    through Curator and Information Publisher to their knowledge destinations.
+    through Curator, Writer and Publisher to their knowledge destinations.
 Responsibility:
     Workers execute the saved, reviewed capability on one complete snapshot.
     Report-capable actions can also receive a submitted report for the same result review.
@@ -28,9 +28,10 @@ from assistant.components.execution.investigator.models import InvestigationRequ
 from assistant.components.execution.task_worker.models import TaskRequest, TaskResult
 from assistant.components.data.workbench.models import WorkbenchItem, SUBMIT_EXTERNAL_RESULT, result_publication_key
 from assistant.components.recommendations.discovery.models import PaperCandidate
-from assistant.components.execution.briefer.models import PaperReadingMetadata, ReadingMaterial
+from assistant.components.execution.briefer.models import PaperReadingMetadata
 from assistant.runtime.records import digest
 from assistant.runtime.recovery import invoke
+from assistant.workflows.steps.authoring import author
 from assistant.workflows.steps.receive_delivery import process_delivery
 from assistant.workflows.steps.review_memory import queue_feedback
 from logger import get_logger, trace_call
@@ -174,9 +175,12 @@ async def review_item(self: WorkbenchWorkflows, key: str, state: dict) -> str:
                 logger.exception("Could not report execution error: title=%r.", item.title)
             raise
     elif retention or (item.status == "Executed" and item.result_review == "Qualified"):
-        decision = await self.extract(item)
+        decision = await self.extract(item, source)
         for position, artifact in enumerate(decision.artifacts):
-            identity = f"{item.page_id}:{item.proposal.version}:{position}:{artifact.model_dump_json()}"
+            identity = f"{item.page_id}:{item.proposal.version}:{item.publication_key}:{position}:{artifact.kind}"
+            approved = (retention and not item.human_instruction.strip()) or bool(item.result and item.result.artifacts)
+            artifact = await self.write_manuscript(source, artifact, item, approved)
+            decision.artifacts[position] = artifact
             receipt = self.publish_artifact(source, item, artifact, digest(identity))
             decision.receipts.append(receipt)
         item.curation = decision
@@ -271,6 +275,8 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, item: WorkbenchIt
         result = await self.services.planner.execute(task)
         if result.plan is None and not result.questions:
             raise ValueError("Planner returned neither a concrete plan nor clarification questions")
+    elif action == "answer_directly":
+        result = await self.services.direct_answer.execute(task)
     elif action == "run_experiment":
         plan = task.proposal.execution_plan
         if plan is None or not source.history or plan != source.history[-1].accepted_plan:
@@ -278,32 +284,30 @@ async def execute(self: WorkbenchWorkflows, task: TaskRequest, item: WorkbenchIt
         result = await self.services.experiment.execute(task)
     elif action in {"investigate_question", "investigate_literature"}:
         logger.info("Dispatching approved action: title=%r capability=investigator action=%s.", task.proposal.title, action)
-        context = [source.context_content, task.instruction]
-        if task.proposal.execution_plan is not None:
-            context.append(task.proposal.execution_plan.markdown())
-        request = InvestigationRequest(question=task.proposal.action, context=context)
+        scope = task.proposal.model_dump(include={"title", "purpose", "action", "plan", "expected_result", "execution_plan"})
+        context = [json.dumps({"approved_proposal": scope, "human_instruction": task.instruction,
+                               "original_source": source.model_dump(exclude={"revision"})}, ensure_ascii=False)]
+        request = InvestigationRequest(question=task.proposal.action, context=context,
+                                       deliverable=task.proposal.expected_result)
         investigator = self.services.literature_investigator if action == "investigate_literature" else self.services.investigator
         report = await investigator.investigate(request)
         sections = [report.answer]
-        sections.extend(f"- [{e.title}]({e.url}): {e.finding}" for e in report.sources)
-        sections.extend(report.limitations)
+        if report.sources:
+            sections.append("## Sources\n\n" + "\n".join(f"- [{e.title}]({e.url}) — {e.finding}" for e in report.sources))
+        if report.limitations:
+            sections.append("## Limitations\n\n" + "\n".join(f"- {limit}" for limit in report.limitations))
         result = TaskResult(content="\n\n".join(sections), process=report.process)
-    elif action == "organize_material" and source.kind in {"notero", "simpread"}:
-        capture = ReadingMaterial(kind=source.kind, page_id=source.page_id, url=source.url,
-                             title=source.title, text="\n\n".join([source.context_content, task.instruction,
-                                 task.proposal.execution_plan.markdown() if task.proposal.execution_plan else ""]),
-                             metadata={**source.metadata, "Direction catalog": self.services.recommendation_tags.catalog()}, revision=source.revision,
-                             full_text_verified=source.full_text_verified)
-        brief = await self.services.briefs.brief(capture)
-        artifacts = []
-        if brief.destination in {"papers", "knowledge"}:
-            artifacts.append(RetainedArtifact(kind="paper" if brief.destination == "papers" else "knowledge",
-                                              title=brief.title, content=brief.content, reason=brief.reason,
-                                              reading=brief.reading))
-        result = TaskResult(content=brief.content, artifacts=artifacts)
+    elif action == "organize_material":
+        commission = await self.services.curator.commission(source, item)
+        works = [await author(self.services, source, assignment, item) for assignment in commission.artifacts]
+        if works:
+            content = works[0].content if len(works) == 1 else commission.reason
+            result = TaskResult(content=content, artifacts=works)
+        else:
+            result = TaskResult(content=commission.reason, questions=[commission.reason])
     elif action == "propose_direction":
         result = await self.services.direction_proposer.execute(task)
-    elif action in {"complete_task", "organize_material"}:
+    elif action == "complete_task":
         logger.info("Dispatching approved action: title=%r capability=task_worker action=%s.", task.proposal.title, action)
         result = await self.services.worker.execute(task)
     else:
@@ -414,7 +418,7 @@ def request_input(self: WorkbenchWorkflows, source: SourceMaterial, item: Workbe
 
 @DBOS.step(name="ProposalWorkflows.extract")
 @trace_call("step", "extract")
-async def extract(self: WorkbenchWorkflows, item: WorkbenchItem) -> CurationDecision:
+async def extract(self: WorkbenchWorkflows, item: WorkbenchItem, source: SourceMaterial | None = None) -> CurationDecision:
     """Checkpoint grounded extraction before archive writes.
 
     Args:
@@ -429,25 +433,21 @@ async def extract(self: WorkbenchWorkflows, item: WorkbenchItem) -> CurationDeci
         item.title,
         extra={"details": {'page': item.page_id}},
     )
+    decision = await self.services.curator.extract(item, source)
     if item.proposal.kind == "retention":
-        decision = await self.services.curator.extract(item)
         approved = item.proposal.retention
         if len(decision.artifacts) != 1 or any(
             artifact.kind != approved.kind or artifact.target_idea_page_id != approved.target_idea_page_id
+            or artifact.target_page_id != approved.target_page_id
             for artifact in decision.artifacts
         ):
             raise ValueError("Curator changed the approved retention destination")
-    elif item.result.artifacts:
-        # Structured products were part of the accepted result, not inferred later.
-        decision = CurationDecision(reason="Retain the structured outputs accepted by the user.",
-                                    artifacts=item.result.artifacts)
-    else:
-        decision = await self.services.curator.extract(item)
+    elif not item.result.artifacts:
         for position, artifact in enumerate(decision.artifacts):
             if artifact.kind == "idea":
                 logger.info("Retaining inferred research lead as a Spark pending adoption: title=%r.", artifact.title)
                 decision.artifacts[position] = artifact.model_copy(update={"kind": "spark", "target_idea_page_id": None})
-    # A worker or Curator can retain a paper without invoking the dedicated Briefer.
+    # Explicitly retained papers may still need catalog metadata.
     papers = [artifact for artifact in decision.artifacts if artifact.kind == "paper"
               and (artifact.reading is None or artifact.reading.directions is None)]
     if papers:

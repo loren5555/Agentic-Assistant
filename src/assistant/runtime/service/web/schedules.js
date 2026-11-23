@@ -328,7 +328,7 @@ const descriptions = {
   "propose-tasks": "归档 Inbox 中可复用的材料，将后续工作和 Elevated TODO 提交至 Workbench。",
   "organize-papers": "读取 Notero 中待处理的论文，将有依据的阅读摘要存入 Papers，有后续任务时再向 Workbench 提案。",
   "organize-articles": "读取简悦收藏的待处理文章，将有价值的材料归入 Knowledge 或 Papers，需要跟进时提交 Workbench。",
-  "process-signals": "把 Papers 和 Research Feed 中勾选 Follow Up 的条目，以及 Research Interests 中待处理的方向，转成 Workbench 提案。",
+  "process-signals": "把 Papers、Research Feed 和 Discovery Pool 中勾选 Follow Up 的条目，以及 Research Interests 中待处理的方向，转成 Workbench 提案。",
   "reconcile-feedback": "将补充说明、修改要求或验收意见写回原始条目，供下次重新提案；驳回的提案则结束处理。",
   "process-workbench": "执行已批准的任务，或接收你提交的已有报告。验收通过后，提取值得归档的成果。",
   "recommend-papers": "按配置的星期自动选择深度或轻量采集，从 Discovery Pool 精选条目，生成当日 Research Feed。",

@@ -62,9 +62,9 @@ Example:
   python -m assistant run organize-articles""",
     },
     "process-signals": {
-        "help": "Propose work from explicit paper/feed follow-ups and pending interest requests.",
+        "help": "Propose work from explicit paper/feed/pool follow-ups and pending interest requests.",
         "description": (
-            "Read Papers/Research Feed with Follow Up checked, and research interests marked\n"
+            "Read Papers/Research Feed/Discovery Pool with Follow Up checked, and research interests marked\n"
             "Agent Pending through source-specific processors and the shared proposal path."
         ),
         "epilog": """No Inbox copies are created. Interested marks tune the newspaper without proposals.

@@ -3,7 +3,7 @@
 Input origin:
     Source processors supply original material and the latest human feedback.
 Output destination:
-    Briefer and Publisher archive reusable material in Papers or Knowledge.
+    Curator, Writer and Publisher archive reusable material in Papers or Knowledge.
     Proposer receives the original plus any archive for outstanding Workbench tasks.
 Responsibility:
     Checkpoint archive publication before drafting. Acknowledge the source last.
@@ -53,18 +53,20 @@ async def submit_proposal(self: WorkbenchWorkflows, key: str, source: SourceMate
     supports_archive = source.kind in {"inbox", "notero", "simpread"}
     propose = not supports_archive or decision.worth_proposing or any(h.workbench_url for h in source.history)
     if supports_archive and decision.worth_archiving:
-        material = ReadingMaterial(kind=source.kind, page_id=source.page_id, url=source.url,
-                                   title=source.title, text="\n\n".join(filter(None, [source.text, source.supplement])),
-                                   metadata=source.metadata, revision=source.revision,
-                                   full_text_verified=source.full_text_verified)
-        brief = await self.brief_source(material)
-        if brief.destination == "proposal" or brief.evidence_level == "metadata":
-            propose = True
-            decision.limitations.append(brief.reason)
-            source = source.model_copy(update={"organization": decision.model_dump_json()})
-        else:
-            archive = self.publish_source_brief(material, brief)
-            source = source.model_copy(update={"archive": archive})
+        commission = await self.commission_source(source)
+        archives = []
+        for position, assignment in enumerate(commission.artifacts):
+            work = await self.write_manuscript(source, assignment)
+            if work.evidence_level == "metadata":
+                decision.limitations.append(work.summary)
+                propose = True
+                continue
+            publication = digest(f"{source.kind}:{source.page_id}:{source.fingerprint}:{position}:{work.kind}")
+            archives.append(self.publish_manuscript(source, work, publication))
+        if archives:
+            archives.sort(key=lambda entry: entry.destination != "papers")
+            source = source.model_copy(update={"archive": archives[0], "additional_archives": archives[1:]})
+        source = source.model_copy(update={"organization": decision.model_dump_json()})
     if not propose:
         self.acknowledge(source)
         logger.info("Input finished: title=%r outcome=%s.", source.title,

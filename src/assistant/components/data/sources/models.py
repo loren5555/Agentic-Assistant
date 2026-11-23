@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from assistant.components.execution.planner.models import ExecutionPlan
 
 
-SourceKind = Literal["inbox", "todo", "notero", "simpread", "paper", "interest", "feed", "brainstorm"]
+SourceKind = Literal["inbox", "todo", "notero", "simpread", "paper", "interest", "feed", "pool", "brainstorm"]
 
 
 class SourceHistory(BaseModel):
@@ -70,11 +70,14 @@ class SourceMaterial(BaseModel):
     full_text_verified: bool = False
     organization: str = ""
     archive: SourceArchive | None = None
+    additional_archives: list[SourceArchive] = Field(default_factory=list, exclude_if=lambda v: not v)
 
     @property
     def intake_snapshot(self) -> str:
         """Identify a proposal input by its origin, semantic version and edit time."""
-        identity = [self.kind, self.page_id, self.version, self.revision]
+        # Pool refreshes and preference edits also advance Notion edit time.
+        revision = self.fingerprint if self.kind == "pool" else self.revision
+        identity = [self.kind, self.page_id, self.version, revision]
         return "snapshot:" + hashlib.sha256(json.dumps(identity).encode()).hexdigest()
 
     @property
@@ -84,7 +87,7 @@ class SourceMaterial(BaseModel):
         Returns:
             Digest covering source content, feedback and semantic version.
         """
-        content = self.model_dump(exclude={"revision", "organization", "archive"})
+        content = self.model_dump(exclude={"revision", "organization", "archive", "additional_archives"})
         return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
     @property

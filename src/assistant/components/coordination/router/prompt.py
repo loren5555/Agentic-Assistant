@@ -14,7 +14,11 @@ Select plan when the deliverable is a concrete execution design whose consequent
 steps, parameters, budget or stopping conditions should be reviewed before use.
 For a requested experiment, select plan to establish the protocol first. When the
 approved protocol is supplied, select run_experiment to run code and collect measurements.
-Direct calculations, translations and bounded explanations can be completed directly.
+Use the original question and requested deliverable to distinguish answer_directly
+from investigation. Choose answer_directly for an explanation, comparison or
+judgment grounded in established knowledge and the supplied context.
+Choose investigation when the answer needs external verification, fresh facts or
+public references. Choose complete_task for calculations, translations and text transformations.
 A human-qualified execution plan is supplied when available: select a capability to
 carry out that plan rather than repeat its planning stage. Choose only supplied IDs.
 

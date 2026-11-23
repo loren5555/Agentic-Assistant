@@ -13,7 +13,7 @@ providers:
   workbench: notion  # Stores reports and proposals for human review.
   worker: local  # Completes approved tasks using supplied materials.
   curator: local  # Extracts reusable knowledge from accepted results.
-  briefs: local  # Organizes captured material into grounded briefs.
+  writer: local  # Writes manuscripts for Papers, Knowledge and accepted research outputs.
   discovery_pool: notion  # Broad discoveries and optional preference feedback.
   feed: notion  # Manages research interests, recommendations, and follow-ups.
   discovery: codex  # Searches live public primary sources using the Codex CLI.
@@ -83,9 +83,9 @@ local:
   investigator_model: openai-codex:gpt-6.2-sol
   investigator_effort: high
   investigator_timeout_seconds: 300
-  brief_model: openai-codex:gpt-6.1-sol
+  writer_model: openai-codex:gpt-6.1-sol
   recommendation_model: openai-codex:gpt-6-astra
-  brief_effort: medium
+  writer_effort: medium
 
 codex:
   router_model: gpt-6-luna

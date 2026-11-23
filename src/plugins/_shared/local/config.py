@@ -66,6 +66,9 @@ class LocalSettings(BaseModel):
     investigator_effort: str | None = "medium"
     investigator_timeout_seconds: float = 300
 
+    writer_model: str | None = None
+    writer_effort: str | None = None
+    writer_timeout_seconds: float | None = None
     brief_model: str | None = None
     brief_effort: str | None = "low"
     brief_timeout_seconds: float = 180

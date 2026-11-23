@@ -29,10 +29,15 @@ EXECUTION_ACTIONS = [
         "returning reviewable reasoning and possible next investigations."
     )),
     ActionCandidate(
+        id="answer_directly", accepts_external_report=True, name="Answer directly",
+        description="Answer a question using established knowledge, reasoning and the supplied context. "
+                    "Explain a concept, compare ideas or give a reasoned judgment without external research.",
+    ),
+    ActionCandidate(
         id="complete_task", accepts_external_report=True,
         name="Complete a task",
         description=(
-            "Complete a self-contained calculation, explanation, translation, "
+            "Complete a self-contained calculation, translation, "
             "or text transformation using the supplied material and return the result."
         ),
     ),
@@ -41,7 +46,7 @@ EXECUTION_ACTIONS = [
         name="Organize supplied material",
         description=(
             "Organize supplied papers, articles or notes into evidence-scoped reading "
-            "briefs and reusable knowledge products, including useful reading metadata "
+            "notes, standalone tutorials or references with worked examples, reading metadata "
             "and source attribution."
         ),
     ),

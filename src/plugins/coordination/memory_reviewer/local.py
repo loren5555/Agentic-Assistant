@@ -1,4 +1,4 @@
-"""Use the project-owned writing skill to revise whole notebooks from feedback.
+"""Use the project-owned revision instructions to revise whole notebooks from feedback.
 
 The model proposes complete text for affected roles. The workflow owns storage,
 conflict detection and the durable link to the human decision.
@@ -23,9 +23,9 @@ class MemoryReviewer:
         self.agent = Agent(infer_model(model), model_settings=settings, output_type=NativeOutput(MemoryRevision))
 
     @trace_call("component", "memory_reviewer.review")
-    async def review(self, feedback, earlier, notes, skill):
+    async def review(self, feedback, earlier, notes, instructions):
         prompt = json.dumps({"human_review": feedback.model_dump(), "prior_observations": earlier,
                              "current_notes": {n.role: n.content for n in notes}}, ensure_ascii=False)
         async with asyncio.timeout(self.timeout), self.agent:
-            result = await self.agent.run(prompt, instructions=skill)
+            result = await self.agent.run(prompt, instructions=instructions)
         return result.output

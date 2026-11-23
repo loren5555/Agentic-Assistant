@@ -25,24 +25,27 @@ def use_instructions(instructions: str | None):
         _current.reset(token)
 
 
-def skill_text(name: str) -> str:
-    raw = files("assistant").joinpath("skills", name, "SKILL.md").read_text(encoding="utf-8")
-    if not raw.startswith("---\n"):
-        return raw.strip()
-    _, delimiter, body = raw[4:].partition("\n---\n")
-    if not delimiter:
-        raise ValueError(f"Invalid front matter in {name}/SKILL.md")
-    return body.strip()
+def load_instructions(name: str) -> str:
+    """Read packaged instructions selected by the calling component."""
+    return files("assistant").joinpath("instructions", f"{name}.md").read_text(encoding="utf-8").strip()
+
+
+def writing_guidance(purpose: str, *, brief: bool = False) -> str:
+    """Compose project prose guidance with the reader's task for this output."""
+    guide = load_instructions("researcher-style-writing")
+    if brief:
+        guide = guide.split("\n## ", 1)[0].rstrip()
+    return f"\n\n{guide}\n\n{purpose}"
 
 
 @DBOS.step(name="ProposalWorkflows.recall_memory")
 @trace_call("step", "recall_memory")
 def recall_memory(self, role: MemoryRole) -> dict:
-    skill = skill_text("project-agent")
+    base_instructions = load_instructions("project-agent")
     note = self.services.memory.recall(role)
-    snapshot = {"instructions": "\n\n".join(filter(None, [skill, note.content])),
-                "skill_version": sha256(skill.encode()).hexdigest(),
+    snapshot = {"instructions": "\n\n".join(filter(None, [base_instructions, note.content])),
+                "instructions_version": sha256(base_instructions.encode()).hexdigest(),
                 "memories": {role: note.version} if note.content else {}}
     get_logger("runtime.agent_context").debug("Loaded role notebook for %s: %d characters.", role, len(note.content),
-        extra={"details": {"skill_version": snapshot["skill_version"], "memories": snapshot["memories"]}})
+        extra={"details": {"instructions_version": snapshot["instructions_version"], "memories": snapshot["memories"]}})
     return snapshot

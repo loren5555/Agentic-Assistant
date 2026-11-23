@@ -34,6 +34,7 @@ class ProviderSettings(BaseModel):
     workbench: str = "notion"
     worker: str = "local"
     curator: str = "local"
+    writer: str | None = None
     briefs: str = "local"
     feed: str = "notion"
     discovery_pool: str = "notion"

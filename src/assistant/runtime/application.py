@@ -15,6 +15,7 @@ from assistant.runtime import agent_context
 from assistant.workflows.steps import review_memory as memory_steps
 from assistant.runtime.serialization import ComponentSerializer
 from assistant.runtime.services import Services
+from assistant.workflows.steps import authoring
 from assistant.workflows.steps import submit_proposal as proposal_steps, intake_sources as source_steps
 from assistant.workflows.steps import receive_delivery as delivery_steps
 from assistant.workflows.steps import select_action as routing_steps, advance_plan as planning_steps
@@ -92,6 +93,9 @@ class WorkbenchWorkflows(DBOSConfiguredInstance):
     read_source = proposal_steps.read_source
     read_current_source = proposal_steps.read_current_source
     draft = proposal_steps.draft
+    commission_source = authoring.commission_source
+    write_manuscript = authoring.write_manuscript
+    publish_manuscript = authoring.publish_manuscript
     brief_source = proposal_steps.brief_source
     publish_source_brief = proposal_steps.publish_source_brief
     recall_memory = agent_context.recall_memory

@@ -23,6 +23,9 @@ STEPS = {
     "revise_notes": ("复盘反馈并修订角色笔记", "Memory Reviewer"),
     "apply_notes": ("保存角色笔记", "Memory"),
     "read_sources": ("读取待处理条目", "来源处理器"),
+    "commission_source": ("确定归档作品与写作范围", "Curator"),
+    "write_manuscript": ("撰写或复用成稿", "Writer"),
+    "publish_manuscript": ("编辑并归档成稿", "Publisher"),
     "brief_source": ("摘要来源材料", "Source Briefer"),
     "publish_source_brief": ("归档来源摘要", "Information Publisher"),
     "organize_source": ("整理来源材料", "Information Organizer"),
@@ -47,7 +50,7 @@ TRACE_FIELDS = {
     "read": "process", "assess": "process", "discover": "process", "collect": "process",
 }
 EXECUTORS = {"run_experiment": "Codex 实验执行", "investigate_literature": "AMiner 沉思", "investigate_question": "Investigator", "plan": "Planner", "complete_task": "Task Worker",
-             "propose_direction": "Direction Proposer", "organize_material": "材料整理执行器"}
+             "answer_directly": "Codex 直接回答", "propose_direction": "Direction Proposer", "organize_material": "材料整理执行器"}
 FIELDS = {
     "title": "条目", "text": "原始内容", "human_review": "审批", "human_instruction": "人工说明",
     "result_review": "验收", "result_feedback": "验收反馈", "status": "条目状态", "purpose": "目的",
@@ -278,7 +281,7 @@ def activity(metadata, workflow_id):
             step = business_step(stored)
             owner = step["workflow"] = stored["workflow_uuid"]
             name = short_name(stored["function_name"])
-            source_step = name in {"organize_source", "brief_source", "publish_source_brief", "acknowledge", "read_source"}
+            source_step = name in {"organize_source", "commission_source", "publish_manuscript", "brief_source", "publish_source_brief", "acknowledge", "read_source"}
             if stored["workflow_name"].startswith("ProposalWorkflows.") and (source_step or not step["subject"]):
                 if owner not in titles:
                     titles[owner] = item_titles(db, owner)

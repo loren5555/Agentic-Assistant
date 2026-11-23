@@ -2,6 +2,7 @@
 
 from assistant.components.execution.investigator.models import InvestigationReport, InvestigationRequest, SourceEvidence
 from assistant.runtime.records import ExecutionProcess
+from assistant.runtime.agent_context import writing_guidance
 from logger import get_logger, trace_call
 from plugins._shared import aminer
 
@@ -18,7 +19,8 @@ class Investigator:
     @trace_call("component", "investigator.investigate")
     async def investigate(self, request: InvestigationRequest) -> InvestigationReport:
         logger.info("kind=agent provider=aminer Deep research started: question=%r.", request.question[:160])
-        message = "\n\n".join(part for part in [request.question, *request.context] if part)
+        message = "\n\n".join(part for part in [request.question, request.deliverable] if part)
+        message += writing_guidance("Organize the report around the submitted research question.")
         try:
             data = await aminer.post("paper/deep_research", {"message": message, "type": 1}, api_key=self.api_key, timeout=self.timeout)
             answer = data if isinstance(data, str) else None

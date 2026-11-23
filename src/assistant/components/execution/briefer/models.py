@@ -30,6 +30,9 @@ class ReadingMaterial(BaseModel):
         metadata: Source metadata without timestamps or agent bookkeeping.
         revision: Current storage edit timestamp for diagnostics.
         full_text_verified: Whether acquisition independently verified original text.
+        archive_requirements: Reader purpose, organization and coverage chosen for direct archival.
+        human_instruction: Source supplement or current Workbench reviewer instruction.
+        approved_proposal: Reviewed scope and concrete plan when dispatched from Workbench.
     """
 
     kind: ReadingSourceKind
@@ -40,6 +43,9 @@ class ReadingMaterial(BaseModel):
     metadata: dict = Field(default_factory=dict)
     revision: str = ""
     full_text_verified: bool = False
+    archive_requirements: str = ""
+    human_instruction: str = ""
+    approved_proposal: dict = Field(default_factory=dict)
 
     @property
     def fingerprint(self) -> str:

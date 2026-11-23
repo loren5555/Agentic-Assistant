@@ -16,6 +16,7 @@ class InvestigationRequest(BaseModel):
 
     question: str
     context: list[str]
+    deliverable: str = ""
 
 
 class SourceEvidence(BaseModel):

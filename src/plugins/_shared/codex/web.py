@@ -69,6 +69,7 @@ async def run_web_research[T: BaseModel](
     effort: str | None, timeout_seconds: float,
     mcp_servers: dict[str, dict] | None = None,
     extra_environment: dict[str, str] | None = None,
+    enable_web_search: bool = True,
 ) -> tuple[T, ExecutionProcess]:
     """Run one isolated research turn and validate its result file.
 
@@ -100,7 +101,8 @@ async def run_web_research[T: BaseModel](
             f"--output-last-message={result_path}",
             "-c", "forced_login_method='chatgpt'",
             "-c", "model_provider='openai'",
-            "-c", "web_search='live'", "-c", "project_doc_max_bytes=0",
+            "-c", "web_search='live'" if enable_web_search else "web_search='disabled'",
+            "-c", "project_doc_max_bytes=0",
         ]
         if model:
             command.extend(["--model", model])
@@ -117,6 +119,8 @@ async def run_web_research[T: BaseModel](
             "computer_use", "image_generation", "multi_agent", "view_image",
         ):
             command.extend(["-c", f"features.{feature}=false"])
+        if not enable_web_search:
+            command.extend(["-c", "features.code_mode=false"])
         command.append("-")
 
         process = await asyncio.create_subprocess_exec(

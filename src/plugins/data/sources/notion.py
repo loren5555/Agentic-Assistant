@@ -68,6 +68,7 @@ class NotionProcessor(SourceProcessor):
             "simpread": capture.simpread_data_source_id,
             "paper": capture.papers_data_source_id,
             "feed": feed.research_feed_data_source_id,
+            "pool": feed.discovery_pool_data_source_id,
             "interest": feed.research_interests_data_source_id,
         }[self.kind]
         self.limit = int(options.get("input_limit", 20))
@@ -84,7 +85,7 @@ class NotionProcessor(SourceProcessor):
             for name in ("Agent Feedback", "Agent History"):
                 ensure_rich_text(client, self.data_source_id, name)
             ensure_checkbox(client, self.data_source_id, "Agent Processed")
-            if self.kind in {"paper", "feed"}:
+            if self.kind in {"paper", "feed", "pool"}:
                 ensure_checkbox(client, self.data_source_id, "Follow Up")
             if self.kind == "paper":
                 ensure_checkbox(client, self.data_source_id, "Interested")
@@ -114,9 +115,7 @@ class NotionProcessor(SourceProcessor):
             clauses.append({"property": "Status", kind: condition})
         elif self.kind == "simpread":
             clauses.append({"property": "Agent Archived", "checkbox": {"equals": False}})
-        elif self.kind == "paper":
-            clauses.append({"property": "Follow Up", "checkbox": {"equals": True}})
-        elif self.kind == "feed":
+        elif self.kind in {"paper", "feed", "pool"}:
             clauses.append({"property": "Follow Up", "checkbox": {"equals": True}})
         elif self.kind == "interest":
             clauses.append({"property": "Agent Pending", "checkbox": {"equals": True}})
@@ -145,7 +144,7 @@ class NotionProcessor(SourceProcessor):
             sources = []
             for page in pages:
                 source = self._read(client, page)
-                if page_id is None and self.kind in {"inbox", "todo", "simpread", "interest", "paper", "feed"} and page["properties"].get("Agent Processed", {}).get("checkbox"):
+                if page_id is None and self.kind in {"inbox", "todo", "simpread", "interest", "paper", "feed", "pool"} and page["properties"].get("Agent Processed", {}).get("checkbox"):
                     source = self.apply_feedback(source, SourceHistory(
                         key=digest(f"reopened:{source.kind}:{source.page_id}:{source.version}:{source.revision}"),
                         workbench_url="", feedback="Reprocess requested by reopening the source queue.",
@@ -174,6 +173,10 @@ class NotionProcessor(SourceProcessor):
             kind = prop["type"]
             if kind == "title":
                 title = plain_text(prop)
+            elif self.kind == "pool" and name not in {"URL", "Kind"}:
+                # The page body carries the research material. Cache rankings, translations
+                # and preference edits must not invalidate an approved follow-up.
+                continue
             elif name.startswith("Agent ") or name in {
                 "Status", "Date Added", "Date Modified", "Publication Key", "Brief Status",
                 "Citation Key", "In-Text Citation", "Full Citation", "File Path", "Extra",
@@ -236,7 +239,7 @@ class NotionProcessor(SourceProcessor):
             props["Agent Archived"] = {"checkbox": not pending}
         elif self.kind == "interest":
             props["Agent Pending"] = {"checkbox": pending}
-        elif self.kind in {"paper", "feed"}:
+        elif self.kind in {"paper", "feed", "pool"}:
             props["Follow Up"] = {"checkbox": pending}
         return props
 
@@ -254,7 +257,10 @@ class NotionProcessor(SourceProcessor):
             if page["parent"].get("data_source_id", "").replace("-", "") != str(self.data_source_id).replace("-", ""):
                 raise ValueError(f"Page does not belong to {self.kind}: {source.page_id}")
             version = int(page["properties"].get("Agent Version", {}).get("number") or 1)
-            if (version, page["last_edited_time"]) != (source.version, source.revision):
+            changed = (version, page["last_edited_time"]) != (source.version, source.revision)
+            if changed and self.kind == "pool" and version == source.version:
+                changed = self._read(client, page).fingerprint != source.fingerprint
+            if changed:
                 self.logger.info('Proposal retained; skipping source acknowledgement because the input changed: '
                                  'title=%r version=%s→%s edited=%s→%s.',
                                  source.title, source.version, version, source.revision, page["last_edited_time"])
@@ -343,6 +349,12 @@ class FeedProcessor(NotionProcessor):
     """Read explicit recommendation follow-ups without creating an Inbox copy."""
 
     kind = "feed"
+
+
+class PoolProcessor(NotionProcessor):
+    """Send an explicitly marked discovery and its original link to Workbench."""
+
+    kind = "pool"
 
 
 class InterestProcessor(NotionProcessor):

@@ -31,7 +31,7 @@ Inbox / TODO / Notero / SimpRead / Papers / Feed / Interests
                          |
                   Source Processor
                          |
-                Information Organizer ── reusable material → Briefer → Publisher → Papers / Knowledge
+                Information Organizer ── reusable material → Curator → Writer → Publisher → Papers / Knowledge
                          |
                       Proposer
                          |
@@ -41,11 +41,11 @@ Inbox / TODO / Notero / SimpRead / Papers / Feed / Interests
                          |
                   Human approval
                          |
-    Planner / Task Worker / Investigator / Direction Proposer
+    Planner / Task Worker / Investigator / Writer / Direction Proposer
                          |
                 Workbench result acceptance
                          |
-                Curator → Information Publisher
+                Curator → Writer → Publisher
                          |
           Papers / Knowledge / Ideas / Research Interests
 ```
@@ -63,14 +63,26 @@ statuses or select the next workflow.
 
 Paper and article intake remain separate commands and separate processors. Their
 organization and review contracts are shared with Inbox. For each source version,
-Organizer decides separately whether the supplied evidence merits a reading brief and
-whether there is work to propose. When both apply, publication happens first. Proposer
+Organizer decides independently whether material merits an archive and whether it raises
+outstanding work. Curator identifies the specific work, its destination, reader and scope.
+Writer receives the original source, any existing target page and the approved task or
+accepted result when available. Papers follow a common reading structure. Knowledge retains
+the explanations, examples and reference material needed to use the page independently.
+Publisher integrates each manuscript and preserves separate research discussions.
+When both archival and a proposal apply, publication happens first. Proposer
 receives the original material plus the verified archive link, summary and evidence level.
 The source is acknowledged after all selected steps finish. Materials with no follow-up
 can enter the library directly. Rejecting a follow-up leaves its source brief available.
 
 A completed result can contain multiple typed artifacts. Explicit accepted products
 are retained as submitted; otherwise Curator assesses whether reusable content exists.
+
+Proposer and Curator can search Workbench and the configured research collections by
+title or summary, then read a matching page. When another LaTeX clip arrives, Proposer
+can refer to the earlier cheat-sheet proposal and identify what the new clip adds.
+Curator can compare an accepted result with the published note before deciding what
+to retain. Each source keeps its own approval history.
+
 Trivial calculations can finish without producing knowledge.
 
 ## Install and configure
@@ -126,7 +138,7 @@ uv run python -m assistant run recommend-papers
 | brainstorm-idea | A question in an active Idea | Exploration report with evidence, possible next steps and Workbench links |
 | organize-papers | Pending Notero records | Papers reading briefs and optional Workbench follow-up |
 | organize-articles | Pending SimpRead clips | Knowledge or Papers briefs and optional Workbench follow-up |
-| process-signals | Papers/Feed with Follow Up checked; explicitly pending Interests | Workbench proposals on the original records |
+| process-signals | Papers/Feed/Discovery Pool with Follow Up checked; explicitly pending Interests | Workbench proposals on the original records |
 | reconcile-feedback | Revisions, unqualified results, rejections | Reopened source versions; closed old work |
 | process-workbench | Approvals and qualified results | Executed results; accepted outputs |
 | recommend-papers | Notion Recommendation Tags, optional likes and Discovery Pool | Broad discovery cache and selected Research Feed edition |
@@ -134,21 +146,31 @@ uv run python -m assistant run recommend-papers
 Every command and job has detailed `--help`. `--page PAGE_ID` on either organization
 job reads one source without forcing duplicate publication.
 
-A normal manual cycle is:
+### Workbench review cycle
 
-1. Submit sources with their input job.
-2. In Workbench, read the proposal and its Proposed workflow. The page body previews
-   the saved proposal version. Add execution reminders in Human Instruction, then
-   set Human Review to Approved. To change the scope or route, describe the change
-   in Human Instruction and select Revision Requested.
-3. Run process-workbench. Inspect the Executed result.
-4. Set Result Review to Qualified, then run process-workbench to retain outputs.
-5. For changes, provide Human Instruction or Result Feedback and choose Revision
-   Requested or Unqualified. Reconciliation reopens the source; run its input job
-   again and review the fresh proposal before another execution.
+Each managed row represents one proposal version. Read **Status** first. The
+assistant maintains it. Use **Human Review** to decide what may be done and
+**Result Review** to assess what was delivered.
 
-`process-workbench` runs feedback reconciliation first. `reconcile-feedback`
-is also available independently and does not invoke a model or worker.
+| Status and deliverable | Your decision | What happens on the next pass |
+| --- | --- | --- |
+| Open · execution proposal | Read the proposed action. Add reminders in Human Instruction and select Approved. | The executor delivers a result. Status becomes Executed and Result Review starts at Pending. |
+| Open · retention proposal | Review the proposed text and destination, then select Approved. | Curator passes the approved work to Writer for reuse and Publisher for archival. |
+| Open · scope or route needs changing | Describe the change in Human Instruction and select Revision Requested. | Feedback returns to the source. The old row becomes Superseded. The next intake proposes a new version. |
+| Open or Needs Input · abandon this proposal | Select Rejected in Human Review. | The row becomes Deprecated. This decision creates no new source version. |
+| Needs Input · clarification | Answer in Human Instruction and select Revision Requested. | The next intake uses your answer to draft a fresh proposal. |
+| Executed · ordinary result | Read Execution result. Select Qualified, or explain the shortcoming in Result Feedback and select Unqualified. | Qualified closes the row as Archived when an artifact is retained, otherwise Finished. Unqualified returns the result and feedback to the source for a fresh proposal. |
+| Executed · plan | Read Plan for review and select Qualified when the plan is ready. | The plan row becomes Finished. A new execution proposal presents the confirmed plan for separate approval. |
+
+An Executed row with Human Review = Approved and Result Review = Pending is
+waiting for **your verdict on the result**. Further passes leave it waiting.
+For a report delivered by another agent, see [Submitting work completed elsewhere](#submitting-work-completed-elsewhere).
+
+The scheduled or manual `process-workbench` pass first reconciles feedback, then
+handles approved proposals and qualified results. To advance it manually, run
+`uv run python -m assistant run process-workbench`. After a revision, the original
+input job picks up the new source version. Standalone `reconcile-feedback` runs
+only the feedback stage.
 
 When a proposal has Status = Needs Input, read its questions and answer in
 Human Instruction. Set Human Review to Revision Requested to submit the answer;
@@ -221,7 +243,7 @@ from the maintenance panel also appears in execution history.
 
 In Workbench, approve a specific retention proposal to keep a research lead in
 Sparks, adopt a project in Ideas, or add a finding to the named Idea. Run
-`process-workbench` to apply the decision through Curator and Publisher. An
+`process-workbench` to apply the decision through Curator, Writer and Publisher. An
 investigation or experiment proposal follows its own execution and result review.
 A revision reopens that proposal's underlying candidate. Run `propose-tasks` to
 draft its next version.
@@ -288,6 +310,7 @@ Processors preserve original page bodies and plugin-owned metadata. Shared field
 | Notero | Agent Processed unchecked; check after intake completes |
 | Papers | Follow Up checked |
 | Research Feed | Follow Up checked |
+| Discovery Pool | Follow Up checked, independently of preference Feedback |
 | Research Interests | Agent Pending checked; clear after proposal submission |
 
 Reopening Inbox/TODO/SimpRead's native queue after it was consumed creates a new
@@ -463,7 +486,7 @@ src/assistant/
       planner/                 concrete plans and limits for review
       investigator/            public-source investigation
       task_worker/             approved execution and typed task results
-      briefer/                 evidence-aware reading material and briefs
+      writer/                  reader-facing manuscripts and destination standards
     recommendations/
       collector/               acquisition briefs, saved directions and breadth-by-age policy
       discovery/               source candidates, quality provenance and identity
@@ -534,8 +557,8 @@ Feedback** with the acceptance decision. The next Workbench processing or releva
 feedback reconciliation queues a separate memory review. A decision without written
 feedback needs no model call. Existing finished work is not replayed.
 
-The reviewer uses the manually maintained project skill
-[`revise-role-memory`](src/assistant/skills/revise-role-memory/SKILL.md), the
+The reviewer uses the manually maintained project instructions
+[`revise-role-memory`](src/assistant/instructions/revise-role-memory.md), the
 current task and comment, up to twelve earlier observations from other pages and
 both complete notebooks. It can leave both unchanged, revise one or both, or
 withdraw a preference. The background review uses the local proposer model by
@@ -544,9 +567,19 @@ page. A failed model review can be retried independently of the original task.
 
 Personal experience lives in `<runtime.directory>/v2/memory/organizer.md` and
 `proposer.md`. Each decision reads its role's complete note plus the shared,
-manually maintained [project skill](src/assistant/skills/project-agent/SKILL.md).
+manually maintained [project instructions](src/assistant/instructions/project-agent.md).
 DBOS checkpoints those instructions before the call, including for BrainStorm
 proposal assessment. A new decision picks up revisions automatically. Each newly
 written note is limited to 4,000 characters during revision; recall preserves its
 entire text. Empty notebooks are valid. You can inspect the notes without editing
 them. Existing active per-entry memories are consolidated into a role notebook on first use.
+
+### Writing guidance for reader-facing outputs
+
+Edit the [project writing instructions](src/assistant/instructions/researcher-style-writing.md)
+to change how agents explain findings in Chinese and English. Writer, Investigator,
+BrainStorm, Curator and Research Feed assessment receive the full guide. Pool
+translations, proposal drafts, execution plans and worker deliverables receive
+its opening section plus an instruction about the reader's task. Each component
+continues to own the output language, evidence requirements and structured fields.
+Restart the service after editing the guide so all agent instances load the revision.

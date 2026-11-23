@@ -346,7 +346,9 @@ class Workbench(WorkbenchProtocol):
                         "The assistant will prepare a new execution proposal with the confirmed plan; "
                         "that proposal requires fresh approval before execution.")
         for artifact in result.artifacts:
-            content += f"\n\n## Proposed {artifact.kind}: {artifact.title}\n\n{artifact.content}\n\nRetention reason: {artifact.reason}"
+            if artifact.content != body:
+                content += f"\n\n## Proposed {artifact.kind}: {artifact.title}\n\n{artifact.content}"
+            content += f"\n\nRetention reason: {artifact.reason}"
             if getattr(artifact, "target_idea_page_id", None):
                 content += f"\n\nDestination: {self._destination(artifact)}"
             if artifact.reading:

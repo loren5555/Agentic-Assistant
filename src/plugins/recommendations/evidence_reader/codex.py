@@ -29,8 +29,15 @@ Return primary_source=true only for material actually read on the original autho
 publication, preprint or proceedings source. text contains short verbatim source excerpts
 only: at most 25 words in total from the source page. Keep excerpts in their original
 language and preserve source_url. Put your own concise synopsis in summary, not text.
-The synopsis may cover the question, method, author claims and experiments actually
-visible in the accessed material. Identify missing experimental details and sections in
+Write a short reading brief explaining the problem, the central mechanism and one
+concrete finding or comparison when the evidence supports it. Include the conditions
+that make the result meaningful. For a paper, look for its overview or central result
+figure on the original publication, HTML preprint or author's project page. Supply
+one figure only when you observe its direct public HTTPS image URL and its identifying
+caption on that page. Use the page as source_url and paraphrase what to look at in
+one English sentence, including the figure number when available. Use null for
+unavailable images, PDF-only figures without a direct image URL, and non-paper items.
+Never guess an asset path or substitute a logo, decorative cover or generated image. Identify missing experimental details and sections in
 limitations. reading_scope must describe the material accessed (abstract, selected
 sections, or source excerpts). Do not claim full-text retrieval: this provider returns
 selected excerpts rather than an independently verified complete source document.

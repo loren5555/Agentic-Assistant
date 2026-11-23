@@ -13,6 +13,7 @@ from assistant.components.execution.task_worker.models import TaskRequest
 from assistant.components.execution.task_worker.models import TaskResult
 from assistant.components.execution.task_worker.protocol import TaskWorkerProtocol
 from assistant.runtime.records import ExecutionProcess
+from assistant.runtime.agent_context import writing_guidance
 from logger import get_logger, trace_call
 from plugins._shared.local.config import LocalSettings
 from plugins.execution.tools import load_toolsets
@@ -63,7 +64,10 @@ performed by the dedicated Planner capability.
             model_settings["openai_reasoning_effort"] = self.settings.worker_effort
         self.agent = Agent(
             model,
-            instructions=self.instructions,
+            instructions=self.instructions + writing_guidance(
+                "For a written deliverable, explain the result in the form requested. For a simple answer, give it directly.",
+                brief=True,
+            ),
             output_type=NativeOutput(TaskResult),
             toolsets=load_toolsets(self.settings.worker_toolsets),
             model_settings=model_settings,

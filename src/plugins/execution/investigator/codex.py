@@ -10,6 +10,7 @@ import os
 
 from assistant.components.execution.investigator.models import InvestigationReport, InvestigationRequest
 from assistant.components.execution.investigator.protocol import InvestigatorProtocol
+from assistant.runtime.agent_context import writing_guidance
 from logger import get_logger, trace_call
 from plugins._shared.codex.config import CodexSettings
 from plugins._shared.codex.process import read_process
@@ -74,7 +75,10 @@ class Investigator(InvestigatorProtocol):
         Returns:
             Verified findings, supporting sources, and unresolved information.
         """
-        prompt = f"{INVESTIGATION_INSTRUCTIONS}\n\n{request.model_dump_json()}"
+        instructions = INVESTIGATION_INSTRUCTIONS + writing_guidance(
+            "Answer the research question and explain which evidence changes the reader's decision."
+        )
+        prompt = f"{instructions}\n\n{request.model_dump_json()}"
 
         # Keep normal subscription authentication without API-key fallback.
         environment = os.environ.copy()

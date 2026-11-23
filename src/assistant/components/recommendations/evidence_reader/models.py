@@ -25,6 +25,15 @@ class ReviewDiscussion(BaseModel):
     content: dict[str, str] = Field(default_factory=dict)
 
 
+class PaperFigure(BaseModel):
+    """A representative illustration observed on the primary publication."""
+
+    model_config = ConfigDict(extra="forbid")
+    image_url: str
+    source_url: str
+    caption: str
+
+
 class PaperEvidence(BaseModel):
     """Preserve exactly what was accessible to the recommendation agent.
 
@@ -50,6 +59,7 @@ class PaperEvidence(BaseModel):
     quality: SourceQuality = Field(default_factory=SourceQuality)
     reading_scope: str = "partial text"
     summary: str = ""
+    figure: PaperFigure | None = None
     limitations: list[str] = Field(default_factory=list)
     process: SkipJsonSchema[ExecutionProcess | None] = None
     discussions: SkipJsonSchema[list[ReviewDiscussion]] = Field(default_factory=list)

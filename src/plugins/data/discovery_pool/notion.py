@@ -228,7 +228,10 @@ class DiscoveryPool:
             retired = 0
             for page in pages:
                 entry = self._entry(page)
-                if len(retained) >= limit and not entry.feedback:
+                # A submitted proposal keeps this page as its source for approval and revision.
+                props = page["properties"]
+                work_source = any(props.get(name, {}).get("checkbox") for name in ("Follow Up", "Agent Processed"))
+                if len(retained) >= limit and not entry.feedback and not work_source:
                     client.pages.update(page_id=page["id"], archived=True)
                     retired += 1
                 else:

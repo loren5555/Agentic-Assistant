@@ -21,7 +21,7 @@ from logger import get_logger, trace_call
 from plugins._shared.notion.config import SourceCollectionSettings
 from plugins._shared.notion.markdown import page_markdown
 from plugins._shared.notion.sparks import resolve_sparks
-from plugins.data.sources.notion import plain_text
+from plugins._shared.notion.catalog import metadata, terms
 
 SEED_WINDOW = 12
 HISTORY_PER_COLLECTION = 6
@@ -30,39 +30,6 @@ SORT_BY_EDIT = [{"timestamp": "last_edited_time", "direction": "descending"}]
 QUESTION_FIELDS = ("open question", "open questions", "research question", "research questions", "待解问题", "研究问题")
 NOTE_FIELDS = ("research log", "research logs", "research notes", "findings", "experiment log", "研究日志", "研究记录", "实验记录", "研究发现")
 ACTIVE_STATES = {"active", "open", "in progress", "ongoing", "doing", "in research", "进行中", "活跃", "研究中"}
-STOP_WORDS = {"from", "with", "using", "research", "study", "paper", "what", "does", "could", "would", "this", "that",
-              "方法", "我们", "研究", "如何", "进行", "问题", "是否", "这个", "中的", "可以"}
-
-
-def terms(value: str) -> list[str]:
-    """Use English words and Chinese bigrams for title lookup and ranking."""
-    result = []
-    for word in re.findall(r"[a-z][a-z0-9-]+|[\u3400-\u9fff]+", value.casefold()):
-        if "\u3400" <= word[0] <= "\u9fff":
-            result.extend(word[i:i + 2] for i in range(len(word) - 1))
-        elif len(word) >= 3 or word in {"rl", "ai"}:
-            result.append(word)
-    return list(dict.fromkeys(word for word in result if word not in STOP_WORDS))
-
-
-def metadata(page: dict) -> tuple[str, dict[str, str]]:
-    title = ""
-    fields = {}
-    for name, prop in page["properties"].items():
-        kind = prop["type"]
-        if kind == "title":
-            title = plain_text(prop)
-        elif name.startswith("Agent ") or name.casefold() in {
-            "proposal data", "result data", "archive key", "publication key", "verification code"
-        }:
-            continue
-        elif kind == "rich_text":
-            fields[name] = plain_text(prop)[:1500]
-        elif kind in {"select", "status"}:
-            fields[name] = (prop.get(kind) or {}).get("name", "")
-        elif kind == "multi_select":
-            fields[name] = ", ".join(option["name"] for option in prop[kind])
-    return title, {key: value for key, value in fields.items() if value}
 
 
 def field_or_section(fields: dict[str, str], body: str, names: tuple[str, ...]) -> str:

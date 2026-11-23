@@ -1,7 +1,7 @@
 """Bring explicit paper/feed follow-ups and interest requests into normal intake.
 
 Input origin:
-    Registered Paper, Feed and Interest processors, each with its own queue rule.
+    Registered Paper, Feed, Interest and Pool processors, each with its own queue rule.
 Output destination:
     Shared Organizer/Proposer submit Workbench proposals, without Inbox copies.
 Responsibility:
@@ -21,4 +21,4 @@ async def process_signals(self) -> list[str]:
     Returns:
         Proposal links awaiting human review.
     """
-    return await self.intake_sources(["paper", "feed", "interest"])
+    return await self.intake_sources(["paper", "feed", "interest", "pool"])

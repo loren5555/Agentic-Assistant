@@ -37,7 +37,7 @@ def initialize_schema(services: Services, topics: list[str]) -> None:
     services.discovery_pool.initialize_schema()
     services.feed.initialize_schema()
     services.recommendation_tags.initialize(services.discovery_pool.data_source_id(), topics)
-    for kind in ("inbox", "todo", "notero", "simpread", "paper", "feed", "interest"):
+    for kind in ("inbox", "todo", "notero", "simpread", "paper", "feed", "interest", "pool"):
         logger.info("Initializing source context schema: source=%s.", kind)
         services.processor(kind).initialize_schema()
 

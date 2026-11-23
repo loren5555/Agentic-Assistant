@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import hashlib
+import re
 
 from notion_client import Client
 
@@ -132,10 +133,23 @@ class ResearchFeed:
             extra={"details": {'candidate': candidate.id}},
         )
 
-        sections = [f"Source: {candidate.url}", f"Discovery type: {candidate.kind}",
-                    f"Exploration scope: {candidate.breadth}", f"Evidence: {evidence.source_url}",
-                    f"Reading scope: {'full text' if evidence.full_text else 'partial text'}",
-                    f"Reason: {assessment.reason}"]
+        sections = [f"> {assessment.reason}"]
+        if evidence.summary:
+            sections.append(f"## Reader synopsis (model-generated)\n\n{evidence.summary}")
+        figure = getattr(evidence, "figure", None)
+        if candidate.kind == "Paper" and figure and figure.caption.strip() and all(
+            re.fullmatch(r"https://[A-Za-z0-9.-]+/[^\s()<>]+", url)
+            for url in (figure.image_url, figure.source_url)
+        ):
+            caption = " ".join(figure.caption.split()).replace("[", "(").replace("]", ")")
+            sections.extend([f"![{caption}]({figure.image_url})", f"[Figure source]({figure.source_url})"])
+        for heading, points in (
+            ("Author claims", assessment.author_claims),
+            ("Experimental support", assessment.experimental_support),
+            ("Agent inference", assessment.agent_inference),
+        ):
+            if points:
+                sections.append(f"## {heading}\n\n" + "\n".join(f"- {point}" for point in points))
         if assessment.credibility:
             sections.append(f"## Credibility assessment\n\n{assessment.credibility}")
         if assessment.novelty:
@@ -155,17 +169,11 @@ class ResearchFeed:
             sections.append("## Discussion access limits\n\n" + "\n".join(evidence.discussion_limitations))
         if evidence.quality.sources:
             sections.append("## Publication and author verification\n\n" + "\n".join(evidence.quality.sources))
-        for heading, points in (
-            ("Author claims", assessment.author_claims),
-            ("Experimental support", assessment.experimental_support),
-            ("Agent inference", assessment.agent_inference),
-        ):
-            sections.append(f"## {heading}\n\n" + "\n".join(f"- {point}" for point in points))
+        sections.extend(["---", f"[Original {candidate.kind.lower()}]({candidate.url}) · "
+                         f"[Reading source]({evidence.source_url})",
+                         f"**Reading scope** · {evidence.reading_scope}"])
         if candidate.published_date:
-            sections.append(f"Source publication date: {candidate.published_date}")
-        sections.append(f"## Reading scope\n\n{evidence.reading_scope}")
-        if evidence.summary:
-            sections.append(f"## Reader synopsis (model-generated)\n\n{evidence.summary}")
+            sections.append(f"Published {candidate.published_date}")
         sections.append(f"## Source excerpts\n\n{evidence.text}")
         if evidence.limitations or evidence.failure:
             limitations = [*evidence.limitations, *([evidence.failure] if evidence.failure else [])]

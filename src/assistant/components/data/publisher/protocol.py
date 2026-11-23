@@ -16,11 +16,15 @@ class PublisherProtocol(Protocol):
         """Prepare destination publication keys and reading fields."""
         ...
 
+    def locate(self, source: SourceMaterial, item: WorkbenchItem | None, assignment: RetainedArtifact) -> str | None:
+        """Resolve an existing manuscript page for the writing context."""
+        ...
+
     def publish_source_brief(self, material: ReadingMaterial, brief: ReadingBrief) -> BriefPublicationReceipt:
         """Save a grounded source brief before any follow-up proposal."""
         ...
 
-    def publish(self, source: SourceMaterial, item: WorkbenchItem,
+    def publish(self, source: SourceMaterial, item: WorkbenchItem | None,
                 artifact: RetainedArtifact, key: str) -> PublicationReceipt:
         """Save an accepted product with its source provenance.
 

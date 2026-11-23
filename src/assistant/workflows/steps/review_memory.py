@@ -1,13 +1,13 @@
 """Learn role preferences from submitted Workbench comments.
 
 Workbench queues one independent review per human decision with written feedback.
-The writer reviews both role notes with a project skill. DBOS retains its reason
+The writer reviews both role notes with project instructions. DBOS retains its reason
 and the source page; the file provider commits just the affected role texts.
 """
 from dbos import DBOS, SetWorkflowAttributes, SetWorkflowID
 from assistant.components.data.memory.models import ReviewFeedback, ROLES
 from assistant.components.data.workbench.models import SUBMIT_EXTERNAL_RESULT
-from assistant.runtime.agent_context import skill_text
+from assistant.runtime.agent_context import load_instructions
 from logger import get_logger, trace_call
 
 MEMORY_QUEUE = "assistant-memory"
@@ -41,11 +41,11 @@ async def queue_feedback(workflows, item, source):
 @trace_call("workflow", "review_memory")
 async def review_memory(self, event: ReviewFeedback):
     logger.info("Reviewing human feedback: title=%r decision=%s.", event.title, event.decision)
-    earlier, skill = self.memory_evidence(event)
+    earlier, instructions = self.memory_evidence(event)
     changed_roles = set()
     for _ in range(3):
         notes = self.read_role_notes()
-        revision = await self.revise_notes(event, earlier, notes, skill)
+        revision = await self.revise_notes(event, earlier, notes, instructions)
         updated, conflict = self.apply_notes(event, notes, revision)
         changed_roles.update(updated)
         if not conflict:
@@ -58,7 +58,7 @@ async def review_memory(self, event: ReviewFeedback):
 
 @DBOS.step(name="ProposalWorkflows.memory_evidence")
 def memory_evidence(self, event):
-    return self.index.remember_feedback(event), skill_text("revise-role-memory")
+    return self.index.remember_feedback(event), load_instructions("revise-role-memory")
 
 
 @DBOS.step(name="ProposalWorkflows.read_role_notes")
@@ -68,8 +68,8 @@ def read_role_notes(self):
 
 @DBOS.step(name="ProposalWorkflows.revise_notes", retries_allowed=True, max_attempts=3, interval_seconds=2)
 @trace_call("step", "revise_notes")
-async def revise_notes(self, event, earlier, notes, skill):
-    return await self.services.memory_reviewer.review(event, earlier, notes, skill)
+async def revise_notes(self, event, earlier, notes, instructions):
+    return await self.services.memory_reviewer.review(event, earlier, notes, instructions)
 
 
 @DBOS.step(name="ProposalWorkflows.apply_notes")

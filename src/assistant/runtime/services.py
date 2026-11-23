@@ -14,6 +14,7 @@ from assistant.components.coordination.proposer.protocol import ProposerProtocol
 from assistant.components.coordination.reconciler.protocol import ReconcilerProtocol
 from assistant.components.coordination.router.protocol import RouterProtocol
 
+from assistant.components.execution.writer.protocol import WriterProtocol
 from assistant.components.execution.briefer.protocol import BriefWriterProtocol
 from assistant.components.execution.investigator.protocol import InvestigatorProtocol
 from assistant.components.execution.planner.protocol import PlannerProtocol
@@ -79,11 +80,19 @@ class Services:
             plugin = get_plugin("data.sources", name)
             classes = {"inbox": "InboxProcessor", "todo": "TodoProcessor",
                        "notero": "NoteroProcessor", "simpread": "SimpReadProcessor",
-                       "paper": "PaperProcessor", "feed": "FeedProcessor", "interest": "InterestProcessor"}
+                       "paper": "PaperProcessor", "feed": "FeedProcessor", "pool": "PoolProcessor", "interest": "InterestProcessor"}
             options = dict(self.config.provider_options[name])
+            if kind == "pool":
+                options["discovery_pool_data_source_id"] = self.discovery_pool.data_source_id()
             options["input_limit"] = self.config.runtime.batch_size
             self._processors[kind] = getattr(plugin, classes[kind])(options)
         return self._processors[kind]
+
+    @cached_property
+    def workspace(self):
+        """Shared read-only catalog for agents making workspace-dependent decisions."""
+        from plugins.data.workspace.notion import Workspace
+        return Workspace(self.config.provider_options["notion"])
 
     @cached_property
     def workbench(self) -> WorkbenchProtocol:
@@ -147,7 +156,7 @@ class Services:
         """Provide item-level proposal drafting."""
         name = self.config.providers.proposer
         plugin = get_plugin("coordination.proposer", name)
-        service = plugin.Proposer(self.config.provider_options[name])
+        service = plugin.Proposer(self.config.provider_options[name], workspace=self.workspace)
         return service
 
     @cached_property
@@ -169,7 +178,7 @@ class Services:
         """Provide extraction without controlling workflow progression."""
         name = self.config.providers.curator
         plugin = get_plugin("coordination.curator", name)
-        service = plugin.Curator(self.config.provider_options[name])
+        service = plugin.Curator(self.config.provider_options[name], workspace=self.workspace)
         return service
 
     # Delegated execution capabilities.
@@ -187,6 +196,12 @@ class Services:
         plugin = get_plugin("execution.task_worker", name)
         service = plugin.TaskWorker(self.config.provider_options[name])
         return service
+
+    @cached_property
+    def direct_answer(self) -> TaskWorkerProtocol:
+        """Answer an approved question through Codex."""
+        from plugins.execution.task_worker.direct_answer import DirectAnswerWorker
+        return DirectAnswerWorker(self.config.provider_options.get("codex", {}))
 
     @cached_property
     def experiment(self) -> TaskWorkerProtocol:
@@ -212,6 +227,12 @@ class Services:
     def literature_investigator(self) -> InvestigatorProtocol:
         plugin = get_plugin("execution.investigator", "aminer")
         return plugin.Investigator(self.config.provider_options.get("aminer", {}))
+
+    @cached_property
+    def writer(self) -> WriterProtocol:
+        """Author all durable output using the configured writing model."""
+        name = self.config.providers.writer or self.config.providers.briefs
+        return get_plugin("execution.writer", name).Writer(self.config.provider_options[name])
 
     @cached_property
     def briefs(self) -> BriefWriterProtocol:

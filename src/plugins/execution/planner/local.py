@@ -12,6 +12,7 @@ from pydantic_ai.models.openai import OpenAIResponsesModelSettings
 from assistant.components.execution.planner.models import PlanningResult
 from assistant.components.execution.task_worker.models import TaskRequest, TaskResult
 from assistant.runtime.records import ExecutionProcess
+from assistant.runtime.agent_context import writing_guidance
 from logger import get_logger, trace_call
 from plugins._shared.local.config import LocalSettings
 
@@ -48,7 +49,9 @@ class Planner:
         if self.settings.planner_effort is not None:
             settings["openai_reasoning_effort"] = self.settings.planner_effort
         self.agent = Agent(infer_model(self.model), output_type=NativeOutput(PlanningResult),
-                           instructions=PLANNER_INSTRUCTIONS, model_settings=settings)
+                           instructions=PLANNER_INSTRUCTIONS + writing_guidance(
+                               "Make the consequential choices and observable acceptance criteria easy to review.", brief=True
+                           ), model_settings=settings)
 
     @trace_call("component", "planner.execute")
     async def execute(self, task: TaskRequest) -> TaskResult:

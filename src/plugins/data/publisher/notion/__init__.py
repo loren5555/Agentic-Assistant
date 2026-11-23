@@ -8,6 +8,8 @@ from assistant.components.execution.briefer.models import ReadingMaterial, Readi
 from assistant.components.data.publisher.models import BriefPublicationReceipt, PublicationReceipt
 from plugins.data.publisher.notion.artifacts import ArtifactPublisher
 from plugins.data.publisher.notion.briefs import BriefPublisher
+from assistant.components.recommendations.discovery.models import PaperCandidate
+from assistant.components.recommendations.discovery.identity import candidate_identity
 from logger import get_logger, trace_call
 
 
@@ -33,8 +35,43 @@ class InformationPublisher:
         """Save a grounded source brief before any follow-up proposal."""
         return self.papers.publish(material, brief, mark_notero=False)
 
+    def _material(self, source: SourceMaterial, item: WorkbenchItem | None,
+                  artifact: RetainedArtifact) -> tuple[ReadingMaterial, bool]:
+        """Carry source bibliography only when the assignment describes that same work."""
+        primary = item is None or getattr(item, "selected_action_id", "") == "organize_material"
+        paper_url = getattr(artifact.reading, "paper_url", "")
+        origin_url = source.metadata.get("URL") or source.metadata.get("Link")
+        same_paper = False
+        if artifact.kind == "paper":
+            same_title = source.title.strip().casefold() == artifact.title.strip().casefold()
+            if paper_url and isinstance(origin_url, str) and origin_url:
+                paper = PaperCandidate(id="", title=artifact.title, url=paper_url)
+                origin = PaperCandidate(id="", title=source.title, url=origin_url)
+                same_link = candidate_identity(paper) == candidate_identity(origin)
+                same_paper = same_title or same_link
+            else:
+                same_paper = same_title
+            primary = primary and same_paper
+        metadata = dict(source.metadata) if primary else {}
+        if paper_url.startswith(("https://", "http://")):
+            metadata["URL"] = paper_url
+        metadata["Source Type"] = {"notero": "Zotero", "simpread": "SimpRead"}.get(source.kind, source.kind.title())
+        material = ReadingMaterial(kind=source.kind if source.kind in {"notero", "simpread"} else "inbox",
+            page_id=source.page_id, url=source.url, title=source.title if primary else artifact.title,
+            text=source.text, metadata=metadata, revision=source.revision,
+            full_text_verified=source.full_text_verified and (artifact.kind != "paper" or same_paper))
+        return material, primary
+
+    def locate(self, source, item, assignment):
+        """Resolve the work through the same identity rules used at publication."""
+        material, primary = self._material(source, item, assignment)
+        destination = "papers" if assignment.kind == "paper" else "knowledge"
+        if not primary and not material.metadata.get("URL"):
+            return None
+        return self.papers.locate(material, destination, assignment.title, None if primary else "lookup")
+
     @trace_call("component", "publisher.publish")
-    def publish(self, source: SourceMaterial, item: WorkbenchItem,
+    def publish(self, source: SourceMaterial, item: WorkbenchItem | None,
                 artifact: RetainedArtifact, key: str) -> PublicationReceipt:
         """Publish one accepted paper, knowledge, idea or interest product.
 
@@ -48,28 +85,21 @@ class InformationPublisher:
             Verified publication receipt.
         """
         self.logger.info('Publishing accepted output: title=%r destination=%s.', artifact.title, artifact.kind)
-        if artifact.kind == "paper":
-            organized_source = (source.kind in {"notero", "simpread"} and item.result is not None
-                                and item.result.action_id == "organize_material"
-                                and len(item.result.artifacts) == 1)
-            metadata = dict(source.metadata) if organized_source else {}
-            paper_url = getattr(artifact.reading, "paper_url", "")
-            if paper_url.startswith(("https://", "http://")):
-                metadata["URL"] = paper_url
-            metadata["Source Version"] = source.version
-            metadata["Human Supplement"] = source.supplement
-            metadata["Source Type"] = {"notero": "Zotero", "simpread": "SimpRead"}.get(source.kind, source.kind.title())
-            capture = ReadingMaterial(kind="notero" if source.kind == "notero" else "simpread",
-                                 page_id=source.page_id, url=source.url, title=source.title if organized_source else artifact.title,
-                                 text=source.text, metadata=metadata, revision=source.revision,
-                                 full_text_verified=organized_source and source.full_text_verified)
-            content = artifact.content + f"\n\nWorkbench: {item.url}"
-            brief = ReadingBrief(destination="papers", title=artifact.title, content=content,
-                                 reason=artifact.reason, evidence_level="full_text" if capture.full_text_verified else "notes",
-                                 reading=artifact.reading or PaperReadingMetadata())
-            receipt = self.papers.publish(capture, brief, artifact_key=None if organized_source else key)
+        if artifact.kind in {"paper", "knowledge"}:
+            material, primary = self._material(source, item, artifact)
+            content = artifact.content
+            if item:
+                content += f"\n\n[Workbench]({item.url})"
+            brief = ReadingBrief(destination="papers" if artifact.kind == "paper" else "knowledge",
+                title=artifact.title, content=content, reason=artifact.reason,
+                evidence_level=artifact.evidence_level or "notes", reading=artifact.reading or PaperReadingMetadata())
+            receipt = self.papers.publish(material, brief, artifact_key=None if primary else key,
+                mark_notero=item is not None and primary, target_page_id=artifact.target_page_id,
+                contribution=artifact.contribution, edition=key, target_revision=artifact.target_revision)
             result = PublicationReceipt(key=key, url=receipt.url)
         else:
+            if item is None:
+                raise ValueError(f"{artifact.kind} requires an accepted Workbench item")
             result = self.archive.publish(item, artifact, key)
         self.logger.info('Accepted output published: title=%r destination=%s.', artifact.title, artifact.kind)
         return result

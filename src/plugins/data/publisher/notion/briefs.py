@@ -1,7 +1,10 @@
 """Publish organized paper and knowledge briefs while retaining human notes."""
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 import hashlib
+from html import escape
+from urllib.parse import urlsplit
 
 from notion_client import Client
 
@@ -36,6 +39,18 @@ def rich_text(text: str) -> list[dict]:
     return fragments
 
 
+@dataclass
+class Destination:
+    data_source_id: str
+    title_name: str
+    key: str
+    property_name: str
+    property_value: dict
+    bibliographic_properties: dict
+    page: dict | None
+    schema: dict
+
+
 class BriefPublisher(BriefPublisherProtocol):
     """Publish one source-linked brief while preserving human-owned page content."""
 
@@ -49,9 +64,10 @@ class BriefPublisher(BriefPublisherProtocol):
         self.catalog = RecommendationTags(options)
         self.logger = get_logger("plugins.data.publisher.notion.briefs")
 
-    @trace_call("component", "captures.publish")
+    @trace_call("component", "publisher.edit_page")
     def publish(self, capture: ReadingMaterial, brief: ReadingBrief, *, artifact_key: str | None = None,
-                mark_notero: bool = True) -> BriefPublicationReceipt:
+                mark_notero: bool = True, target_page_id: str | None = None,
+                contribution: str = "work", edition: str | None = None, target_revision: str = "") -> BriefPublicationReceipt:
         """Create or replace only the assistant-owned brief section.
 
         Args:
@@ -67,32 +83,17 @@ class BriefPublisher(BriefPublisherProtocol):
         if brief.evidence_level == "full_text" and not capture.full_text_verified:
             raise ValueError(f"Full-text acquisition was not verified: {capture.url}")
 
-        key = "capture:" + hashlib.sha256(capture.identity.encode()).hexdigest()
-        paper_url = capture.metadata.get("URL") or capture.metadata.get("Link") or capture.metadata.get("Canonical URL")
-        if not isinstance(paper_url, str) or not paper_url.startswith(("https://", "http://")):
-            paper_url = ""
-        if artifact_key:
-            key = "artifact:" + artifact_key
-            if paper_url:
-                key = candidate_identity(PaperCandidate(id=key, title=brief.title, url=paper_url))
-        data_source_id = self.settings.papers_data_source_id
-        property_name = "Source Page"
-        property_value = {"url": capture.url}
-        # Notion app/web URLs can differ while referring to the same raw page.
-        page_filter = {
-            "or": [
-                {"property": property_name, "url": {"equals": capture.url}},
-                {"property": property_name, "url": {"contains": capture.page_id}},
-                {"property": property_name, "url": {"contains": capture.page_id.replace("-", "")}},
-            ],
-        }
-        if brief.destination == "knowledge":
-            data_source_id = self.settings.knowledge_data_source_id
-            property_name = "Archive Key"
-            property_value = {"rich_text": rich_text(key)}
-            page_filter = {"property": property_name, "rich_text": {"equals": key}}
-
-        section = self._brief_section(capture, brief, key)
+        section = self._brief_section(capture, brief)
+        incremental = contribution != "work"
+        marker = f"Publication reference: {edition}" if edition else ""
+        details = f"<details>\n<summary>Publication details</summary>\n\t{marker}\n</details>"
+        if marker and not incremental:
+            section = section.replace("\n\n### Personal notes", f"\n\n{details}\n\n### Personal notes")
+        if incremental:
+            if not marker:
+                raise ValueError("An incremental publication requires its durable contribution key")
+            heading = "### " + brief.title if contribution == "discussion" else "## " + brief.title
+            section = f"{heading}\n\n{brief.content}\n\n[Source]({capture.url})\n\n{details}"
         # Source identity locates the page; the receipt identifies this exact
         # source version and report. Neither depends on Notion's Markdown export.
         publication_key = "brief:" + hashlib.sha256(section.encode()).hexdigest()
@@ -104,48 +105,20 @@ class BriefPublisher(BriefPublisherProtocol):
             extra={"details": {'source_page': capture.page_id}},
         )
         with Client(auth=self.settings.token) as client:
-            source = client.data_sources.retrieve(data_source_id=data_source_id)
-            title_name = next(name for name, value in source["properties"].items() if value["type"] == "title")
-            bibliographic_properties = {}
-            if brief.destination == "papers":
-                # Matching URI/DOI links a re-imported source to its existing brief.
-                matches, bibliographic_properties = self._bibliographic_matches(capture, source["properties"])
-                legacy = page_filter
-                if artifact_key:
-                    legacy = {"and": [
-                        {"property": "Source Page", "url": {"equals": capture.url}},
-                        {"property": title_name, "title": {"equals": brief.title}},
-                    ]}
-                page_filter = {"or": [{"property": "Paper Key", "rich_text": {"equals": key}}, *matches]}
-                if paper_url and source["properties"].get("Link", {}).get("type") == "url":
-                    page_filter["or"].append({"property": "Link", "url": {"equals": paper_url}})
-                bibliographic_properties["Paper Key"] = {"rich_text": rich_text(key)}
-            response = client.data_sources.query(data_source_id=data_source_id, filter=page_filter, page_size=2)
-            if brief.destination == "papers" and not response["results"]:
-                # Adopt an existing unkeyed page only if its legacy identity matches.
-                legacy_filter = {"and": [{"property": "Paper Key", "rich_text": {"is_empty": True}}, legacy]}
-                response = client.data_sources.query(data_source_id=data_source_id, filter=legacy_filter, page_size=2)
-            self.logger.debug(
-                'kind=script provider=notion Organized-output lookup: matches=%d.',
-                len(response['results']),
-                extra={"details": {'source_page': capture.page_id}},
-            )
-            if len(response["results"]) > 1:
-                raise ValueError(f"Multiple organized outputs for source {capture.url}")
-
+            destination = self._destination(client, capture, brief.destination, brief.title, artifact_key, target_page_id)
+            existing = destination.page
             reading_properties = {}
             if brief.destination == "papers":
-                existing_properties = response["results"][0]["properties"] if response["results"] else {}
-                reading_properties = self._reading_properties(capture, brief, source["properties"], existing_properties)
+                existing_properties = existing["properties"] if existing else {}
+                reading_properties = self._reading_properties(capture, brief, destination.schema, existing_properties)
                 if existing_properties and not existing_properties.get("Paper Key", {}).get("rich_text"):
-                    reading_properties["Paper Key"] = bibliographic_properties["Paper Key"]
+                    reading_properties["Paper Key"] = destination.bibliographic_properties["Paper Key"]
                 if not existing_properties.get(RELATION, {}).get("relation"):
                     ids = capture.metadata.get(RELATION) or self.catalog.resolve(brief.reading.directions)
                     if ids:
                         reading_properties[RELATION] = relation(ids)
 
-            if response["results"]:
-                existing = response["results"][0]
+            if existing:
                 page_id = existing["id"]
                 confirmed = self._publication_key(existing) == publication_key
                 if confirmed:
@@ -161,20 +134,40 @@ class BriefPublisher(BriefPublisherProtocol):
                         extra={"details": {'page': page_id}},
                     )
                     body = page_markdown(client, page_id)
-                    self._update_brief(client, page_id, body, section)
+                    if incremental:
+                        if marker not in body:
+                            insert = {"content": "\n\n" + section, "position": {"type": "end"}}
+                            if contribution == "discussion":
+                                if "## Research discussion" in body.splitlines():
+                                    insert = {"content": section, "after": "## Research discussion"}
+                                else:
+                                    insert["content"] = "\n\n## Research discussion\n\n" + section
+                            client.pages.update_markdown(page_id=page_id, type="insert_content", insert_content=insert)
+                    elif not marker or marker not in body:
+                        if target_revision and existing["last_edited_time"] != target_revision:
+                            raise ValueError(f"Writing target changed since the manuscript was prepared: {brief.title}")
+                        self._update_brief(client, page_id, body, section)
             else:
+                if contribution == "discussion":
+                    # A verified finding may reach the library before the original paper is organized.
+                    # Keep a replaceable paper record above it so later intake can supply the reading note.
+                    paper_url = brief.reading.paper_url or capture.metadata.get("URL")
+                    citation = f"[{brief.title}]({paper_url})" if paper_url else brief.title
+                    lead = brief.reading.abstract or citation
+                    record = brief.model_copy(update={"content": lead, "evidence_level": "abstract" if brief.reading.abstract else "metadata"})
+                    section = self._brief_section(capture, record) + "\n\n## Research discussion\n\n" + section
                 self.logger.debug("kind=script provider=notion Creating organized %s page.", brief.destination,
                                   extra={"details": {"source_page": capture.page_id}})
                 properties = {
-                    title_name: {"title": rich_text(brief.title)},
-                    property_name: property_value,
-                    **bibliographic_properties,
+                    destination.title_name: {"title": rich_text(brief.title)},
+                    destination.property_name: destination.property_value,
+                    **destination.bibliographic_properties,
                     **reading_properties,
                 }
                 if brief.destination == "papers":
                     properties["Source Type"] = {"select": {"name": capture.metadata.get("Source Type") or {"notero": "Zotero", "simpread": "SimpRead", "inbox": "Inbox"}[capture.kind]}}
                 page = client.pages.create(
-                    parent={"type": "data_source_id", "data_source_id": data_source_id},
+                    parent={"type": "data_source_id", "data_source_id": destination.data_source_id},
                     properties=properties, markdown=section,
                 )
                 page_id = page["id"]
@@ -184,17 +177,19 @@ class BriefPublisher(BriefPublisherProtocol):
             # reuse the same page, and a matching receipt never rewrites content.
             if not confirmed:
                 properties = {
-                    property_name: property_value,
+                    destination.property_name: destination.property_value,
                     "Publication Key": {"rich_text": rich_text(publication_key)},
                 }
+                if existing and brief.destination == "knowledge":
+                    properties.pop(destination.property_name)
                 if brief.destination == "papers":
-                    if response["results"] and existing_properties.get("Source Page", {}).get("url"):
+                    if existing and existing_properties.get("Source Page", {}).get("url"):
                         properties.pop("Source Page")
                     properties["Brief Status"] = {"select": {"name": "Reviewed"}}
                 client.pages.update(page_id=page_id, properties=properties)
             # Fill missing reading fields even when the body was already confirmed.
             # Nonempty human-edited fields are deliberately preserved.
-            if response["results"] and reading_properties:
+            if existing and reading_properties:
                 self.logger.info('Completing paper reading metadata: title=%r fields=%s.',
                                  brief.title, ", ".join(reading_properties))
                 client.pages.update(page_id=page_id, properties=reading_properties)
@@ -211,7 +206,7 @@ class BriefPublisher(BriefPublisherProtocol):
                     extra={"details": {'page': page_id}},
                 )
                 raise ValueError(f"Brief publication key readback failed: {page_id}")
-            receipt = BriefPublicationReceipt(page_id=page_id, url=verified["url"], key=key, fingerprint=capture.fingerprint)
+            receipt = BriefPublicationReceipt(page_id=page_id, url=verified["url"], key=destination.key, fingerprint=capture.fingerprint)
             if mark_notero and capture.kind == "notero" and brief.destination == "papers" and not artifact_key:
                 # Confirm the destination first, including on publication retries.
                 self.logger.info('Marking Notero entry as published to Papers: title=%r.', capture.title)
@@ -228,6 +223,107 @@ class BriefPublisher(BriefPublisherProtocol):
             extra={"details": {'page': page_id, 'url': receipt.url}},
         )
         return receipt
+
+    def locate(self, capture: ReadingMaterial, destination: str, title: str, artifact_key: str | None):
+        """Resolve an existing canonical page before Writer receives its assignment."""
+        with Client(auth=self.settings.token) as client:
+            destination = self._destination(client, capture, destination, title, artifact_key, None)
+        return destination.page["id"] if destination.page else None
+
+    def _destination(self, client, capture, destination, title, artifact_key, target_page_id):
+        """Use the same bibliographic and legacy keys before writing and at publication."""
+        key = "capture:" + hashlib.sha256(capture.identity.encode()).hexdigest()
+        paper_url = capture.metadata.get("URL") or capture.metadata.get("Link") or capture.metadata.get("Canonical URL")
+        if not isinstance(paper_url, str) or not paper_url.startswith(("https://", "http://")):
+            paper_url = ""
+        legacy_key = key
+        if artifact_key:
+            key = "artifact:" + artifact_key
+        if destination == "papers":
+            doi = next((v for k, v in capture.metadata.items() if k.lower() == "doi" and isinstance(v, str)), "")
+            if paper_url or doi:
+                key = candidate_identity(PaperCandidate(id=key, title=title, url=paper_url, doi=doi))
+        data_source_id = self.settings.papers_data_source_id
+        property_name = "Source Page"
+        property_value = {"url": capture.url}
+        # Notion app/web URLs can differ while referring to the same raw page.
+        page_filter = {
+            "or": [
+                {"property": property_name, "url": {"equals": capture.url}},
+                {"property": property_name, "url": {"contains": capture.page_id}},
+                {"property": property_name, "url": {"contains": capture.page_id.replace("-", "")}},
+            ],
+        }
+        if destination == "knowledge":
+            if not artifact_key:
+                key = "knowledge:" + hashlib.sha256(f"{capture.identity}:{title.casefold()}".encode()).hexdigest()
+            data_source_id = self.settings.knowledge_data_source_id
+            property_name = "Archive Key"
+            property_value = {"rich_text": rich_text(key)}
+            page_filter = {"property": property_name, "rich_text": {"equals": key}}
+        source = client.data_sources.retrieve(data_source_id=data_source_id)
+        title_name = next(name for name, value in source["properties"].items() if value["type"] == "title")
+        bibliographic_properties = {}
+        if destination == "papers":
+            # Matching URI/DOI links a re-imported source to its existing brief.
+            matches, bibliographic_properties = self._bibliographic_matches(capture, source["properties"])
+            legacy = page_filter
+            if artifact_key:
+                legacy = {"and": [
+                    {"property": "Source Page", "url": {"equals": capture.url}},
+                    {"property": title_name, "title": {"equals": title}},
+                ]}
+            page_filter = {"or": [{"property": "Paper Key", "rich_text": {"equals": key}}, *matches]}
+            if paper_url:
+                url_key = candidate_identity(PaperCandidate(id=key, title=title, url=paper_url))
+                if url_key != key:
+                    page_filter["or"].append({"property": "Paper Key", "rich_text": {"equals": url_key}})
+            if paper_url and source["properties"].get("Link", {}).get("type") == "url":
+                page_filter["or"].append({"property": "Link", "url": {"equals": paper_url}})
+            if not artifact_key and legacy_key != key:
+                page_filter["or"].append({"property": "Paper Key", "rich_text": {"equals": legacy_key}})
+            if paper_url and url_key.startswith("arxiv:") and source["properties"].get("Link", {}).get("type") == "url":
+                identifier = url_key.removeprefix("arxiv:")
+                for scheme in ("https", "http"):
+                    for path in ("abs/" + identifier, "pdf/" + identifier, "pdf/" + identifier + ".pdf"):
+                        page_filter["or"].append({"property": "Link", "url": {"equals": f"{scheme}://arxiv.org/{path}"}})
+            bibliographic_properties["Paper Key"] = {"rich_text": rich_text(key)}
+        if destination == "knowledge" and not artifact_key:
+            # Adopt earlier single-source archives and distinguish different works from one source.
+            page_filter = {"or": [page_filter, {"and": [
+                {"property": "Archive Key", "rich_text": {"equals": legacy_key}},
+                {"property": title_name, "title": {"equals": title}},
+            ]}]}
+        if destination == "knowledge" and artifact_key:
+            page_filter = {"or": [page_filter, {"property": "Archive Key", "rich_text": {"equals": artifact_key}}]}
+        if target_page_id:
+            target = client.pages.retrieve(page_id=target_page_id)
+            parent = target.get("parent", {}).get("data_source_id", "").replace("-", "")
+            if target.get("in_trash") or target.get("archived") or parent != data_source_id.replace("-", ""):
+                raise ValueError(f"The destination for {title} has moved or was archived")
+            if destination == "papers":
+                fragments = target["properties"].get("Paper Key", {}).get("rich_text", [])
+                existing_key = "".join(part["plain_text"] for part in fragments)
+                scheme = key.partition(":")[0]
+                if scheme in {"doi", "arxiv", "openreview"} and existing_key.startswith(scheme + ":") and existing_key != key:
+                    raise ValueError(f"The selected page identifies a different paper: {title}")
+            response = {"results": [target]}
+        else:
+            response = client.data_sources.query(data_source_id=data_source_id, filter=page_filter, page_size=2)
+        if destination == "papers" and not response["results"]:
+            # Adopt an existing unkeyed page only if its legacy identity matches.
+            legacy_filter = {"and": [{"property": "Paper Key", "rich_text": {"is_empty": True}}, legacy]}
+            response = client.data_sources.query(data_source_id=data_source_id, filter=legacy_filter, page_size=2)
+        self.logger.debug(
+            'kind=script provider=notion Organized-output lookup: matches=%d.',
+            len(response['results']),
+            extra={"details": {'source_page': capture.page_id}},
+        )
+        if len(response["results"]) > 1:
+            raise ValueError(f"Multiple library pages match {title}: " +
+                             ", ".join(page["url"] for page in response["results"]))
+        return Destination(data_source_id, title_name, key, property_name, property_value, bibliographic_properties,
+                           next(iter(response["results"]), None), source["properties"])
 
     def _publication_key(self, page: dict) -> str:
         """Read a publication receipt independently of page Markdown.
@@ -338,7 +434,7 @@ class BriefPublisher(BriefPublisherProtocol):
             properties[name] = {property_type: value if property_type == "url" else rich_text(value)}
         return matches, properties
 
-    def _brief_section(self, capture: ReadingMaterial, brief: ReadingBrief, key: str) -> str:
+    def _brief_section(self, capture: ReadingMaterial, brief: ReadingBrief, key: str = "") -> str:
         """Render the only section owned by automated paper/article intake.
 
         Args:
@@ -349,12 +445,23 @@ class BriefPublisher(BriefPublisherProtocol):
         Returns:
             Clearly bounded Markdown section.
         """
-        section = (
-            f"{BRIEF_START}\n\n{brief.content}\n\n"
-            f"Evidence read: {brief.evidence_level}\n\nReason: {brief.reason}\n\n"
-            f"Source: {capture.url}\n\nCapture key: {key}\n\n"
-            f"Source fingerprint: {capture.fingerprint}\n\n{BRIEF_END}"
-        )
+        link = brief.reading.paper_url or capture.metadata.get("URL") or capture.metadata.get("Link")
+        primary = ""
+        if brief.destination == "papers" and isinstance(link, str) and link.startswith(("https://", "http://")):
+            primary = f"[Original paper]({link}) · "
+        content = brief.content
+        heading, _, rest = content.partition("\n")
+        if heading == f"# {brief.title}":
+            content = rest.lstrip("\n")
+        if brief.destination == "papers":
+            pdf = capture.metadata.get("PDF URL") or capture.metadata.get("PDF") or link
+            if isinstance(pdf, str) and pdf.startswith(("https://", "http://")):
+                path = urlsplit(pdf)
+                if path.path.lower().endswith(".pdf") or (path.hostname == "arxiv.org" and path.path.startswith("/pdf/")):
+                    content += f'\n\n<pdf src="{escape(pdf, quote=True)}">Original paper</pdf>'
+        section = (f"## Reading note\n\n{content}\n\n"
+                   f"{primary}[Source]({capture.url}) · Evidence: {brief.evidence_level}\n\n"
+                   "### Personal notes")
         return section
 
     def _update_brief(self, client: Client, page_id: str, body: str, section: str) -> None:
@@ -366,25 +473,28 @@ class BriefPublisher(BriefPublisherProtocol):
             body: Current complete page Markdown.
             section: New assistant-owned report.
         """
-        if BRIEF_START not in body and BRIEF_END not in body:
+        start_label, end_label = BRIEF_START, BRIEF_END
+        if "## Reading note" in body or "### Personal notes" in body:
+            start_label, end_label = "## Reading note", "### Personal notes"
+        if start_label not in body and end_label not in body:
             self.logger.debug(
                 'kind=script provider=notion Appending assistant brief to existing page.',
                 extra={"details": {'page': page_id}},
             )
             client.pages.update_markdown(
                 page_id=page_id, type="insert_content",
-                insert_content={"content": "\n\n" + section, "position": {"type": "end"}},
+                insert_content={"content": section + "\n\n", "position": {"type": "start"}},
             )
             return
-        if body.count(BRIEF_START) != 1 or body.count(BRIEF_END) != 1:
+        if body.count(start_label) != 1 or body.count(end_label) != 1:
             raise ValueError(f"Ambiguous assistant brief boundaries: {page_id}")
         self.logger.debug(
             'kind=script provider=notion Replacing assistant-owned brief region.',
             extra={"details": {'page': page_id}},
         )
-        start = body.index(BRIEF_START)
-        end = body.index(BRIEF_END) + len(BRIEF_END)
-        if end <= start:
+        start = body.index(start_label)
+        end = body.index(end_label) + len(end_label)
+        if body.index(end_label) < start:
             raise ValueError(f"Reversed assistant brief boundaries: {page_id}")
         old_section = body[start:end]
         if old_section != section:

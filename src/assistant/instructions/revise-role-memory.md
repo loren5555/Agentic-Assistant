@@ -1,8 +1,3 @@
----
-name: revise-role-memory
-description: Review natural-language Workbench feedback and maintain the Organizer and Proposer notebooks.
----
-
 # Learn from a researcher's feedback
 
 Read the current human comment in the context of the decision it responds to. The researcher writes ordinary feedback. Infer its scope from what they meant; special wording or an explicit request to remember is unnecessary. The proposal, external sources and generated results explain the situation. The human's own comments supply evidence about their working preferences.

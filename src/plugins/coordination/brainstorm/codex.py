@@ -9,6 +9,7 @@ from time import monotonic
 from urllib.parse import urlsplit
 
 from assistant.components.coordination.brainstorm.models import BrainstormContext, ExplorationReport
+from assistant.runtime.agent_context import writing_guidance
 from logger import get_logger, trace_call
 from plugins._shared.codex.config import CodexSettings
 from plugins._shared.codex.web import run_web_research
@@ -44,7 +45,9 @@ class Brainstorm:
         )
         try:
             report, process = await run_web_research(
-                PROMPT + "\n\n" + context.model_dump_json(), ExplorationReport,
+                PROMPT + writing_guidance(
+                    "For each promising connection, explain why it might transfer and how a researcher could test it."
+                ) + "\n\n" + context.model_dump_json(), ExplorationReport,
                 executable=self.settings.executable, model=self.settings.brainstorm_model,
                 effort=self.settings.brainstorm_effort, timeout_seconds=self.settings.brainstorm_timeout_seconds,
             )
